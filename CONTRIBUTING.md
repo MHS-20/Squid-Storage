@@ -5,11 +5,11 @@
 Follow the Conventional Commits format:
 
 ```bash
-type(scope): message
+(type)scope: message
 ```
 
 ```bash
-git commit -m "chore(storage): added B+Tree index support"
+git commit -m "(chore)storage: added B+Tree index support"
 ```
 
 - Keep each commit focused on one logical change, don't mix refactoring and feature additions in the same commit. Commit Types:
