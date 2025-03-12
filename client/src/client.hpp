@@ -22,7 +22,6 @@ class Client
         ~Client();
         virtual void connectToServer();
 
-
         /* Messages for Testing */
         virtual void sendMessage(const char* message);
         virtual void receiveMessage();
@@ -31,7 +30,6 @@ class Client
         void sendFile(const char* filepath);
         void retriveFile(const char* outputpath);
 
-        
         // virtual bool createFile(int fileId);
         // virtual bool updateFile(int fileId);
         // virtual bool deleteFile(int fileId);

@@ -67,6 +67,32 @@ void Server::handleClientMessages(int client_socket)
     std::cout << "[SERVER]: Reply sent\n";
 }
 
+/* ---- FILE TRANSFER API ----- */
+void Server::sendFile(int client_socket, const char *filepath)
+{
+    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+    if (!file)
+    {
+        perror("[SERVER]: Error opening file");
+        return;
+    }
+
+    std::streamsize filesize = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    send(client_socket, &filesize, sizeof(filesize), 0);
+
+    char buffer[BUFFER_SIZE];
+    while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0)
+    {
+        send(client_socket, buffer, file.gcount(), 0);
+    }
+
+    std::cout << "[SERVER]: File sent to client.\n";
+    file.close();
+}
+
+
 void Server::receiveFile(int client_socket, const char *outputpath)
 {
     std::ofstream outfile(outputpath, std::ios::binary);
@@ -95,26 +121,3 @@ void Server::receiveFile(int client_socket, const char *outputpath)
     outfile.close();
 }
 
-void Server::sendFile(int client_socket, const char *filepath)
-{
-    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
-    if (!file)
-    {
-        perror("[SERVER]: Error opening file");
-        return;
-    }
-
-    std::streamsize filesize = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    send(client_socket, &filesize, sizeof(filesize), 0);
-
-    char buffer[BUFFER_SIZE];
-    while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0)
-    {
-        send(client_socket, buffer, file.gcount(), 0);
-    }
-
-    std::cout << "[SERVER]: File sent to client.\n";
-    file.close();
-}
