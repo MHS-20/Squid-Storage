@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <fstream>
 
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
@@ -15,6 +16,8 @@ class Server {
         Server(int port);
         Server();
         ~Server();
+        void receiveFile(int client_socket, const char* outputpath);
+        void sendFile(int client_socket, const char* filepath);
         // virtual bool listenForClients();
         // virtual bool listenForDataNodes();
         // virtual bool lock(int filedId);
@@ -31,6 +34,7 @@ class Server {
         socklen_t addrlen = sizeof(address);
         char buffer[BUFFER_SIZE] = {0};
         void handleClient(int client_socket);
+        void handleClientMessages(int client_socket); 
         // virtual bool replicateFileToDataNodes(int fileId, std::vector<int> ip);
         // virtual bool receiveFileFromDataNode(int fileId, int ip);
         // virtual bool sendFileToClient(int fileId, int ip);

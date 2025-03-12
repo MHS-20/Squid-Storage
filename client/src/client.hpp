@@ -1,13 +1,14 @@
 #include "filelock.hpp"
 #include <iostream>
 #include <unistd.h>
+#include <string.h>
+#include <fstream>
 
 #ifdef _WIN32
 #include <winsock2.h>
 #else
 #include <arpa/inet.h>
 #endif
-#include <string.h>
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
@@ -15,17 +16,23 @@
 
 class Client
 {
-public:
-    Client();
-    Client(const char *server_ip, int port);
-    ~Client();
-    virtual void connectToServer();
-    virtual void sendMessage(const char *message);
-    virtual void receiveMessage();
+    public:
+        Client(); 
+        Client(const char* server_ip, int port);
+        ~Client();
+        virtual void connectToServer();
 
-    // virtual bool createFile(int fileId);
-    // virtual bool updateFile(int fileId);
-    // virtual bool deleteFile(int fileId);
+        /* Messages for Testing */
+        virtual void sendMessage(const char* message);
+        virtual void receiveMessage();
+        
+        /* File Transfer API */
+        void sendFile(const char* filepath);
+        void retriveFile(const char* outputpath);
+
+        // virtual bool createFile(int fileId);
+        // virtual bool updateFile(int fileId);
+        // virtual bool deleteFile(int fileId);
 
 private:
     int socket_fd = 0;

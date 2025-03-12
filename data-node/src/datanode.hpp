@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <string.h>
-
+#include <fstream>
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
@@ -21,8 +21,15 @@ class DataNode{
         DataNode(const char* server_ip, int port);
         ~DataNode();
         virtual void connectToServer();
+
+        /* Messages for Testing */
         virtual void sendMessage(const char* message);
         virtual void receiveMessage();
+        
+        /* File Transfer API */
+        void sendFile(const char* filepath);
+        void retriveFile(const char* outputpath);
+        
         // virtual bool sendFileToServer(int fileId);
         // virtual bool receiveFileFromServer(int fileId);
 }; 
