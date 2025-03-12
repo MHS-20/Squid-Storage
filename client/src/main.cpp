@@ -37,7 +37,9 @@ int main()
     bool openButtonPressed = false;
     bool deleteButtonPressed = false;
     bool showFileNameInput = false;
+    bool showFileContent = false;
     char newFileName[128] = "file.txt";
+    std::string fileContent = "";
     //----------------------------------------------------------------------------------
 
     SetTargetFPS(60);
@@ -58,13 +60,12 @@ int main()
         if (newFileButtonPressed)
         {
             showFileNameInput = true;
-            
         }
         if (showFileNameInput)
         {
             bool editMode = true;
-            
-            if (GuiTextBox((Rectangle){432, 104, 120, 24}, newFileName, 128, editMode)) 
+
+            if (GuiTextBox((Rectangle){432, 104, 120, 24}, newFileName, 128, editMode))
             {
                 std::string newFilePath = FOLDER_PATH + "/" + std::string(newFileName);
                 fileManager.createFile(newFilePath);
@@ -77,17 +78,13 @@ int main()
 
         if (openButtonPressed)
         {
-            std::string selectedFile = files[selectedIndex];
-            std::ifstream file(selectedFile);
-            std::string fileContent;
-            std::string line;
-            while (std::getline(file, line))
-            {
-                fileContent += line + "\n";
-            }
-            file.close();
+            showFileContent = true;
+            fileContent = fileManager.readFile(files[selectedIndex]);
+        }
+        if (showFileContent)
+        {
             char *fileContentChar = fileManager.stringToChar(fileContent);
-            // GuiTextBoxMulti((Rectangle){8, 8, 392, 496}, fileContentChar, 1024, true);
+            GuiTextBox((Rectangle){8, 8, 392, 496}, fileContentChar, 1024, true);
         }
         if (deleteButtonPressed)
         {

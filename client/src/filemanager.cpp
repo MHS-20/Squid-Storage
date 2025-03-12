@@ -38,3 +38,28 @@ bool FileManager::deleteFile(std::string path)
 {
     return fs::remove(path);
 }
+
+bool FileManager::updateFile(std::string path, std::string content)
+{
+    std::ofstream file(path, std::ios::trunc);
+    if (!file.is_open())
+    {
+        return false;
+    }
+    file << content;
+    file.close();
+    return true;
+}
+
+std::string FileManager::readFile(std::string path)
+{
+    std::ifstream file(path);
+    std::string fileContent;
+    std::string line;
+    while (std::getline(file, line))
+    {
+        fileContent += line + "\n";
+    }
+    file.close();
+    return fileContent;
+}

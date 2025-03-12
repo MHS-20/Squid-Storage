@@ -13,4 +13,6 @@ public:
     char *stringToChar(std::string str);
     bool createFile(std::string path);
     bool deleteFile(std::string path);
+    bool updateFile(std::string path, std::string content);
+    std::string readFile(std::string path);
 };
