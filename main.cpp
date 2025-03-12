@@ -17,15 +17,15 @@ int main() {
     datanode.connectToServer();
     // datanode.sendMessage("Hello from datanode");
     // datanode.receiveMessage();
-    datanode.sendFile("./datanode.txt");
-    datanode.retriveFile("datatoserverfile.txt");
+    datanode.sendFile("./test_txt/datanode.txt");
+    datanode.retriveFile("./test_txt/datatoserverfile.txt");
 
     Client client("127.0.0.1", 12345);
     client.connectToServer();
     // client.sendMessage("Hello from client");
     // client.receiveMessage();
-    client.sendFile("./clientfile.txt");
-    client.retriveFile("clienttoserverfile.txt");
+    client.sendFile("./test_txt/clientfile.txt");
+    client.retriveFile("./test_txt/clienttoserverfile.txt");
 
     return 0;
 }
