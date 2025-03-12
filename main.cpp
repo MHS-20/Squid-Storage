@@ -13,15 +13,18 @@ int main() {
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    DataNode datanode("127.0.0.1", 12345);
-    datanode.connectToServer();
-    datanode.sendMessage("Hello from datanode");
-    datanode.receiveMessage();
+    // DataNode datanode("127.0.0.1", 12345);
+    // datanode.connectToServer();
+    // datanode.sendMessage("Hello from datanode");
+    // datanode.receiveMessage();
 
     Client client("127.0.0.1", 12345);
     client.connectToServer();
-    client.sendMessage("Hello from client");
-    client.receiveMessage();
+    // client.sendMessage("Hello from client");
+    // client.receiveMessage();
+
+    client.sendFile("./clientfile.txt");
+    client.retriveFile("serverfile.txt");
 
     return 0;
 }
