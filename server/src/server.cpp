@@ -17,6 +17,7 @@ Server::Server(int port)
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
+    this->fileTransfer = FileTransfer();
 }
 
 Server::~Server()
@@ -68,56 +69,10 @@ void Server::handleClientMessages(int client_socket)
 }
 
 /* ---- FILE TRANSFER API ----- */
-void Server::sendFile(int client_socket, const char *filepath)
-{
-    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
-    if (!file)
-    {
-        perror("[SERVER]: Error opening file");
-        return;
-    }
-
-    std::streamsize filesize = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    send(client_socket, &filesize, sizeof(filesize), 0);
-
-    char buffer[BUFFER_SIZE];
-    while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0)
-    {
-        send(client_socket, buffer, file.gcount(), 0);
-    }
-
-    std::cout << "[SERVER]: File sent to client.\n";
-    file.close();
+void Server::sendFile(int client_socket, const char *filepath){
+    this->fileTransfer.sendFile(client_socket, "[SERVER]", filepath);
 }
 
-
-void Server::receiveFile(int client_socket, const char *outputpath)
-{
-    std::ofstream outfile(outputpath, std::ios::binary);
-    if (!outfile)
-    {
-        perror("[SERVER]: Error creating file");
-        return;
-    }
-
-    std::streamsize filesize;
-    read(client_socket, &filesize, sizeof(filesize));
-
-    char buffer[BUFFER_SIZE];
-    while (filesize > 0)
-    {
-        int bytes_to_read = (filesize > BUFFER_SIZE) ? BUFFER_SIZE : filesize;
-        int received = read(client_socket, buffer, bytes_to_read);
-        if (received <= 0)
-            break;
-
-        outfile.write(buffer, received);
-        filesize -= received;
-    }
-
-    std::cout << "[SERVER]: File received by server.\n";
-    outfile.close();
+void Server::receiveFile(int client_socket, const char *outputpath){
+    this->fileTransfer.receiveFile(client_socket, "[SERVER]", outputpath);
 }
-

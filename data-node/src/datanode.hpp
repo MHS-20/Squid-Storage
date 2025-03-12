@@ -3,33 +3,35 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <fstream>
+#include "filetransfer.hpp"
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
 #define BUFFER_SIZE 1024
 
-class DataNode{
+class DataNode
+{
 
-    private: 
-        int socket_fd = 0;
-        struct sockaddr_in server_addr;
-        char buffer[BUFFER_SIZE] = {0};
+public:
+    DataNode();
+    DataNode(const char *server_ip, int port);
+    ~DataNode();
+    virtual void connectToServer();
 
+    /* Messages for Testing */
+    virtual void sendMessage(const char *message);
+    virtual void receiveMessage();
 
-    public: 
-        DataNode();
-        DataNode(const char* server_ip, int port);
-        ~DataNode();
-        virtual void connectToServer();
+    /* File Transfer API */
+    void sendFile(const char *filepath);
+    void retriveFile(const char *outputpath);
 
-        /* Messages for Testing */
-        virtual void sendMessage(const char* message);
-        virtual void receiveMessage();
-        
-        /* File Transfer API */
-        void sendFile(const char* filepath);
-        void retriveFile(const char* outputpath);
-        
-        // virtual bool sendFileToServer(int fileId);
-        // virtual bool receiveFileFromServer(int fileId);
-}; 
+    // virtual bool sendFileToServer(int fileId);
+    // virtual bool receiveFileFromServer(int fileId);
+
+private:
+    int socket_fd = 0;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE] = {0};
+    FileTransfer fileTransfer;
+};

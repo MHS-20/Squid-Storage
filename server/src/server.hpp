@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <fstream>
+#include "filetransfer.hpp"
 
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
@@ -33,6 +34,8 @@ class Server {
         int opt = 1;
         socklen_t addrlen = sizeof(address);
         char buffer[BUFFER_SIZE] = {0};
+        FileTransfer fileTransfer;
+
         void handleClient(int client_socket);
         void handleClientMessages(int client_socket); 
         // virtual bool replicateFileToDataNodes(int fileId, std::vector<int> ip);
