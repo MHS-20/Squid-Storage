@@ -27,5 +27,7 @@ int main() {
     client.sendFile("./test_txt/clientfile.txt");
     client.retriveFile("./test_txt/clienttoserverfile.txt");
 
+    server_thread.join(); 
+
     return 0;
 }
