@@ -36,6 +36,8 @@ int main()
     bool newFileButtonPressed = false;
     bool openButtonPressed = false;
     bool deleteButtonPressed = false;
+    bool showFileNameInput = false;
+    char newFileName[128] = "file.txt";
     //----------------------------------------------------------------------------------
 
     SetTargetFPS(60);
@@ -55,15 +57,22 @@ int main()
         //----------------------------------------------------------------------------------
         if (newFileButtonPressed)
         {
-            char newFileName[128] = "file.txt";
+            showFileNameInput = true;
+            
+        }
+        if (showFileNameInput)
+        {
             bool editMode = true;
-
-            GuiTextBox((Rectangle){432, 104, 120, 24}, newFileName, 128, editMode);
-
-            std::string newFilePath = FOLDER_PATH + "/" + std::string(newFileName);
-            fileManager.createFile(newFilePath);
-            files = fileManager.getFiles(FOLDER_PATH);
-            formattedFiles = fileManager.stringToChar(formatFileList(files));
+            
+            if (GuiTextBox((Rectangle){432, 104, 120, 24}, newFileName, 128, editMode)) 
+            {
+                std::string newFilePath = FOLDER_PATH + "/" + std::string(newFileName);
+                fileManager.createFile(newFilePath);
+                files = fileManager.getFiles(FOLDER_PATH);
+                formattedFiles = fileManager.stringToChar(formatFileList(files));
+                showFileNameInput = false;
+                strcpy(newFileName, "file.txt");
+            }
         }
 
         if (openButtonPressed)
