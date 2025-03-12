@@ -1,6 +1,6 @@
 #include "filelock.hpp"
 
-class Client 
+class IClient 
 {
     public:
         virtual bool connectToServer(int ip);
