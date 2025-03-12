@@ -1,5 +1,9 @@
 #include "filemanager.hpp"
 
+FileManager::FileManager()
+{
+}
+
 std::vector<std::string> FileManager::getFiles(std::string path)
 {
     std::vector<std::string> files;
@@ -8,5 +12,6 @@ std::vector<std::string> FileManager::getFiles(std::string path)
     {
         files.push_back(entry.path().string());
     }
+
     return files;
 }

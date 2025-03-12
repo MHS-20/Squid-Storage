@@ -9,22 +9,21 @@
 
 int main()
 {
-    const Color darkGreen = {20, 160, 133, 255};
 
     constexpr int screenWidth = 800;
     constexpr int screenHeight = 450;
-    FileManager fileManager;
+    // FileManager fileManager;
 
-    fileManager.getFiles(".");
+    // fileManager.getFiles(".");
 
     InitWindow(screenWidth, screenHeight, "Squid Storage");
     // layout_name: controls initialization
     //----------------------------------------------------------------------------------
     int startIndex = 0;
     int selectedIndex = 0;
-    bool Button002Pressed = false;
-    bool Button003Pressed = false;
-    bool Button004Pressed = false;
+    bool newFileButtonPressed = false;
+    bool openButtonPressed = false;
+    bool deleteButtonPressed = false;
     //----------------------------------------------------------------------------------
 
     SetTargetFPS(60);
@@ -38,9 +37,9 @@ int main()
         // raygui: controls drawing
         //----------------------------------------------------------------------------------
         GuiListView((Rectangle){8, 8, 392, 496}, "ONE;TWO;THREE", &startIndex, &selectedIndex);
-        Button002Pressed = GuiButton((Rectangle){432, 8, 120, 24}, "New File");
-        Button003Pressed = GuiButton((Rectangle){432, 40, 120, 24}, "Open");
-        Button004Pressed = GuiButton((Rectangle){432, 72, 120, 24}, "Delete");
+        newFileButtonPressed = GuiButton((Rectangle){432, 8, 120, 24}, "New File");
+        openButtonPressed = GuiButton((Rectangle){432, 40, 120, 24}, "Open");
+        deleteButtonPressed = GuiButton((Rectangle){432, 72, 120, 24}, "Delete");
         //----------------------------------------------------------------------------------
 
         EndDrawing();
