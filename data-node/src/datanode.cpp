@@ -7,7 +7,7 @@ DataNode::DataNode(const char *server_ip, int port)
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0)
     {
-        perror("Socket creation failed");
+        perror("[DATANODE]: Socket creation failed");
         exit(EXIT_FAILURE);
     }
 
@@ -16,7 +16,7 @@ DataNode::DataNode(const char *server_ip, int port)
 
     if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0)
     {
-        perror("Invalid address");
+        perror("[DATANODE]: Invalid address");
         exit(EXIT_FAILURE);
     }
 }
@@ -30,20 +30,20 @@ void DataNode::connectToServer()
 {
     if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
-        perror("connection to server failed");
+        perror("[DATANODE]: connection to server failed");
         exit(EXIT_FAILURE);
     }
-    std::cout << "Connected to server...\n";
+    std::cout << "[DATANODE]: Connected to server...\n";
 }
 
 void DataNode::sendMessage(const char *message)
 {
     send(socket_fd, message, strlen(message), 0);
-    std::cout << "Message sent: " << message << std::endl;
+    std::cout << "[DATANODE]: Message sent: " << message << std::endl;
 }
 
 void DataNode::receiveMessage()
 {
     read(socket_fd, buffer, sizeof(buffer));
-    std::cout << "Server Reply: " << buffer << std::endl;
+    std::cout << "[DATANODE]: Server Reply: " << buffer << std::endl;
 }

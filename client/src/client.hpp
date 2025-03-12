@@ -17,7 +17,6 @@ class Client
         virtual void connectToServer();
         virtual void sendMessage(const char* message);
         virtual void receiveMessage();
-        virtual void connectToServer();
         
         // virtual bool createFile(int fileId);
         // virtual bool updateFile(int fileId);

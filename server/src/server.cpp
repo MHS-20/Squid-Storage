@@ -7,7 +7,7 @@ Server::Server(int port) {
     this->port = port;
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == 0) {
-        perror("Socket failed");
+        perror("[SERVER]: Socket failed");
         exit(EXIT_FAILURE);
     }
 
@@ -23,19 +23,19 @@ Server::~Server() {
 }
 
 void Server::start() {
-    std::cout << "Server Starting..." << std::endl;
+    std::cout << "[SERVER]: Server Starting..." << std::endl;
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
         perror("bind failed");
         return;
     }
 
     listen(server_fd, 3);
-    std::cout << "Server listening on " << this->port << "...\n";
+    std::cout << "[SERVER]: Server listening on " << this->port << "...\n";
 
     while (true) {
         new_socket = accept(server_fd, (struct sockaddr *)&address, &addrlen);
         if (new_socket < 0) {
-            perror("Accept failed");
+            perror("[SERVER]: Accept failed");
             exit(EXIT_FAILURE);
         }
 
@@ -48,9 +48,9 @@ void Server::handleClient(int client_socket) {
     char buffer[BUFFER_SIZE] = {0};
 
     read(client_socket, buffer, sizeof(buffer));
-    std::cout << "Received: " << buffer << std::endl;
+    std::cout << "[SERVER]: Received: " << buffer << std::endl;
 
     const char* message = "Hello from server";
     send(client_socket, message, strlen(message), 0);
-    std::cout << "Message sent\n";
+    std::cout << "[SERVER]: Reply sent\n";
 }
