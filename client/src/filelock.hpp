@@ -1,4 +1,5 @@
-class FileLock{
-
-
+class FileLock
+{
+public:
+    FileLock();
 };

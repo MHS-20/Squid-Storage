@@ -1,5 +1,5 @@
 #include "filelock.hpp"
-class FileLock{
 
-
-};
+FileLock::FileLock()
+{
+}
