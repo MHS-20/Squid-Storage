@@ -1,4 +1,4 @@
-class DataNode{
+class IDataNode{
 
     public: 
         virtual bool connectToServer(int ip);
