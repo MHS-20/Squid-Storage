@@ -2,6 +2,7 @@
 #include <thread>
 #include "server.hpp"
 #include "datanode.hpp"
+#include "client.hpp"
 
 using namespace std; 
 int main() {
@@ -14,9 +15,13 @@ int main() {
 
     DataNode datanode("127.0.0.1", 12345);
     datanode.connectToServer();
-    datanode.sendMessage("Hello from client");
+    datanode.sendMessage("Hello from datanode");
     datanode.receiveMessage();
 
-    server_thread.join();
+    Client client("127.0.0.1", 12345);
+    client.connectToServer();
+    client.sendMessage("Hello from client");
+    client.receiveMessage();
+
     return 0;
 }
