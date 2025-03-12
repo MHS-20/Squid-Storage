@@ -52,8 +52,8 @@ void Server::start()
 }
 
 void Server::handleClient(int client_socket) {
-    receiveFile(client_socket, "received_from_client.txt");
-    sendFile(client_socket, "received_from_client.txt");
+    receiveFile(client_socket, "./test_txt/received_from_client.txt");
+    sendFile(client_socket, "./test_txt/received_from_client.txt");
 }
 
 void Server::handleClientMessages(int client_socket)
