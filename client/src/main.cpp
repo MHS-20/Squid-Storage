@@ -39,7 +39,7 @@ int main()
     bool showFileNameInput = false;
     bool showFileContent = false;
     char newFileName[128] = "file.txt";
-    std::string fileContent = "";
+    char *fileContentChar;
     //----------------------------------------------------------------------------------
 
     SetTargetFPS(60);
@@ -79,12 +79,17 @@ int main()
         if (openButtonPressed)
         {
             showFileContent = true;
-            fileContent = fileManager.readFile(files[selectedIndex]);
+            std::string fileContent = fileManager.readFile(files[selectedIndex]);
+            fileContentChar = fileManager.stringToChar(fileContent);
         }
         if (showFileContent)
         {
-            char *fileContentChar = fileManager.stringToChar(fileContent);
-            GuiTextBox((Rectangle){8, 8, 392, 496}, fileContentChar, 1024, true);
+            if (GuiTextBox((Rectangle){8, 8, 392, 496}, fileContentChar, 1024, true))
+            {
+                std::string newContent = fileContentChar;
+                fileManager.updateFile(files[selectedIndex], newContent);
+                showFileContent = false;
+            }
         }
         if (deleteButtonPressed)
         {
