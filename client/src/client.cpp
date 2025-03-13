@@ -36,6 +36,14 @@ void Client::connectToServer()
         exit(EXIT_FAILURE);
     }
     std::cout << "[CLIENT]: Connected to server...\n";
+    sendName(socket_fd);
+}
+
+void Client::sendName(int socket_fd){
+    const char *name = "CLIENT";
+    send(socket_fd, name, strlen(name), 0);
+    std::cout << "[CLIENT]: Name sent: " << name << std::endl;
+
 }
 
 /* ---- MESSAGE API ----- */

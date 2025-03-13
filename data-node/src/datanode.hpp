@@ -34,4 +34,5 @@ private:
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE] = {0};
     FileTransfer fileTransfer;
+    void sendName(int socket_fd); 
 };
