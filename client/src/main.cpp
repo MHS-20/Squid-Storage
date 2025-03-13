@@ -84,7 +84,7 @@ int main()
         }
         if (showFileContent)
         {
-            if (GuiTextBox((Rectangle){8, 8, 392, 496}, fileContentChar, 1024, true))
+            if (GuiTextBoxMultiline((Rectangle){8, 8, 400, 200}, fileContentChar, 1024, true))
             {
                 std::string newContent = fileContentChar;
                 fileManager.updateFile(files[selectedIndex], newContent);
