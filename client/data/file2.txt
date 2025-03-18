@@ -1,0 +1,11 @@
+An attack data structure that represents a set of potential
+techniques for exploiting security vulnerabilities [MAUW05, MOOR01, SCHN99]. The security
+incident that is the goal of the attack is represented as the root node of the tree, and the ways by
+which an attacker could reach that goal are iteratively and incrementally represented as branches
+and subnodes of the tree. Each subnode defines a subgoal, and each subgoal may have its own
+set of further subgoals, and so on. The final nodes on the paths outward from the root, that is, the
+leaf nodes, represent different ways to initiate an attack. Each node other than a leaf is either an
+AND-node or an OR-node. To achieve the goal represented by an AND-node, the subgoals
+represented by all of that node’s subnodes must be achieved; and for an OR-node, at least one of
+the subgoals must be achieved. Branches can be labeled with values representing difficulty, cost,
+or other attack attributes, so that alternative attacks can be compared.

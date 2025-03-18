@@ -8,17 +8,6 @@
 #include <vector>
 #include "filemanager.hpp"
 
-std::string formatFileList(std::vector<std::string> files)
-{
-    std::string fileList = "";
-    for (auto file : files)
-    {
-        fileList += file + ";";
-    }
-    fileList.pop_back();
-    return fileList;
-}
-
 int main()
 {
     const std::string FOLDER_PATH = "./data";
@@ -26,7 +15,7 @@ int main()
     constexpr int screenHeight = 450;
     FileManager fileManager;
     std::vector<std::string> files = fileManager.getFiles(FOLDER_PATH);
-    const char *formattedFiles = fileManager.stringToChar(formatFileList(files));
+    const char *formattedFiles = fileManager.stringToChar(fileManager.formatFileList(files));
     std::cout << formattedFiles << std::endl;
     InitWindow(screenWidth, screenHeight, "Squid Storage");
     // layout_name: controls initialization
@@ -70,7 +59,7 @@ int main()
                 std::string newFilePath = FOLDER_PATH + "/" + std::string(newFileName);
                 fileManager.createFile(newFilePath);
                 files = fileManager.getFiles(FOLDER_PATH);
-                formattedFiles = fileManager.stringToChar(formatFileList(files));
+                formattedFiles = fileManager.stringToChar(fileManager.formatFileList(files));
                 showFileNameInput = false;
                 strcpy(newFileName, "file.txt");
             }
@@ -96,7 +85,7 @@ int main()
             std::string selectedFile = files[selectedIndex];
             fileManager.deleteFile(selectedFile);
             files = fileManager.getFiles(FOLDER_PATH);
-            formattedFiles = fileManager.stringToChar(formatFileList(files));
+            formattedFiles = fileManager.stringToChar(fileManager.formatFileList(files));
         }
 
         EndDrawing();
