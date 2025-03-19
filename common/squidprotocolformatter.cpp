@@ -39,9 +39,70 @@ std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::
     case RESPONSE:
         keywordValue = "RESPONSE";
         break;
-
     default:
         break;
     }
-    return std::string();
+    std::string message = keywordValue + "<";
+    for (auto arg : args)
+    {
+        message += arg + ",";
+    }
+    message.pop_back();
+    message += ">";
+    return message;
+}
+
+std::string SquidProtocolFormatter::createFileFormat(std::string filePath)
+{
+    return this->createMessage(CREATE_FILE, {"filePath:" + filePath});
+}
+
+std::string SquidProtocolFormatter::transferFileFormat(std::string fileContent)
+{
+    return this->createMessage(TRANSFER_FILE, {"fileContent:" + fileContent});
+}
+
+std::string SquidProtocolFormatter::readFileFormat(std::string filePath)
+{
+    return this->createMessage(READ_FILE, {"filePath:" + filePath});
+}
+
+std::string SquidProtocolFormatter::updateFileFormat(std::string filePath)
+{
+    return this->createMessage(UPDATE_FILE, {"filePath:" + filePath});
+}
+
+std::string SquidProtocolFormatter::deleteFileFormat(std::string filePath)
+{
+    return this->createMessage(DELETE_FILE, {"filePath:" + filePath});
+}
+
+std::string SquidProtocolFormatter::acquireLockFormat(std::string filePath)
+{
+    return this->createMessage(ACQUIRE_LOCK, {"filePath:" + filePath});
+}
+
+std::string SquidProtocolFormatter::releaseLockFormat(std::string filePath)
+{
+    return this->createMessage(RELEASE_LOCK, {"filePath:" + filePath});
+}
+
+std::string SquidProtocolFormatter::heartbeatFormat()
+{
+    return this->createMessage(HEARTBEAT, {});
+}
+
+std::string SquidProtocolFormatter::syncStatusFormat()
+{
+    return this->createMessage(SYNC_STATUS, {});
+}
+
+std::string SquidProtocolFormatter::identifyFormat()
+{
+    return this->createMessage(IDENTIFY, {});
+}
+
+std::string SquidProtocolFormatter::responseFormat()
+{
+    return this->createMessage(RESPONSE, {});
 }
