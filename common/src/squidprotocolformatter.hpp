@@ -29,7 +29,9 @@ public:
     std::string heartbeatFormat();
     std::string syncStatusFormat();
     std::string identifyFormat();
-    std::string responseFormat();
+    std::string responseFormat(std::string ack);
+    std::string responseFormat(std::string nodeType, std::string processName);
+    std::string responseFormat(bool lock);
 
 private:
     std::string createMessage(ProtocolKeyWord keyword, std::vector<std::string> args);

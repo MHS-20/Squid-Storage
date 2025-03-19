@@ -102,7 +102,17 @@ std::string SquidProtocolFormatter::identifyFormat()
     return this->createMessage(IDENTIFY, {});
 }
 
-std::string SquidProtocolFormatter::responseFormat()
+std::string SquidProtocolFormatter::responseFormat(std::string ack)
 {
-    return this->createMessage(RESPONSE, {});
+    return this->createMessage(RESPONSE, {"ack:" + ack});
+}
+
+std::string SquidProtocolFormatter::responseFormat(std::string nodeType, std::string processName)
+{
+    return this->createMessage(RESPONSE, {"nodeType:" + nodeType, "processName:" + processName});
+}
+
+std::string SquidProtocolFormatter::responseFormat(bool lock)
+{
+    return this->createMessage(RESPONSE, {"lock:" + std::to_string(lock)});
 }
