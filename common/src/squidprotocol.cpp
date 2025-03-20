@@ -31,3 +31,48 @@ Message SquidProtocol::receiveAndParseMessage()
     }
     return this->formatter.parseMessage(this->buffer);
 }
+
+std::string SquidProtocol::deleteFile(std::string filePath)
+{
+    this->sendMessage(this->formatter.deleteFileFormat(filePath));
+    return receiveAndParseMessage().args["ACK"];
+}
+
+bool SquidProtocol::acquireLock(std::string filePath)
+{
+    this->sendMessage(this->formatter.acquireLockFormat(filePath));
+    return receiveAndParseMessage().args["LOCK"] == "true";
+}
+
+std::string SquidProtocol::releaseLock(std::string filePath)
+{
+    this->sendMessage(this->formatter.releaseLockFormat(filePath));
+    return receiveAndParseMessage().args["ACK"];
+}
+
+std::string SquidProtocol::heartbeat()
+{
+    this->sendMessage(this->formatter.heartbeatFormat());
+    return receiveAndParseMessage().args["ACK"];
+}
+
+Message SquidProtocol::identify()
+{
+    this->sendMessage(this->formatter.identifyFormat());
+    return receiveAndParseMessage();
+}
+
+void SquidProtocol::response(std::string ack)
+{
+    this->sendMessage(this->formatter.responseFormat(ack));
+}
+
+void SquidProtocol::response(std::string nodeType, std::string processName)
+{
+    this->sendMessage(this->formatter.responseFormat(nodeType, processName));
+}
+
+void SquidProtocol::response(bool lock)
+{
+    this->sendMessage(this->formatter.responseFormat(lock));
+}

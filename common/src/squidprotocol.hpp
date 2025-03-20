@@ -17,7 +17,7 @@ public:
     virtual std::string releaseLock(std::string filePath);
     virtual std::string heartbeat();
     virtual std::string syncStatus();
-    virtual void identify();
+    virtual Message identify();
     virtual void response(std::string ack);
     virtual void response(std::string nodeType, std::string processName);
     virtual void response(bool lock);
