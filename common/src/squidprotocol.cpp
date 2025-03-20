@@ -1,10 +1,12 @@
 #include "squidprotocol.hpp"
 
-SquidProtocol::SquidProtocol(int socket_fd, std::string processName)
+SquidProtocol::SquidProtocol(int socket_fd, std::string processName, std::string nodeType)
 {
     this->socket_fd = socket_fd;
     this->processName = processName;
     this->fileTransfer = FileTransfer();
+    this->fileManager = FileManager();
+    this->formatter = SquidProtocolFormatter();
 }
 
 std::string SquidProtocol::createFile(std::string filePath)
@@ -76,3 +78,43 @@ void SquidProtocol::response(bool lock)
 {
     this->sendMessage(this->formatter.responseFormat(lock));
 }
+
+void SquidProtocol::dispatcher(Message message)
+{
+    switch (message.keyword)
+    {
+    case CREATE_FILE:
+        this->response("ACK");
+        this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+        this->response("ACK");
+        break;
+    case TRANSFER_FILE:
+        break;
+    case READ_FILE:
+        break;
+    case UPDATE_FILE:
+        break;
+    case DELETE_FILE:
+        this->fileManager.deleteFile(message.args["filePath"]);
+        this->response("ACK");
+        break;
+    case ACQUIRE_LOCK:
+        this->response(this->fileManager.acquireLock(message.args["filePath"]));
+        break;
+    case RELEASE_LOCK:
+        this->fileManager.releaseLock(message.args["filePath"]);
+        this->response("ACK");
+        break;
+    case HEARTBEAT:
+        this->response("ACK");
+        break;
+    case SYNC_STATUS:
+        break;
+    case IDENTIFY:
+        this->response(this->nodeType, this->processName);
+        break;
+    case RESPONSE:
+        break;
+    default:
+        break;
+    }

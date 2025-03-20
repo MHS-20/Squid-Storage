@@ -63,3 +63,13 @@ std::string FileManager::readFile(std::string path)
     file.close();
     return fileContent;
 }
+
+bool FileManager::acquireLock(std::string path)
+{
+    return false;
+}
+
+bool FileManager::releaseLock(std::string path)
+{
+    return false;
+}

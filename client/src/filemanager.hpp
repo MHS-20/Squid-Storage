@@ -15,4 +15,6 @@ public:
     bool deleteFile(std::string path);
     bool updateFile(std::string path, std::string content);
     std::string readFile(std::string path);
+    bool acquireLock(std::string path);
+    bool releaseLock(std::string path);
 };

@@ -1,6 +1,7 @@
 #include "squidprotocolformatter.hpp"
 #include <sys/socket.h>
 #include "filetransfer.hpp"
+#include "../../client/src/filemanager.hpp" // to be changed
 #define BUFFER_SIZE 1024
 
 class SquidProtocol
@@ -21,12 +22,15 @@ public:
     virtual void response(std::string ack);
     virtual void response(std::string nodeType, std::string processName);
     virtual void response(bool lock);
+    virtual void dispatcher(Message message);
 
 private:
     int socket_fd;
     std::string processName;
+    std::string nodeType;
     char buffer[BUFFER_SIZE] = {0};
     FileTransfer fileTransfer;
+    FileManager fileManager;
     SquidProtocolFormatter formatter;
     void sendMessage(std::string message);
     Message receiveAndParseMessage();
