@@ -56,12 +56,12 @@ std::string SquidProtocolFormatter::createFileFormat(std::string filePath)
 {
     return this->createMessage(CREATE_FILE, {"filePath:" + filePath});
 }
-
+/*
 std::string SquidProtocolFormatter::transferFileFormat(std::string fileContent)
 {
     return this->createMessage(TRANSFER_FILE, {"fileContent:" + fileContent});
 }
-
+*/
 std::string SquidProtocolFormatter::readFileFormat(std::string filePath)
 {
     return this->createMessage(READ_FILE, {"filePath:" + filePath});
@@ -115,4 +115,19 @@ std::string SquidProtocolFormatter::responseFormat(std::string nodeType, std::st
 std::string SquidProtocolFormatter::responseFormat(bool lock)
 {
     return this->createMessage(RESPONSE, {"lock:" + std::to_string(lock)});
+}
+
+Message SquidProtocolFormatter::parseMessage(std::string message)
+{
+    std::string keyword = message.substr(0, message.find("<"));
+    std::string args = message.substr(message.find("<") + 1, message.find(">") - message.find("<") - 1);
+    std::map<std::string, std::string> argMap;
+    std::string arg;
+    while (args.length() > 0)
+    {
+        arg = args.substr(0, args.find(","));
+        argMap[arg.substr(0, arg.find(":"))] = arg.substr(arg.find(":") + 1);
+        args = args.substr(args.find(",") + 1);
+    }
+    return Message(static_cast<ProtocolKeyWord>(std::stoi(keyword)), argMap);
 }
