@@ -15,6 +15,17 @@ std::vector<std::string> FileManager::getFiles(std::string path)
     return files;
 }
 
+std::map<std::string, fs::file_time_type> FileManager::getFilesLastWrite(std::string path)
+{
+    auto files = this->getFiles(path);
+    std::map<std::string, fs::file_time_type> filesLastWrite;
+    for (auto file : files)
+    {
+        filesLastWrite[file] = fs::last_write_time(file);
+    }
+    return filesLastWrite;
+}
+
 char *FileManager::stringToChar(std::string str)
 {
     char *res = new char[str.length() + 1];

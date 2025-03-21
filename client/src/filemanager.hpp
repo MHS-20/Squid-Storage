@@ -1,7 +1,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
-
+#include <map>
 #include <filesystem>
 namespace fs = std::filesystem;
 
@@ -10,6 +10,7 @@ class FileManager
 public:
     FileManager();
     std::vector<std::string> getFiles(std::string path);
+    std::map<std::string, fs::file_time_type> getFilesLastWrite(std::string path);
     char *stringToChar(std::string str);
     bool createFile(std::string path);
     bool deleteFile(std::string path);
