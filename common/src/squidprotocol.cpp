@@ -58,6 +58,13 @@ std::string SquidProtocol::heartbeat()
     return receiveAndParseMessage().args["ACK"];
 }
 
+std::string SquidProtocol::syncStatus()
+{
+    this->sendMessage(this->formatter.syncStatusFormat());
+
+    return receiveAndParseMessage().args["ACK"];
+}
+
 Message SquidProtocol::identify()
 {
     this->sendMessage(this->formatter.identifyFormat());
@@ -118,3 +125,4 @@ void SquidProtocol::dispatcher(Message message)
     default:
         break;
     }
+}

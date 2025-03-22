@@ -1,6 +1,9 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <filesystem>
+namespace fs = std::filesystem;
+
 enum ProtocolKeyWord
 {
     CREATE_FILE,
@@ -39,6 +42,7 @@ public:
     std::string responseFormat(std::string ack);
     std::string responseFormat(std::string nodeType, std::string processName);
     std::string responseFormat(bool lock);
+    std::string responseFormat(std::map<std::string, fs::file_time_type> args);
     Message parseMessage(std::string message);
 
 private:

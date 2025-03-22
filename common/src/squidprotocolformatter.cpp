@@ -117,6 +117,16 @@ std::string SquidProtocolFormatter::responseFormat(bool lock)
     return this->createMessage(RESPONSE, {"lock:" + std::to_string(lock)});
 }
 
+std::string SquidProtocolFormatter::responseFormat(std::map<std::string, fs::file_time_type> args)
+{
+    std::vector<std::string> arguments;
+    for (auto arg : args)
+    {
+        arguments.push_back(arg.first + ":" + std::to_string(static_cast<long long>(arg.second.time_since_epoch().count())));
+    }
+    return this->createMessage(RESPONSE, arguments);
+}
+
 Message SquidProtocolFormatter::parseMessage(std::string message)
 {
     std::string keyword = message.substr(0, message.find("<"));
