@@ -21,6 +21,7 @@ public:
     virtual Message identify();
     virtual void response(std::string ack);
     virtual void response(std::string nodeType, std::string processName);
+    virtual void response(std::map<std::string, fs::file_time_type> filesLastWrite);
     virtual void response(bool lock);
     virtual void dispatcher(Message message);
 

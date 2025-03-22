@@ -61,8 +61,44 @@ std::string SquidProtocol::heartbeat()
 std::string SquidProtocol::syncStatus()
 {
     this->sendMessage(this->formatter.syncStatusFormat());
-
-    return receiveAndParseMessage().args["ACK"];
+    Message response = receiveAndParseMessage();
+    if (response.keyword == RESPONSE)
+    {
+        std::map<std::string, fs::file_time_type> filesLastWrite;
+        filesLastWrite = this->fileManager.getFilesLastWrite(".");
+        for (auto localFile : filesLastWrite)
+        {
+            if (response.args.find(localFile.first) != response.args.end())
+            {
+                if (localFile.second.time_since_epoch().count() > std::stoll(response.args[localFile.first]))
+                {
+                    // in this case server needs to update the file
+                    this->updateFile(localFile.first);
+                    this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
+                }
+                else if (localFile.second.time_since_epoch().count() < std::stoll(response.args[localFile.first]))
+                {
+                    // in this case client needs to update the file
+                    this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
+                }
+                response.args.erase(localFile.first);
+            }
+            else
+            {
+                // in this case server needs to create the file
+                this->createFile(localFile.first);
+            }
+        }
+        if (response.args.size() > 0)
+        {
+            for (auto remoteFile : response.args)
+            {
+                // in this case client needs to delete the file
+                this->readFile(remoteFile.first);
+            }
+        }
+    }
+    return "ACK";
 }
 
 Message SquidProtocol::identify()
@@ -79,6 +115,11 @@ void SquidProtocol::response(std::string ack)
 void SquidProtocol::response(std::string nodeType, std::string processName)
 {
     this->sendMessage(this->formatter.responseFormat(nodeType, processName));
+}
+
+void SquidProtocol::response(std::map<std::string, fs::file_time_type> filesLastWrite)
+{
+    this->sendMessage(this->formatter.responseFormat(filesLastWrite));
 }
 
 void SquidProtocol::response(bool lock)

@@ -117,10 +117,10 @@ std::string SquidProtocolFormatter::responseFormat(bool lock)
     return this->createMessage(RESPONSE, {"lock:" + std::to_string(lock)});
 }
 
-std::string SquidProtocolFormatter::responseFormat(std::map<std::string, fs::file_time_type> args)
+std::string SquidProtocolFormatter::responseFormat(std::map<std::string, fs::file_time_type> filesLastWrite)
 {
     std::vector<std::string> arguments;
-    for (auto arg : args)
+    for (auto arg : filesLastWrite)
     {
         arguments.push_back(arg.first + ":" + std::to_string(static_cast<long long>(arg.second.time_since_epoch().count())));
     }

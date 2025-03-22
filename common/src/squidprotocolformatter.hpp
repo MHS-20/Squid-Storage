@@ -42,7 +42,7 @@ public:
     std::string responseFormat(std::string ack);
     std::string responseFormat(std::string nodeType, std::string processName);
     std::string responseFormat(bool lock);
-    std::string responseFormat(std::map<std::string, fs::file_time_type> args);
+    std::string responseFormat(std::map<std::string, fs::file_time_type> filesLastWrite);
     Message parseMessage(std::string message);
 
 private:
