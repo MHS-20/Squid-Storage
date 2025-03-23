@@ -65,7 +65,7 @@ std::string SquidProtocol::syncStatus()
     if (response.keyword == RESPONSE)
     {
         std::map<std::string, fs::file_time_type> filesLastWrite;
-        filesLastWrite = this->fileManager.getFilesLastWrite(".");
+        filesLastWrite = this->fileManager.getFilesLastWrite(DEFAULT_FOLDER_PATH);
         for (auto localFile : filesLastWrite)
         {
             if (response.args.find(localFile.first) != response.args.end())
@@ -157,6 +157,7 @@ void SquidProtocol::dispatcher(Message message)
         this->response("ACK");
         break;
     case SYNC_STATUS:
+        this->response(this->fileManager.getFilesLastWrite(DEFAULT_FOLDER_PATH));
         break;
     case IDENTIFY:
         this->response(this->nodeType, this->processName);

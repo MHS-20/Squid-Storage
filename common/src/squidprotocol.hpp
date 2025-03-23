@@ -3,6 +3,7 @@
 #include "filetransfer.hpp"
 #include "../../client/src/filemanager.hpp" // to be changed
 #define BUFFER_SIZE 1024
+#define DEFAULT_FOLDER_PATH "./data"
 
 class SquidProtocol
 {
