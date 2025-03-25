@@ -18,4 +18,5 @@ public:
     std::string readFile(std::string path);
     bool acquireLock(std::string path);
     bool releaseLock(std::string path);
+    std::string formatFileList(std::vector<std::string> files);
 };

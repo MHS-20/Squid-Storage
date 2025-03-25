@@ -84,3 +84,14 @@ bool FileManager::releaseLock(std::string path)
 {
     return false;
 }
+
+std::string formatFileList(std::vector<std::string> files)
+{
+    std::string fileList = "";
+    for (auto file : files)
+    {
+        fileList += file + ";";
+    }
+    fileList.pop_back();
+    return fileList;
+}

@@ -43,6 +43,6 @@ private:
     FileLock file_lock;
     FileTransfer fileTransfer;
 
-    void sendName(int socket_fd); 
+    void sendName(int socket_fd);
     // virtual bool requireLock(int fileId);
 };
