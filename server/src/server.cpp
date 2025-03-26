@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include <thread>
 
 Server::Server() : Server(DEFAULT_PORT) {}
 
@@ -25,7 +26,7 @@ Server::Server(int port)
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
-    //squidProtocol = SquidProtocol(server_fd, "server", "SERVER");
+    squidProtocol = SquidProtocol(server_fd, "server", "SERVER");
 
     fileMap = std::map<std::string, int>();
     clientEndpointMap = std::map<std::string, int>();
@@ -77,10 +78,19 @@ void Server::handleClient(int client_socket)
 {
     SquidProtocol client_protocol = SquidProtocol(client_socket, "server", "SERVER");
     std::cout << "Checking for messages ...\n";
-    Message message = client_protocol.receiveAndParseMessage();
-    std::cout << "[SERVER]: Identify message received from client: " + message.args["processName"] << std::endl;
+
+    Message mex = client_protocol.identify();
+    std::cout << "[SERVER]: Identity received from client: " + mex.args["processName"] << std::endl;
+    
     client_protocol.response(std::string("ACK"));
-    std::cout << "[SERVER]: Ack sent to client." << std::endl;
+    std::cout << "[SERVER]: Ack sent to client" << std::endl;
+
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    while(true)
+    {
+        squidProtocol.requestDispatcher(squidProtocol.receiveAndParseMessage());
+    }
 }
 
 void printMap(std::map<std::string, int> &map, std::string name)

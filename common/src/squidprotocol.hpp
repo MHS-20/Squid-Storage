@@ -13,7 +13,6 @@ public:
     SquidProtocol(int socket_fd, std::string processName, std::string nodeType);
     ~SquidProtocol();
     virtual std::string createFile(std::string filePath);
-    virtual std::string transferFile(std::string fileContent);
     virtual std::string readFile(std::string filePath);
     virtual std::string updateFile(std::string filePath);
     virtual std::string deleteFile(std::string filePath);
@@ -37,6 +36,8 @@ private:
     FileTransfer fileTransfer;
     FileManager fileManager;
     SquidProtocolFormatter formatter;
+
     void sendMessage(std::string message);
+    void transferFile(std::string filePath, Message response);
     // std::string receive();
 };

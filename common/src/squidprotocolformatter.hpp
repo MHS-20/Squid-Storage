@@ -40,7 +40,7 @@ public:
     std::string releaseLockFormat(std::string filePath);
     std::string heartbeatFormat();
     std::string syncStatusFormat();
-    std::string identifyFormat(std::string processName, std::string nodeType);
+    std::string identifyFormat();
     std::string responseFormat(std::string ack);
     std::string responseFormat(std::string nodeType, std::string processName);
     std::string responseFormat(bool lock);

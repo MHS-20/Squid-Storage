@@ -43,14 +43,18 @@ std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::
     default:
         break;
     }
+
     std::string message = keywordValue + "<";
     for (auto arg : args)
     {
         message += arg + ",";
     }
-    message.pop_back();
+
+    if (args.size() != 0)
+        message.pop_back();
     message += ">";
-    std::cout << message << std::endl;
+
+    std::cout <<  "FORMATTER: " + message << std::endl;
     return message;
 }
 
@@ -127,14 +131,14 @@ std::string SquidProtocolFormatter::syncStatusFormat()
     return this->createMessage(SYNC_STATUS, {});
 }
 
-std::string SquidProtocolFormatter::identifyFormat(std::string processName, std::string nodeType)
+std::string SquidProtocolFormatter::identifyFormat()
 {
-    return this->createMessage(IDENTIFY, {"processName:" + processName, "nodeType:" + nodeType});
+    return this->createMessage(IDENTIFY, {});
 }
 
 std::string SquidProtocolFormatter::responseFormat(std::string ack)
 {
-    return this->createMessage(RESPONSE, {"ack:" + ack});
+    return this->createMessage(RESPONSE, {"ACK:" + ack});
 }
 
 std::string SquidProtocolFormatter::responseFormat(std::string nodeType, std::string processName)

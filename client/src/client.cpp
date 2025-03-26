@@ -43,7 +43,7 @@ void Client::connectToServer()
         exit(EXIT_FAILURE);
     }
     std::cout << "[CLIENT]: Connected to server...\n";
-    //sendName(socket_fd);
+    // sendName(socket_fd);
 }
 
 void Client::sendName(int socket_fd)
@@ -57,11 +57,20 @@ void Client::run()
 {
     this->connectToServer();
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    std::cout << "[CLIENT]: Sending identify message" << std::endl;
-    Message mex = squidProtocol.identify();
-    std::cout << "[CLIENT]: Ack received from server: " + mex.args["ack"] << std::endl;
+    Message mex = squidProtocol.receiveAndParseMessage();
+    std::cout << "[CLIENT]: Identify  request received from server: " + mex.keyword << std::endl;
 
-    // squidProtocol.createFile("./test_txt/test.txt");
+    squidProtocol.response(std::string("client"), std::string("CLIENT"));
+    mex = squidProtocol.receiveAndParseMessage();
+
+    if(mex.args["ACK"] == "ACK")
+        std::cout<< "[CLIENT]: ACK received" <<std::endl;
+
+    if (squidProtocol.createFile("./test_txt/clientfile.txt") != "ACK")
+        perror("Error while creating file on server");
+    else
+        std::cout << "Created file successfully on server" << std::endl;
+
     // squidProtocol.readFile("./test_txt/test.txt");
     // squidProtocol.deleteFile("./test_txt/test.txt");
     // squidProtocol.close();
