@@ -1,4 +1,5 @@
 #include "squidprotocolformatter.hpp"
+#include <iostream>
 
 std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::vector<std::string> args)
 {
@@ -49,19 +50,48 @@ std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::
     }
     message.pop_back();
     message += ">";
+    std::cout << message << std::endl;
     return message;
+}
+
+ProtocolKeyWord valueOf(const std::string &keyword)
+{
+    if (keyword == "CREATE_FILE")
+        return CREATE_FILE;
+    if (keyword == "TRANSFER_FILE")
+        return TRANSFER_FILE;
+    if (keyword == "READ_FILE")
+        return READ_FILE;
+    if (keyword == "UPDATE_FILE")
+        return UPDATE_FILE;
+    if (keyword == "DELETE_FILE")
+        return DELETE_FILE;
+    if (keyword == "ACQUIRE_LOCK")
+        return ACQUIRE_LOCK;
+    if (keyword == "RELEASE_LOCK")
+        return RELEASE_LOCK;
+    if (keyword == "HEARTBEAT")
+        return HEARTBEAT;
+    if (keyword == "SYNC_STATUS")
+        return SYNC_STATUS;
+    if (keyword == "IDENTIFY")
+        return IDENTIFY;
+    if (keyword == "RESPONSE")
+        return RESPONSE;
+
+    throw std::invalid_argument("Invalid keyword: " + keyword);
 }
 
 std::string SquidProtocolFormatter::createFileFormat(std::string filePath)
 {
     return this->createMessage(CREATE_FILE, {"filePath:" + filePath});
 }
-/*
-std::string SquidProtocolFormatter::transferFileFormat(std::string fileContent)
+
+std::string SquidProtocolFormatter::transferFileFormat(std::string filePath)
 {
-    return this->createMessage(TRANSFER_FILE, {"fileContent:" + fileContent});
+    return this->createMessage(TRANSFER_FILE, {"filePath:" + filePath});
 }
-*/
+
 std::string SquidProtocolFormatter::readFileFormat(std::string filePath)
 {
     return this->createMessage(READ_FILE, {"filePath:" + filePath});
@@ -97,9 +127,9 @@ std::string SquidProtocolFormatter::syncStatusFormat()
     return this->createMessage(SYNC_STATUS, {});
 }
 
-std::string SquidProtocolFormatter::identifyFormat()
+std::string SquidProtocolFormatter::identifyFormat(std::string processName, std::string nodeType)
 {
-    return this->createMessage(IDENTIFY, {});
+    return this->createMessage(IDENTIFY, {"processName:" + processName, "nodeType:" + nodeType});
 }
 
 std::string SquidProtocolFormatter::responseFormat(std::string ack)
@@ -133,11 +163,33 @@ Message SquidProtocolFormatter::parseMessage(std::string message)
     std::string args = message.substr(message.find("<") + 1, message.find(">") - message.find("<") - 1);
     std::map<std::string, std::string> argMap;
     std::string arg;
+
+    std::cout << "Keyword: " << keyword << std::endl;
+    std::cout << "Args: " << args << std::endl;
     while (args.length() > 0)
     {
-        arg = args.substr(0, args.find(","));
-        argMap[arg.substr(0, arg.find(":"))] = arg.substr(arg.find(":") + 1);
-        args = args.substr(args.find(",") + 1);
+        size_t commaPos = args.find(",");
+        if (commaPos == std::string::npos)
+        {
+            // Handle the last key-value pair
+            std::string arg = args;
+            argMap[arg.substr(0, arg.find(":"))] = arg.substr(arg.find(":") + 1);
+            break; // Exit the loop after processing the last pair
+        }
+        else
+        {
+            // Handle the current key-value pair
+            std::string arg = args.substr(0, commaPos);
+            argMap[arg.substr(0, arg.find(":"))] = arg.substr(arg.find(":") + 1);
+            args = args.substr(commaPos + 1); // Update args to exclude the processed pair
+        }
     }
-    return Message(static_cast<ProtocolKeyWord>(std::stoi(keyword)), argMap);
+
+    std::cout << "Message Parsed: " << std::endl;
+    for (auto arg : argMap)
+    {
+        std::cout << arg.first << " => " << arg.second << std::endl;
+    }
+
+    return Message(valueOf(keyword), argMap);
 }

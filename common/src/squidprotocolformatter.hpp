@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 #include <vector>
 #include <map>
@@ -18,6 +19,7 @@ enum ProtocolKeyWord
     IDENTIFY,
     RESPONSE,
 };
+
 class Message
 {
 public:
@@ -38,7 +40,7 @@ public:
     std::string releaseLockFormat(std::string filePath);
     std::string heartbeatFormat();
     std::string syncStatusFormat();
-    std::string identifyFormat();
+    std::string identifyFormat(std::string processName, std::string nodeType);
     std::string responseFormat(std::string ack);
     std::string responseFormat(std::string nodeType, std::string processName);
     std::string responseFormat(bool lock);
