@@ -1,22 +1,60 @@
 #include "squidprotocol.hpp"
 
+SquidProtocol::SquidProtocol() {}
+
 SquidProtocol::SquidProtocol(int socket_fd, std::string processName, std::string nodeType)
 {
     this->socket_fd = socket_fd;
     this->processName = processName;
+    this->nodeType = nodeType; 
     this->fileTransfer = FileTransfer();
     this->fileManager = FileManager();
     this->formatter = SquidProtocolFormatter();
 }
 
+SquidProtocol::~SquidProtocol() {}
+
+Message SquidProtocol::identify()
+{
+    std::cout << "Identifying..." << std::endl;
+    this->sendMessage(this->formatter.identifyFormat(processName, nodeType));
+    return this->receiveAndParseMessage();
+}
+
 std::string SquidProtocol::createFile(std::string filePath)
 {
     this->sendMessage(this->formatter.createFileFormat(filePath));
-
     Message response = receiveAndParseMessage();
     if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
         this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
+    return receiveAndParseMessage().args["ACK"];
+}
 
+// CHECK
+std::string SquidProtocol::transferFile(std::string filePath)
+{
+    this->sendMessage(this->formatter.transferFileFormat(filePath));
+    Message response = receiveAndParseMessage();
+    if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
+        this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
+    return receiveAndParseMessage().args["ACK"];
+}
+
+std::string SquidProtocol::readFile(std::string filePath)
+{
+    this->sendMessage(this->formatter.readFileFormat(filePath));
+    Message response = receiveAndParseMessage();
+    if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
+        this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
+    return receiveAndParseMessage().args["ACK"];
+}
+
+std::string SquidProtocol::updateFile(std::string filePath)
+{
+    this->sendMessage(this->formatter.updateFileFormat(filePath));
+    Message response = receiveAndParseMessage();
+    if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
+        this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
     return receiveAndParseMessage().args["ACK"];
 }
 
@@ -27,10 +65,11 @@ void SquidProtocol::sendMessage(std::string message)
 
 Message SquidProtocol::receiveAndParseMessage()
 {
-    if (!recv(this->socket_fd, this->buffer, sizeof(this->buffer), 0))
+    if (!read(this->socket_fd, this->buffer, sizeof(this->buffer)))
     {
         perror("Failed to receive message");
     }
+    std::cout<<"Received message: "<<this->buffer<<std::endl;
     return this->formatter.parseMessage(this->buffer);
 }
 
@@ -101,14 +140,9 @@ std::string SquidProtocol::syncStatus()
     return "ACK";
 }
 
-Message SquidProtocol::identify()
-{
-    this->sendMessage(this->formatter.identifyFormat());
-    return receiveAndParseMessage();
-}
-
 void SquidProtocol::response(std::string ack)
 {
+    std::cout << "Sending response: " << ack << std::endl;
     this->sendMessage(this->formatter.responseFormat(ack));
 }
 
@@ -124,10 +158,11 @@ void SquidProtocol::response(std::map<std::string, fs::file_time_type> filesLast
 
 void SquidProtocol::response(bool lock)
 {
+    std::cout << "Sending response: " << lock << std::endl;
     this->sendMessage(this->formatter.responseFormat(lock));
 }
 
-void SquidProtocol::dispatcher(Message message)
+void SquidProtocol::requestDispatcher(Message message)
 {
     switch (message.keyword)
     {
@@ -137,6 +172,9 @@ void SquidProtocol::dispatcher(Message message)
         this->response("ACK");
         break;
     case TRANSFER_FILE:
+        this->response("ACK");
+        this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+        this->response("ACK");
         break;
     case READ_FILE:
         break;

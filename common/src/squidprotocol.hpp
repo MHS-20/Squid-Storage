@@ -1,3 +1,4 @@
+#pragma once
 #include "squidprotocolformatter.hpp"
 #include <sys/socket.h>
 #include "filetransfer.hpp"
@@ -8,6 +9,7 @@
 class SquidProtocol
 {
 public:
+    SquidProtocol();
     SquidProtocol(int socket_fd, std::string processName, std::string nodeType);
     ~SquidProtocol();
     virtual std::string createFile(std::string filePath);
@@ -24,7 +26,8 @@ public:
     virtual void response(std::string nodeType, std::string processName);
     virtual void response(std::map<std::string, fs::file_time_type> filesLastWrite);
     virtual void response(bool lock);
-    virtual void dispatcher(Message message);
+    virtual void requestDispatcher(Message message);
+    virtual Message receiveAndParseMessage();
 
 private:
     int socket_fd;
@@ -35,6 +38,5 @@ private:
     FileManager fileManager;
     SquidProtocolFormatter formatter;
     void sendMessage(std::string message);
-    Message receiveAndParseMessage();
-    std::string receive();
+    // std::string receive();
 };
