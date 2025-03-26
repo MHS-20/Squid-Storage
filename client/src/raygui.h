@@ -5570,7 +5570,8 @@ static inline int GuiTextBoxInternal(Rectangle bounds, char *text, int textSize,
     // NOTE: Position X value should be updated
     Rectangle cursor = {
         textBounds.x + textWidth + GuiGetStyle(DEFAULT, TEXT_SPACING),
-        textBounds.y + textBounds.height / 2 - GuiGetStyle(DEFAULT, TEXT_SIZE),
+        // textBounds.y + textBounds.height / 2 - GuiGetStyle(DEFAULT, TEXT_SIZE),
+        textBounds.y + GuiGetStyle(DEFAULT, TEXT_SIZE),
         2,
         (float)GuiGetStyle(DEFAULT, TEXT_SIZE) * 2};
 
@@ -5806,7 +5807,8 @@ static inline int GuiTextBoxInternal(Rectangle bounds, char *text, int textSize,
             if (multiline)
             {
                 cursor.y = GetTextTotalLines(text, textBoxCursorIndex) * GuiGetStyle(DEFAULT, TEXT_SIZE);
-                cursor.y += textBounds.y + textBounds.height / 2 - GuiGetStyle(DEFAULT, TEXT_SIZE);
+                // cursor.y += textBounds.y + textBounds.height / 2 - GuiGetStyle(DEFAULT, TEXT_SIZE);
+                cursor.y += textBounds.y - GuiGetStyle(DEFAULT, TEXT_SIZE);
             }
 
             // Finish text editing on ENTER or mouse click outside bounds
