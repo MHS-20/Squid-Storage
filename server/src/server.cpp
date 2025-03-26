@@ -4,21 +4,29 @@ Server::Server() : Server(DEFAULT_PORT) {}
 
 Server::Server(int port)
 {
+
+    std::cout << "[SERVER]: Initializing..." + server_fd << std::endl;
     this->port = port;
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd == 0)
+    this->server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0)
     {
         perror("[SERVER]: Socket failed");
         exit(EXIT_FAILURE);
     }
 
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0)
+    {
+        perror("[SERVER]: setsockopt failed");
+        exit(EXIT_FAILURE);
+    }
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
+    //squidProtocol = SquidProtocol(server_fd, "server", "SERVER");
+
     fileMap = std::map<std::string, int>();
     clientEndpointMap = std::map<std::string, int>();
     dataNodeEndpointMap = std::map<std::string, int>();
@@ -27,6 +35,11 @@ Server::Server(int port)
 Server::~Server()
 {
     close(server_fd);
+}
+
+int Server::getSocket()
+{
+    return server_fd;
 }
 
 void Server::start()
@@ -49,14 +62,25 @@ void Server::start()
             perror("[SERVER]: Accept failed");
             exit(EXIT_FAILURE);
         }
+        
+        std::cout << "Accepted connection: " << new_socket << "...\n";
+        this->handleClient(new_socket);
 
         // print client info & update client map
-        
-
-        identifyConnection(new_socket);
-        handleClient(new_socket);
+        // identifyConnection(new_socket);
+        // handleClient(new_socket);
         // close(new_socket);
     }
+}
+
+void Server::handleClient(int client_socket)
+{
+    SquidProtocol client_protocol = SquidProtocol(client_socket, "server", "SERVER");
+    std::cout << "Checking for messages ...\n";
+    Message message = client_protocol.receiveAndParseMessage();
+    std::cout << "[SERVER]: Identify message received from client: " + message.args["processName"] << std::endl;
+    client_protocol.response(std::string("ACK"));
+    std::cout << "[SERVER]: Ack sent to client." << std::endl;
 }
 
 void printMap(std::map<std::string, int> &map, std::string name)
@@ -97,12 +121,6 @@ void Server::identifyConnection(int new_socket)
     printMap(dataNodeEndpointMap, "DATANODES MAP");
 }
 
-void Server::handleClient(int client_socket)
-{
-    receiveFile(client_socket, "./test_txt/received_from_client.txt");
-    sendFile(client_socket, "./test_txt/received_from_client.txt");
-}
-
 void Server::handleClientMessage(int client_socket)
 {
     char buffer[BUFFER_SIZE] = {0};
@@ -125,4 +143,3 @@ void Server::receiveFile(int client_socket, const char *outputpath)
 {
     this->fileTransfer.receiveFile(client_socket, "[SERVER]", outputpath);
 }
-

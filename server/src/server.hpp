@@ -1,5 +1,4 @@
 #include <vector>
-#include <netinet/in.h>
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -7,7 +6,9 @@
 #include <sys/socket.h>
 #include <fstream>
 #include <map>
+
 #include "filetransfer.hpp"
+#include "squidprotocol.hpp"
 
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
@@ -19,6 +20,9 @@ public:
     Server(int port);
     Server();
     ~Server();
+
+    int getSocket();
+
     void receiveFile(int client_socket, const char *outputpath);
     void sendFile(int client_socket, const char *filepath);
     // virtual bool listenForClients();
@@ -38,7 +42,9 @@ private:
     struct sockaddr_in address;
     socklen_t addrlen = sizeof(address);
 
+    SquidProtocol squidProtocol;
     FileTransfer fileTransfer;
+
     std::map<std::string, int> fileMap;             // filename to file id
     std::map<std::string, int> clientEndpointMap;   // client ip/name to socket_fd
     std::map<std::string, int> dataNodeEndpointMap; // datanode ip/name to socket_fd

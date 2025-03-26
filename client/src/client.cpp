@@ -1,4 +1,5 @@
 #include "client.hpp"
+#include <thread>
 
 Client::Client() : Client(SERVER_IP, SERVER_PORT) {}
 
@@ -21,11 +22,17 @@ Client::Client(const char *server_ip, int port)
     }
 
     this->fileTransfer = FileTransfer();
+    this->squidProtocol = SquidProtocol(socket_fd, "client", "CLIENT");
 }
 
 Client::~Client()
 {
     close(socket_fd);
+}
+
+int Client::getSocket()
+{
+    return socket_fd;
 }
 
 void Client::connectToServer()
@@ -36,14 +43,28 @@ void Client::connectToServer()
         exit(EXIT_FAILURE);
     }
     std::cout << "[CLIENT]: Connected to server...\n";
-    sendName(socket_fd);
+    //sendName(socket_fd);
 }
 
-void Client::sendName(int socket_fd){
+void Client::sendName(int socket_fd)
+{
     const char *name = "CLIENT";
     send(socket_fd, name, strlen(name), 0);
     std::cout << "[CLIENT]: Name sent: " << name << std::endl;
+}
 
+void Client::run()
+{
+    this->connectToServer();
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::cout << "[CLIENT]: Sending identify message" << std::endl;
+    Message mex = squidProtocol.identify();
+    std::cout << "[CLIENT]: Ack received from server: " + mex.args["ack"] << std::endl;
+
+    // squidProtocol.createFile("./test_txt/test.txt");
+    // squidProtocol.readFile("./test_txt/test.txt");
+    // squidProtocol.deleteFile("./test_txt/test.txt");
+    // squidProtocol.close();
 }
 
 /* ---- MESSAGE API ----- */

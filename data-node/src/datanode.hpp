@@ -3,7 +3,9 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <fstream>
+
 #include "filetransfer.hpp"
+#include "squidprotocol.hpp"
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
@@ -16,7 +18,9 @@ public:
     DataNode();
     DataNode(const char *server_ip, int port);
     ~DataNode();
+
     virtual void connectToServer();
+    // virtual void run();
 
     /* Messages for Testing */
     virtual void sendMessage(const char *message);
@@ -33,6 +37,8 @@ private:
     int socket_fd = 0;
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE] = {0};
+    
     FileTransfer fileTransfer;
+    SquidProtocol squidProtocol;
     void sendName(int socket_fd); 
 };
