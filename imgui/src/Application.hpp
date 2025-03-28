@@ -1,7 +1,6 @@
 #pragma once
 #include <string>
-#include "../../../Squid-Storage/client/src/filemanager.hpp"
-
+#include "filemanager.hpp"
 
 namespace SquidStorage
 {
@@ -9,5 +8,3 @@ namespace SquidStorage
     void renderFileExplorer();
     void renderFileEditor();
 }
-
-
