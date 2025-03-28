@@ -10,6 +10,7 @@ class FileManager
 public:
     FileManager();
     std::vector<std::string> getFiles(std::string path);
+	std::vector<fs::directory_entry> getFileEntries(std::string path);
     std::map<std::string, fs::file_time_type> getFilesLastWrite(std::string path);
     char *stringToChar(std::string str);
     bool createFile(std::string path);

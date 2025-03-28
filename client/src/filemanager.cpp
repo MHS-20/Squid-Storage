@@ -9,12 +9,18 @@ std::vector<std::string> FileManager::getFiles(std::string path)
     std::vector<std::string> files;
 
     for (const auto &entry : fs::directory_iterator(path))
-    {
         files.push_back(entry.path().string());
-    }
+
     return files;
 }
+std::vector<fs::directory_entry> FileManager::getFileEntries(std::string path)
+{   
+	std::vector<fs::directory_entry> entries;
+    for (const auto& entry : fs::directory_iterator(path))
+        entries.push_back(entry);
 
+    return entries;
+}
 std::map<std::string, fs::file_time_type> FileManager::getFilesLastWrite(std::string path)
 {
     auto files = this->getFiles(path);
@@ -85,7 +91,7 @@ bool FileManager::releaseLock(std::string path)
     return false;
 }
 
-std::string formatFileList(std::vector<std::string> files)
+std::string FileManager::formatFileList(std::vector<std::string> files)
 {
     std::string fileList = "";
     for (auto file : files)
