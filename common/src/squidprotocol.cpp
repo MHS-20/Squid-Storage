@@ -23,11 +23,11 @@ Message SquidProtocol::identify()
 
 std::string SquidProtocol::createFile(std::string filePath)
 {
-    std::cout<< nodeType + ": sending create file request" << std::endl; 
+    std::cout << nodeType + ": sending create file request" << std::endl;
     this->sendMessage(this->formatter.createFileFormat(filePath));
-    std::cout<< nodeType + ": sent create file request" << std::endl; 
+    std::cout << nodeType + ": sent create file request" << std::endl;
     Message response = receiveAndParseMessage();
-    std::cout<< nodeType + ": received create file response" << std::endl; 
+    std::cout << nodeType + ": received create file response" << std::endl;
     transferFile(filePath, response);
     return receiveAndParseMessage().args["ACK"];
 }
@@ -43,7 +43,7 @@ std::string SquidProtocol::updateFile(std::string filePath)
 // CHECK
 void SquidProtocol::transferFile(std::string filePath, Message response)
 {
-    std::cout<< nodeType + ": trying transfering file" << std::endl; 
+    std::cout << nodeType + ": trying transfering file" << std::endl;
     if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
         this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
     else
@@ -62,18 +62,19 @@ std::string SquidProtocol::readFile(std::string filePath)
 
 void SquidProtocol::sendMessage(std::string message)
 {
+    std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
     send(this->socket_fd, message.c_str(), message.length(), 0);
 }
 
 Message SquidProtocol::receiveAndParseMessage()
 {
     // empty the buffer
-    //memset(this->buffer, 0, sizeof(this->buffer));
-    std::cout<< nodeType + ": trying parsing" << std::endl; 
+    // memset(this->buffer, 0, sizeof(this->buffer));
+    std::cout << nodeType + ": trying parsing" << std::endl;
 
     if (recv(this->socket_fd, this->buffer, sizeof(this->buffer), 0) == EOF)
     {
-        std::string msg = std::string(nodeType) + ": Failed to receive message ";        
+        std::string msg = std::string(nodeType) + ": Failed to receive message ";
         perror(msg.c_str());
     }
 
@@ -175,8 +176,9 @@ void SquidProtocol::requestDispatcher(Message message)
     switch (message.keyword)
     {
     case CREATE_FILE:
-        std::cout<< nodeType + ": Dispatcher: create file\n";
+        std::cout << nodeType + ": Dispatcher: create file\n";
         this->response(std::string("ACK"));
+        std::cout << "calling file transfer.receiveFile" << std::endl;
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
         this->response(std::string("ACK"));
         break;

@@ -17,7 +17,11 @@ cl /Zi /MD /I.. /I..\.. /I%SDL2_DIR%\include main.cpp ..\..\backends\imgui_impl_
 -   On Linux and similar Unixes
 
 ```
+<<<<<<< Updated upstream
 c++ -std=c++17 `sdl2-config --cflags` -I .. -I ../ -I backends src/main.cpp src/Application.cpp src/filemanager.cpp backends/imgui_impl_sdl2.cpp backends/imgui_impl_opengl2.cpp imgui*.cpp `sdl2-config --libs` -lGL
+=======
+c++ -std=c++17 `sdl2-config --cflags` -I .. -I ../ -I backends src/main.cpp src/Application.cpp backends/imgui_impl_sdl2.cpp backends/imgui_impl_opengl2.cpp imgui*.cpp `sdl2-config --libs` -lGL
+>>>>>>> Stashed changes
 ```
 
 -   On Mac OS X

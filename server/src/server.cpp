@@ -6,9 +6,9 @@ Server::Server() : Server(DEFAULT_PORT) {}
 Server::Server(int port)
 {
 
-    std::cout << "[SERVER]: Initializing..." + server_fd << std::endl;
     this->port = port;
     this->server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    std::cout << "[SERVER]: Initializing..." + server_fd << std::endl;
     if (server_fd < 0)
     {
         perror("[SERVER]: Socket failed");
@@ -63,7 +63,7 @@ void Server::start()
             perror("[SERVER]: Accept failed");
             exit(EXIT_FAILURE);
         }
-        
+
         std::cout << "Accepted connection: " << new_socket << "...\n";
         this->handleClient(new_socket);
 
@@ -81,15 +81,26 @@ void Server::handleClient(int client_socket)
 
     Message mex = client_protocol.identify();
     std::cout << "[SERVER]: Identity received from client: " + mex.args["processName"] << std::endl;
-    
+
     client_protocol.response(std::string("ACK"));
     std::cout << "[SERVER]: Ack sent to client" << std::endl;
 
     std::this_thread::sleep_for(std::chrono::seconds(3));
 
-    while(true)
+    while (true)
     {
-        squidProtocol.requestDispatcher(squidProtocol.receiveAndParseMessage());
+        try
+        {
+            mex = client_protocol.receiveAndParseMessage();
+            std::cout << "[SERVER]: Received message: " + mex.keyword << std::endl;
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "[SERVER]: Error receiving message: " << e.what() << std::endl;
+            break;
+        }
+        // squidProtocol.requestDispatcher(mex);
+        client_protocol.requestDispatcher(mex);
     }
 }
 
