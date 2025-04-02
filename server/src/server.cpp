@@ -26,7 +26,6 @@ Server::Server(int port)
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
-    squidProtocol = SquidProtocol(server_fd, "server", "SERVER");
 
     fileMap = std::map<std::string, int>();
     clientEndpointMap = std::map<std::string, int>();
@@ -76,13 +75,13 @@ void Server::start()
 
 void Server::handleClient(int client_socket)
 {
-    SquidProtocol client_protocol = SquidProtocol(client_socket, "server", "SERVER");
+    SquidProtocol clientProtocol = SquidProtocol(client_socket, "server", "SERVER");
     std::cout << "Checking for messages ...\n";
 
-    Message mex = client_protocol.identify();
+    Message mex = clientProtocol.identify();
     std::cout << "[SERVER]: Identity received from client: " + mex.args["processName"] << std::endl;
 
-    client_protocol.response(std::string("ACK"));
+    clientProtocol.response(std::string("ACK"));
     std::cout << "[SERVER]: Ack sent to client" << std::endl;
 
     std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -91,7 +90,7 @@ void Server::handleClient(int client_socket)
     {
         try
         {
-            mex = client_protocol.receiveAndParseMessage();
+            mex = clientProtocol.receiveAndParseMessage();
             std::cout << "[SERVER]: Received message: " + mex.keyword << std::endl;
         }
         catch (std::exception &e)
@@ -100,7 +99,7 @@ void Server::handleClient(int client_socket)
             break;
         }
         // squidProtocol.requestDispatcher(mex);
-        client_protocol.requestDispatcher(mex);
+        clientProtocol.requestDispatcher(mex);
     }
 }
 

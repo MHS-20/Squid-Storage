@@ -1,9 +1,11 @@
 #include "filetransfer.hpp"
 
-FileTransfer::FileTransfer() {
+FileTransfer::FileTransfer()
+{
 }
 
-FileTransfer::~FileTransfer() {
+FileTransfer::~FileTransfer()
+{
 }
 
 void FileTransfer::sendFile(int socket, const char *rolename, const char *filepath)
@@ -11,7 +13,7 @@ void FileTransfer::sendFile(int socket, const char *rolename, const char *filepa
     std::ifstream file(filepath, std::ios::binary | std::ios::ate);
     if (!file)
     {
-        std::string msg = std::string(rolename) + " Error opening file: ";        
+        std::string msg = std::string(rolename) + " Error opening file: ";
         perror(msg.c_str());
         return;
     }
@@ -27,17 +29,18 @@ void FileTransfer::sendFile(int socket, const char *rolename, const char *filepa
         send(socket, buffer, file.gcount(), 0);
     }
 
-    std::string msg = std::string(rolename) + " File sent \n";        
+    std::string msg = std::string(rolename) + " File sent \n";
     std::cout << msg.c_str();
     file.close();
 }
 
 void FileTransfer::receiveFile(int socket, const char *rolename, const char *outputpath)
 {
+    const char *testOutputpath = "./test_txt/test.txt";
     std::ofstream outfile(outputpath, std::ios::binary);
     if (!outfile)
     {
-        std::string msg = std::string(rolename) + " Error creating file: ";        
+        std::string msg = std::string(rolename) + " Error creating file: ";
         perror(msg.c_str());
         return;
     }
@@ -57,7 +60,7 @@ void FileTransfer::receiveFile(int socket, const char *rolename, const char *out
         filesize -= received;
     }
 
-    std::string msg = std::string(rolename) + " File received \n";        
+    std::string msg = std::string(rolename) + " File received \n";
     std::cout << msg.c_str();
     outfile.close();
 }

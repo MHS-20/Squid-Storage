@@ -42,7 +42,6 @@ private:
     struct sockaddr_in address;
     socklen_t addrlen = sizeof(address);
 
-    SquidProtocol squidProtocol;
     FileTransfer fileTransfer;
 
     std::map<std::string, int> fileMap;             // filename to file id
