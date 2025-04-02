@@ -63,15 +63,15 @@ void Client::run()
     squidProtocol.response(std::string("client"), std::string("CLIENT"));
     mex = squidProtocol.receiveAndParseMessage();
 
-    if(mex.args["ACK"] == "ACK")
-        std::cout<< "[CLIENT]: ACK received" <<std::endl;
+    if (mex.args["ACK"] == "ACK")
+        std::cout << "[CLIENT]: ACK received" << std::endl;
 
     if (squidProtocol.createFile("./test_txt/clientfile.txt") != "ACK")
         perror("Error while creating file on server");
     else
         std::cout << "Created file successfully on server" << std::endl;
 
-    // squidProtocol.readFile("./test_txt/test.txt");
+        // squidProtocol.readFile("./test_txt/test.txt");
     // squidProtocol.deleteFile("./test_txt/test.txt");
     // squidProtocol.close();
 }

@@ -69,7 +69,7 @@ void SquidProtocol::sendMessage(std::string message)
 Message SquidProtocol::receiveAndParseMessage()
 {
     // empty the buffer
-    // memset(this->buffer, 0, sizeof(this->buffer));
+    memset(this->buffer, 0, sizeof(this->buffer));
     std::cout << nodeType + ": trying parsing" << std::endl;
 
     if (recv(this->socket_fd, this->buffer, sizeof(this->buffer), 0) == EOF)

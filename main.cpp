@@ -47,7 +47,8 @@ int main()
     // // client.sendMessage("Hello from client");
     // // client.receiveMessage();
     // client.run(); });
-
+    client_thread1.join();
+    std::cout << "Client thread finished" << std::endl;
     server_thread.join();
 
     return 0;
