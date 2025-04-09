@@ -14,9 +14,18 @@ SquidProtocol::SquidProtocol(int socket_fd, std::string processName, std::string
 
 SquidProtocol::~SquidProtocol() {}
 
+int SquidProtocol::getSocket(){
+    return socket_fd;
+}
+
+Message SquidProtocol::closeConn()
+{
+    this->sendMessage(this->formatter.closeFormat());
+    return receiveAndParseMessage();
+}
+
 Message SquidProtocol::identify()
 {
-    std::cout << "Identifying..." << std::endl;
     this->sendMessage(this->formatter.identifyFormat());
     return this->receiveAndParseMessage();
 }
@@ -25,7 +34,7 @@ Message SquidProtocol::createFile(std::string filePath)
 {
     std::cout << nodeType + ": sending create file request" << std::endl;
     this->sendMessage(this->formatter.createFileFormat(filePath));
-    std::cout << nodeType + ": sent create file request" << std::endl;
+    //std::cout << nodeType + ": sent create file request" << std::endl;
     Message response = receiveAndParseMessage();
     std::cout << nodeType + ": received create file response" << std::endl;
     transferFile(filePath, response);
@@ -130,7 +139,7 @@ Message SquidProtocol::syncStatus()
 
 Message SquidProtocol::receiveAndParseMessage()
 {
-    // empty the buffer
+    // emptying the buffer
     memset(this->buffer, 0, sizeof(this->buffer));
     // std::cout << nodeType + ": trying parsing" << std::endl;
 
@@ -226,6 +235,12 @@ void SquidProtocol::requestDispatcher(Message message)
     case IDENTIFY:
         this->response(this->nodeType, this->processName);
         break;
+    case CLOSE:
+        this->response(std::string("ACK"));
+        close(this->socket_fd);
+        socket_fd = -1;
+        std::cout << nodeType + ": Connection closed" << std::endl;
+        break;
     default:
         break;
     }
@@ -267,33 +282,42 @@ void SquidProtocol::responseDispatcher(Message response)
         break;
     case ACQUIRE_LOCK:
         if (response.args["LOCK"] != "true")
-            perror(std::string(nodeType + ": Error while acquiring lock: " + response.args["filePath"]).c_str());
+            perror(std::string(nodeType + ": Lock refused for file: " + response.args["filePath"]).c_str());
         else
             std::cout << nodeType + ": Acquired lock successfully on server" << std::endl;
         break;
     case RELEASE_LOCK:
         if (response.args["ACK"] != "ACK")
-            perror(std::string(nodeType + ": Error while releasing lock: " + response.args["filePath"]).c_str());
+            perror(std::string(nodeType + ": Error while releasing lock for file: " + response.args["filePath"]).c_str());
         else
             std::cout << nodeType + ": Released lock successfully on server" << std::endl;
         break;
     case HEARTBEAT:
         if (response.args["ACK"] != "ACK")
-            perror(std::string(nodeType + ": Error while receiving heartbeat: " + response.args["filePath"]).c_str());
+            perror(std::string(nodeType + ": Heartbeat error").c_str());
         else
-            std::cout << nodeType + ": Received heartbeat successfully on server" << std::endl;
+            std::cout << nodeType + ": Received heartbeat successfully from server" << std::endl;
         break;
     case SYNC_STATUS:
         if (response.args["ACK"] != "ACK")
-            perror(std::string(nodeType + ": Error while synchronizing status: " + response.args["filePath"]).c_str());
+            perror(std::string(nodeType + ": Error while synchronizing state").c_str());
         else
             std::cout << nodeType + ": Synchronization with server successful" << std::endl;
         break;
     case IDENTIFY:
         if (response.args["ACK"] != "ACK")
-            perror(std::string(nodeType + ": Error while identifying: " + response.args["filePath"]).c_str());
+            perror(std::string(nodeType + ": Error while identifying").c_str());
         else
             std::cout << nodeType + ": Identified successfully on server" << std::endl;
+        break;
+    case CLOSE:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while closing connection").c_str());
+        else{
+            close(this->socket_fd);
+            socket_fd = -1;
+            std::cout << nodeType + ": Connection closed successfully" << std::endl;
+        }
         break;
     default:
         break;

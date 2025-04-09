@@ -87,6 +87,9 @@ void Client::run()
     handleRequest(squidProtocol.readFile("./test_txt/clientfile.txt"));
     handleRequest(squidProtocol.deleteFile("./test_txt/clientfile.txt"));
     handleRequest(squidProtocol.syncStatus());
+    handleRequest(squidProtocol.closeConn());
+
+    close(socket_fd);
 }
 
 /* ---- MESSAGE API ----- */

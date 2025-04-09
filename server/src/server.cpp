@@ -82,6 +82,13 @@ void Server::handleClient(int client_socket)
 
     while (true)
     {
+        std::cout << "[SERVER]: Waiting for messages..." << std::endl;
+        if(clientProtocol.getSocket() < 0) // connection closed
+        {
+            std::cout << "[SERVER]: Closing & Terminating" << std::endl;
+            break;
+        }
+
         try
         {
             mex = clientProtocol.receiveAndParseMessage();
@@ -92,7 +99,9 @@ void Server::handleClient(int client_socket)
             std::cerr << "[SERVER]: Error receiving message: " << e.what() << std::endl;
             break;
         }
+
         clientProtocol.requestDispatcher(mex);
+        std::cout << "[SERVER]: Request dispatched" << std::endl;
     }
 }
 

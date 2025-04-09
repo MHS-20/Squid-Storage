@@ -47,6 +47,9 @@ std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::
     case RESPONSE:
         keywordValue = "RESPONSE";
         break;
+    case CLOSE:
+        keywordValue = "CLOSE";
+        break;
     default:
         break;
     }
@@ -89,8 +92,15 @@ ProtocolKeyWord valueOf(const std::string &keyword)
         return IDENTIFY;
     if (keyword == "RESPONSE")
         return RESPONSE;
+    if (keyword == "CLOSE")
+        return CLOSE;
 
     throw std::invalid_argument("Invalid keyword: " + keyword);
+}
+
+std::string SquidProtocolFormatter::closeFormat()
+{
+    return this->createMessage(CLOSE, {});
 }
 
 std::string SquidProtocolFormatter::createFileFormat(std::string filePath)

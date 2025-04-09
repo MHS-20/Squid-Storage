@@ -18,6 +18,7 @@ enum ProtocolKeyWord
     SYNC_STATUS,
     IDENTIFY,
     RESPONSE,
+    CLOSE
 };
 
 class Message
@@ -33,21 +34,27 @@ class SquidProtocolFormatter
 public:
     SquidProtocolFormatter();
     SquidProtocolFormatter(std::string nodeType);
+    Message parseMessage(std::string message);
+
+    std::string identifyFormat();
+    std::string closeFormat();
+
     std::string createFileFormat(std::string filePath);
     std::string transferFileFormat(std::string fileContent);
     std::string readFileFormat(std::string filePath);
     std::string updateFileFormat(std::string filePath);
     std::string deleteFileFormat(std::string filePath);
+
     std::string acquireLockFormat(std::string filePath);
     std::string releaseLockFormat(std::string filePath);
+
     std::string heartbeatFormat();
     std::string syncStatusFormat();
-    std::string identifyFormat();
+
+    std::string responseFormat(bool lock);
     std::string responseFormat(std::string ack);
     std::string responseFormat(std::string nodeType, std::string processName);
-    std::string responseFormat(bool lock);
     std::string responseFormat(std::map<std::string, fs::file_time_type> filesLastWrite);
-    Message parseMessage(std::string message);
 
 private:
     std::string nodeType;
