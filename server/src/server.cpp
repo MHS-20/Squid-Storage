@@ -26,7 +26,6 @@ Server::Server(int port)
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
-
     fileMap = std::map<std::string, int>();
     clientEndpointMap = std::map<std::string, int>();
     dataNodeEndpointMap = std::map<std::string, int>();
@@ -65,11 +64,6 @@ void Server::start()
 
         std::cout << "Accepted connection: " << new_socket << "...\n";
         this->handleClient(new_socket);
-
-        // print client info & update client map
-        // identifyConnection(new_socket);
-        // handleClient(new_socket);
-        // close(new_socket);
     }
 }
 
@@ -98,7 +92,6 @@ void Server::handleClient(int client_socket)
             std::cerr << "[SERVER]: Error receiving message: " << e.what() << std::endl;
             break;
         }
-        // squidProtocol.requestDispatcher(mex);
         clientProtocol.requestDispatcher(mex);
     }
 }
