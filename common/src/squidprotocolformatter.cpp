@@ -1,6 +1,13 @@
 #include "squidprotocolformatter.hpp"
 #include <iostream>
 
+SquidProtocolFormatter::SquidProtocolFormatter() {};
+
+SquidProtocolFormatter::SquidProtocolFormatter(std::string nodeType)
+{
+    this->nodeType = nodeType;
+}
+
 std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::vector<std::string> args)
 {
     std::string keywordValue;
@@ -54,7 +61,7 @@ std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::
         message.pop_back();
     message += ">";
 
-    std::cout <<  "FORMATTER: " + message << std::endl;
+    //std::cout <<  "FORMATTER: " + message << std::endl;
     return message;
 }
 
@@ -168,8 +175,8 @@ Message SquidProtocolFormatter::parseMessage(std::string message)
     std::map<std::string, std::string> argMap;
     std::string arg;
 
-    std::cout << "Keyword: " << keyword << std::endl;
-    std::cout << "Args: " << args << std::endl;
+    // std::cout << nodeType + ": Keyword: " << keyword << std::endl;
+    // std::cout << nodeType + ": Args: " << args << std::endl;
     while (args.length() > 0)
     {
         size_t commaPos = args.find(",");
@@ -189,11 +196,11 @@ Message SquidProtocolFormatter::parseMessage(std::string message)
         }
     }
 
-    std::cout << "Message Parsed: " << std::endl;
-    for (auto arg : argMap)
-    {
-        std::cout << arg.first << " => " << arg.second << std::endl;
-    }
+    // std::cout << nodeType + ": Message Parsed: " << std::endl;
+    // for (auto arg : argMap)
+    // {
+    //     std::cout << arg.first << " => " << arg.second << std::endl;
+    // }
 
     return Message(valueOf(keyword), argMap);
 }

@@ -9,7 +9,7 @@ SquidProtocol::SquidProtocol(int socket_fd, std::string processName, std::string
     this->nodeType = nodeType;
     this->fileTransfer = FileTransfer();
     this->fileManager = FileManager();
-    this->formatter = SquidProtocolFormatter();
+    this->formatter = SquidProtocolFormatter(nodeType);
 }
 
 SquidProtocol::~SquidProtocol() {}
@@ -43,7 +43,7 @@ std::string SquidProtocol::updateFile(std::string filePath)
 // CHECK
 void SquidProtocol::transferFile(std::string filePath, Message response)
 {
-    std::cout << nodeType + ": trying transfering file" << std::endl;
+    //std::cout << nodeType + ": trying transfering file" << std::endl;
     if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
         this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
     else
@@ -62,7 +62,7 @@ std::string SquidProtocol::readFile(std::string filePath)
 
 void SquidProtocol::sendMessage(std::string message)
 {
-    std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
+    //std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
     send(this->socket_fd, message.c_str(), message.length(), 0);
 }
 
@@ -70,14 +70,25 @@ Message SquidProtocol::receiveAndParseMessage()
 {
     // empty the buffer
     memset(this->buffer, 0, sizeof(this->buffer));
-    std::cout << nodeType + ": trying parsing" << std::endl;
+    //std::cout << nodeType + ": trying parsing" << std::endl;
 
-    if (recv(this->socket_fd, this->buffer, sizeof(this->buffer), 0) == EOF)
-    {
-        std::string msg = std::string(nodeType) + ": Failed to receive message ";
+    // if (recv(this->socket_fd, this->buffer, sizeof(this->buffer) - 1, 0) == EOF)
+    // {
+    //     std::string msg = std::string(nodeType) + ": Failed to receive message ";
+    //     perror(msg.c_str());
+    // }
+
+    ssize_t bytesRead = recv(this->socket_fd, this->buffer, sizeof(this->buffer) - 1, 0);
+    if (bytesRead == 0) {
+        std::cerr << nodeType + ": Connection closed by peer" << std::endl;
+        throw std::runtime_error("Connection closed by peer");
+    } else if (bytesRead < 0) {
+        std::string msg = std::string(nodeType) + ": Failed to receive message";
         perror(msg.c_str());
+        throw std::runtime_error("Failed to receive message");
     }
 
+    this->buffer[bytesRead] = '\0';
     std::cout << nodeType + ": Received message: " << this->buffer << std::endl;
     return this->formatter.parseMessage(this->buffer);
 }
@@ -91,7 +102,7 @@ std::string SquidProtocol::deleteFile(std::string filePath)
 bool SquidProtocol::acquireLock(std::string filePath)
 {
     this->sendMessage(this->formatter.acquireLockFormat(filePath));
-    return receiveAndParseMessage().args["LOCK"] == "true";
+    return receiveAndParseMessage().args["LOCK"] == "1";
 }
 
 std::string SquidProtocol::releaseLock(std::string filePath)

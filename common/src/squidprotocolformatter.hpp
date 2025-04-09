@@ -31,6 +31,8 @@ public:
 class SquidProtocolFormatter
 {
 public:
+    SquidProtocolFormatter();
+    SquidProtocolFormatter(std::string nodeType);
     std::string createFileFormat(std::string filePath);
     std::string transferFileFormat(std::string fileContent);
     std::string readFileFormat(std::string filePath);
@@ -48,5 +50,6 @@ public:
     Message parseMessage(std::string message);
 
 private:
+    std::string nodeType;
     std::string createMessage(ProtocolKeyWord keyword, std::vector<std::string> args);
 };
