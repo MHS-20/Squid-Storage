@@ -23,7 +23,7 @@ public:
     virtual Message releaseLock(std::string filePath);
 
     virtual Message heartbeat();
-    virtual std::string syncStatus();
+    virtual Message syncStatus();
 
     virtual void response(std::string ack);
     virtual void response(std::string nodeType, std::string processName);

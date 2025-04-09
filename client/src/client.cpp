@@ -84,50 +84,9 @@ void Client::run()
     handleRequest(squidProtocol.acquireLock("./test_txt/clientfile.txt"));
     handleRequest(squidProtocol.releaseLock("./test_txt/clientfile.txt"));
     handleRequest(squidProtocol.heartbeat());
-    handleRequest(squidProtocol.deleteFile("./test_txt/clientfile.txt"));
     handleRequest(squidProtocol.readFile("./test_txt/clientfile.txt"));
-    // handleRequest(squidProtocol.syncStatus());
-
-
-    // if (squidProtocol.createFile("./test_txt/clientfile.txt") != "ACK")
-    //     perror("[CLIENT]: Error while creating file on server");
-    // else
-    //     std::cout << "[CLIENT]: Created file successfully on server" << std::endl;
-
-    // if (squidProtocol.acquireLock("./test_txt/clientfile.txt") == "true")
-    //     perror("[CLIENT]: Lock acquisition failed");
-    // else
-    //     std::cout << "[CLIENT]: Lock acquired successfully on server" << std::endl;
-
-    // if (squidProtocol.releaseLock("./test_txt/clientfile.txt") != "ACK")
-    //     perror("[CLIENT]: Lock release failed");
-    // else
-    //     std::cout << "[CLIENT]: Lock released successfully on server" << std::endl;
-
-    // if (squidProtocol.updateFile("./test_txt/clientfile.txt") != "ACK")
-    //     perror("[CLIENT]: Error while updating file on server");
-    // else
-    //     std::cout << "[CLIENT]: Updated file successfully on server" << std::endl;
-
-    // if (squidProtocol.readFile("./test_txt/clientfile.txt") != "ACK")
-    //     perror("[CLIENT]: Error while reading file on server");
-    // else
-    //     std::cout << "[CLIENT]: Read file successfully from server" << std::endl;
-
-    // if (squidProtocol.heartbeat() != "ACK")
-    //     perror("[CLIENT]: Error missing hearbeat from server");
-    // else
-    //     std::cout << "[CLIENT]: Hearbeat received from server" << std::endl;
-
-    // if (squidProtocol.syncStatus() != "ACK")
-    //     perror("[CLIENT]: Error while synchronizing status with server");
-    // else
-    //     std::cout << "[CLIENT]: Synchronization with server successful" << std::endl;
-
-    // if (squidProtocol.deleteFile("./test_txt/clientfile.txt") != "ACK")
-    //     perror("[CLIENT]: Error while deleting file on server");
-    // else
-    //     std::cout << "[CLIENT]: Deleted file successfully on server" << std::endl;
+    handleRequest(squidProtocol.deleteFile("./test_txt/clientfile.txt"));
+    handleRequest(squidProtocol.syncStatus());
 }
 
 /* ---- MESSAGE API ----- */
