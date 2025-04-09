@@ -15,6 +15,8 @@ public:
     virtual int getSocket();
 
     virtual Message receiveAndParseMessage();
+    virtual std::string receiveMessageWithLength();
+
     virtual void requestDispatcher(Message request);
     virtual void responseDispatcher(Message response);
 
@@ -49,4 +51,5 @@ private:
 
     void sendMessage(std::string message);
     void transferFile(std::string filePath, Message response);
+    void sendMessageWithLength(std::string &message);
 };

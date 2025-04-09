@@ -14,7 +14,8 @@ SquidProtocol::SquidProtocol(int socket_fd, std::string processName, std::string
 
 SquidProtocol::~SquidProtocol() {}
 
-int SquidProtocol::getSocket(){
+int SquidProtocol::getSocket()
+{
     return socket_fd;
 }
 
@@ -30,11 +31,15 @@ Message SquidProtocol::identify()
     return this->receiveAndParseMessage();
 }
 
+// ----------------------------
+// --------- REQUESTS ---------
+// ----------------------------
+
 Message SquidProtocol::createFile(std::string filePath)
 {
     std::cout << nodeType + ": sending create file request" << std::endl;
     this->sendMessage(this->formatter.createFileFormat(filePath));
-    //std::cout << nodeType + ": sent create file request" << std::endl;
+    // std::cout << nodeType + ": sent create file request" << std::endl;
     Message response = receiveAndParseMessage();
     std::cout << nodeType + ": received create file response" << std::endl;
     transferFile(filePath, response);
@@ -133,17 +138,27 @@ Message SquidProtocol::syncStatus()
             }
         }
     }
-    //return "ACK";
+    // return "ACK";
     return formatter.parseMessage(formatter.responseFormat("ACK"));
 }
+
+// ---------------------------
+// --------- PARSING ---------
+// ---------------------------
 
 Message SquidProtocol::receiveAndParseMessage()
 {
     // emptying the buffer
-    memset(this->buffer, 0, sizeof(this->buffer));
+    // memset(this->buffer, 0, sizeof(this->buffer));
     // std::cout << nodeType + ": trying parsing" << std::endl;
 
-    ssize_t bytesRead = recv(this->socket_fd, this->buffer, sizeof(this->buffer) - 1, 0);
+    std::string receivedMessage = receiveMessageWithLength();
+    std::cout << nodeType + ": Received message: " << receivedMessage << std::endl;
+    return this->formatter.parseMessage(receivedMessage);
+}
+
+void checkBytesRead(ssize_t bytesRead, std::string nodeType)
+{
     if (bytesRead == 0)
     {
         std::cerr << nodeType + ": Connection closed by peer" << std::endl;
@@ -155,17 +170,36 @@ Message SquidProtocol::receiveAndParseMessage()
         perror(msg.c_str());
         throw std::runtime_error("Failed to receive message");
     }
-
-    this->buffer[bytesRead] = '\0';
-    std::cout << nodeType + ": Received message: " << this->buffer << std::endl;
-    return this->formatter.parseMessage(this->buffer);
 }
 
-void SquidProtocol::sendMessage(std::string message)
+
+std::string SquidProtocol::receiveMessageWithLength()
 {
-    // std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
-    send(this->socket_fd, message.c_str(), message.length(), 0);
+    // Read the length of the message
+    uint32_t messageLength;
+    ssize_t bytesRead = recv(socket_fd, &messageLength, sizeof(messageLength), 0);
+    checkBytesRead(bytesRead, nodeType);
+
+    messageLength = ntohl(messageLength);
+    std::cout << nodeType + "[INFO]: Expecting message of length: " << messageLength << std::endl;
+
+    // Read the actual message
+    char *buffer = new char[messageLength + 1];
+    bytesRead = recv(socket_fd, buffer, messageLength, 0);
+    checkBytesRead(bytesRead, nodeType);
+
+    buffer[messageLength] = '\0';
+    std::string message(buffer);
+    delete[] buffer;
+
+    //std::cout << "[INFO]: Received message: " << message << std::endl;
+    return message;
 }
+
+
+// -----------------------------
+// --------- RESPONSES ---------
+// -----------------------------
 
 void SquidProtocol::response(std::string ack)
 {
@@ -188,6 +222,43 @@ void SquidProtocol::response(bool lock)
     std::cout << "Sending response: " << lock << std::endl;
     this->sendMessage(this->formatter.responseFormat(lock));
 }
+
+// --------------------------------
+// --------- SEND MESSAGE ---------
+// --------------------------------
+
+void SquidProtocol::sendMessage(std::string message)
+{
+    // std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
+    sendMessageWithLength(message);
+    //send(this->socket_fd, message.c_str(), message.length(), 0);
+
+}
+
+void SquidProtocol::sendMessageWithLength(std::string &message)
+{
+    uint32_t messageLength = htonl(message.size());
+
+    // Send the length of the message
+    if (send(socket_fd, &messageLength, sizeof(messageLength), 0) < 0)
+    {
+        std::cerr << nodeType + "[ERROR]: Failed to send message length" << std::endl;
+        return;
+    }
+
+    // Send the actual message
+    if (send(socket_fd, message.c_str(), message.size(), 0) < 0)
+    {
+        std::cerr << nodeType + "[ERROR]: Failed to send message" << std::endl;
+        return;
+    }
+
+    std::cout << nodeType + "[INFO]: Sent message with length: " << message.size() << std::endl;
+}
+
+// -------------------------------
+// --------- DISPATCHERS ---------
+// -------------------------------
 
 void SquidProtocol::requestDispatcher(Message message)
 {
@@ -313,7 +384,8 @@ void SquidProtocol::responseDispatcher(Message response)
     case CLOSE:
         if (response.args["ACK"] != "ACK")
             perror(std::string(nodeType + ": Error while closing connection").c_str());
-        else{
+        else
+        {
             close(this->socket_fd);
             socket_fd = -1;
             std::cout << nodeType + ": Connection closed successfully" << std::endl;
