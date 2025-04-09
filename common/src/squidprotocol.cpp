@@ -21,7 +21,7 @@ Message SquidProtocol::identify()
     return this->receiveAndParseMessage();
 }
 
-std::string SquidProtocol::createFile(std::string filePath)
+Message SquidProtocol::createFile(std::string filePath)
 {
     std::cout << nodeType + ": sending create file request" << std::endl;
     this->sendMessage(this->formatter.createFileFormat(filePath));
@@ -29,21 +29,21 @@ std::string SquidProtocol::createFile(std::string filePath)
     Message response = receiveAndParseMessage();
     std::cout << nodeType + ": received create file response" << std::endl;
     transferFile(filePath, response);
-    return receiveAndParseMessage().args["ACK"];
+    return receiveAndParseMessage();
 }
 
-std::string SquidProtocol::updateFile(std::string filePath)
+Message SquidProtocol::updateFile(std::string filePath)
 {
     this->sendMessage(this->formatter.updateFileFormat(filePath));
     Message response = receiveAndParseMessage();
     transferFile(filePath, response);
-    return receiveAndParseMessage().args["ACK"];
+    return receiveAndParseMessage();
 }
 
 // CHECK
 void SquidProtocol::transferFile(std::string filePath, Message response)
 {
-    //std::cout << nodeType + ": trying transfering file" << std::endl;
+    // std::cout << nodeType + ": trying transfering file" << std::endl;
     if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
         this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
     else
@@ -51,70 +51,37 @@ void SquidProtocol::transferFile(std::string filePath, Message response)
     return;
 }
 
-std::string SquidProtocol::readFile(std::string filePath)
+Message SquidProtocol::readFile(std::string filePath)
 {
     this->sendMessage(this->formatter.readFileFormat(filePath));
     Message response = receiveAndParseMessage();
     if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
-    return receiveAndParseMessage().args["ACK"];
+    return receiveAndParseMessage();
 }
 
-void SquidProtocol::sendMessage(std::string message)
-{
-    //std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
-    send(this->socket_fd, message.c_str(), message.length(), 0);
-}
-
-Message SquidProtocol::receiveAndParseMessage()
-{
-    // empty the buffer
-    memset(this->buffer, 0, sizeof(this->buffer));
-    //std::cout << nodeType + ": trying parsing" << std::endl;
-
-    // if (recv(this->socket_fd, this->buffer, sizeof(this->buffer) - 1, 0) == EOF)
-    // {
-    //     std::string msg = std::string(nodeType) + ": Failed to receive message ";
-    //     perror(msg.c_str());
-    // }
-
-    ssize_t bytesRead = recv(this->socket_fd, this->buffer, sizeof(this->buffer) - 1, 0);
-    if (bytesRead == 0) {
-        std::cerr << nodeType + ": Connection closed by peer" << std::endl;
-        throw std::runtime_error("Connection closed by peer");
-    } else if (bytesRead < 0) {
-        std::string msg = std::string(nodeType) + ": Failed to receive message";
-        perror(msg.c_str());
-        throw std::runtime_error("Failed to receive message");
-    }
-
-    this->buffer[bytesRead] = '\0';
-    std::cout << nodeType + ": Received message: " << this->buffer << std::endl;
-    return this->formatter.parseMessage(this->buffer);
-}
-
-std::string SquidProtocol::deleteFile(std::string filePath)
+Message SquidProtocol::deleteFile(std::string filePath)
 {
     this->sendMessage(this->formatter.deleteFileFormat(filePath));
-    return receiveAndParseMessage().args["ACK"];
+    return receiveAndParseMessage();
 }
 
-bool SquidProtocol::acquireLock(std::string filePath)
+Message SquidProtocol::acquireLock(std::string filePath)
 {
     this->sendMessage(this->formatter.acquireLockFormat(filePath));
-    return receiveAndParseMessage().args["LOCK"] == "1";
+    return receiveAndParseMessage();
 }
 
-std::string SquidProtocol::releaseLock(std::string filePath)
+Message SquidProtocol::releaseLock(std::string filePath)
 {
     this->sendMessage(this->formatter.releaseLockFormat(filePath));
-    return receiveAndParseMessage().args["ACK"];
+    return receiveAndParseMessage();
 }
 
-std::string SquidProtocol::heartbeat()
+Message SquidProtocol::heartbeat()
 {
     this->sendMessage(this->formatter.heartbeatFormat());
-    return receiveAndParseMessage().args["ACK"];
+    return receiveAndParseMessage();
 }
 
 std::string SquidProtocol::syncStatus()
@@ -158,6 +125,36 @@ std::string SquidProtocol::syncStatus()
         }
     }
     return "ACK";
+}
+
+Message SquidProtocol::receiveAndParseMessage()
+{
+    // empty the buffer
+    memset(this->buffer, 0, sizeof(this->buffer));
+    // std::cout << nodeType + ": trying parsing" << std::endl;
+
+    ssize_t bytesRead = recv(this->socket_fd, this->buffer, sizeof(this->buffer) - 1, 0);
+    if (bytesRead == 0)
+    {
+        std::cerr << nodeType + ": Connection closed by peer" << std::endl;
+        throw std::runtime_error("Connection closed by peer");
+    }
+    else if (bytesRead < 0)
+    {
+        std::string msg = std::string(nodeType) + ": Failed to receive message";
+        perror(msg.c_str());
+        throw std::runtime_error("Failed to receive message");
+    }
+
+    this->buffer[bytesRead] = '\0';
+    std::cout << nodeType + ": Received message: " << this->buffer << std::endl;
+    return this->formatter.parseMessage(this->buffer);
+}
+
+void SquidProtocol::sendMessage(std::string message)
+{
+    // std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
+    send(this->socket_fd, message.c_str(), message.length(), 0);
 }
 
 void SquidProtocol::response(std::string ack)
@@ -228,7 +225,74 @@ void SquidProtocol::requestDispatcher(Message message)
     case IDENTIFY:
         this->response(this->nodeType, this->processName);
         break;
-    case RESPONSE:
+    default:
+        break;
+    }
+}
+
+void SquidProtocol::responseDispatcher(Message response)
+{
+    switch (response.keyword)
+    {
+    case CREATE_FILE:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while creating file: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Created file successfully on server" << std::endl;
+        break;
+    case TRANSFER_FILE:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while transfering file: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Transfered file successfully on server" << std::endl;
+        break;
+    case READ_FILE:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while reading file: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Read file successfully on server" << std::endl;
+        break;
+    case UPDATE_FILE:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while updating file: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Updated file successfully on server" << std::endl;
+        break;
+    case DELETE_FILE:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while deleting file: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Deleted file successfully on server" << std::endl;
+        break;
+    case ACQUIRE_LOCK:
+        if (response.args["LOCK"] != "true")
+            perror(std::string(nodeType + ": Error while acquiring lock: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Acquired lock successfully on server" << std::endl;
+        break;
+    case RELEASE_LOCK:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while releasing lock: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Released lock successfully on server" << std::endl;
+        break;
+    case HEARTBEAT:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while receiving heartbeat: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Received heartbeat successfully on server" << std::endl;
+        break;
+    case SYNC_STATUS:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while synchronizing status: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Synchronization with server successful" << std::endl;
+        break;
+    case IDENTIFY:
+        if (response.args["ACK"] != "ACK")
+            perror(std::string(nodeType + ": Error while identifying: " + response.args["filePath"]).c_str());
+        else
+            std::cout << nodeType + ": Identified successfully on server" << std::endl;
         break;
     default:
         break;

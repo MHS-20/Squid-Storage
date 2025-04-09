@@ -26,7 +26,9 @@ public:
 
     virtual void connectToServer();
     virtual int getSocket();
+    
     virtual void run();
+    virtual void handleRequest(Message mex);
 
     /* Messages for Testing */
     virtual void sendMessage(const char *message);

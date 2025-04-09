@@ -12,20 +12,26 @@ public:
     SquidProtocol();
     SquidProtocol(int socket_fd, std::string processName, std::string nodeType);
     ~SquidProtocol();
-    virtual std::string createFile(std::string filePath);
-    virtual std::string readFile(std::string filePath);
-    virtual std::string updateFile(std::string filePath);
-    virtual std::string deleteFile(std::string filePath);
-    virtual bool acquireLock(std::string filePath);
-    virtual std::string releaseLock(std::string filePath);
-    virtual std::string heartbeat();
-    virtual std::string syncStatus();
+
     virtual Message identify();
+    virtual Message createFile(std::string filePath);
+    virtual Message readFile(std::string filePath);
+    virtual Message updateFile(std::string filePath);
+    virtual Message deleteFile(std::string filePath);
+
+    virtual Message acquireLock(std::string filePath);
+    virtual Message releaseLock(std::string filePath);
+
+    virtual Message heartbeat();
+    virtual std::string syncStatus();
+
     virtual void response(std::string ack);
     virtual void response(std::string nodeType, std::string processName);
     virtual void response(std::map<std::string, fs::file_time_type> filesLastWrite);
     virtual void response(bool lock);
-    virtual void requestDispatcher(Message message);
+
+    virtual void requestDispatcher(Message request);
+    virtual void responseDispatcher(Message response);
     virtual Message receiveAndParseMessage();
 
 private:
