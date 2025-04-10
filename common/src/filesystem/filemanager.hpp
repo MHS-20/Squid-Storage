@@ -7,10 +7,10 @@
 #include <filesystem>
 #include "filelock.hpp"
 
-#define DEFAULT_PATH "./test_txt"
+#define DEFAULT_PATH "."
 namespace fs = std::filesystem;
 
-//Singleton class: private constructor and prevent copying
+// Singleton class: private constructor and prevent copying
 
 class FileManager
 {
@@ -41,8 +41,8 @@ private:
     ~FileManager() {};
 
     // Prevent copying and assignment
-    FileManager(const FileManager&) = delete;
-    FileManager& operator=(const FileManager&) = delete;
+    FileManager(const FileManager &) = delete;
+    FileManager &operator=(const FileManager &) = delete;
 
     std::map<std::string, FileLock> fileMap;
 };
