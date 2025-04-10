@@ -2,16 +2,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <fstream>
+#include <arpa/inet.h>
 
 #include "filelock.hpp"
 #include "filetransfer.hpp"
 #include "squidprotocol.hpp"
-
-#ifdef _WIN32
-#include <winsock2.h>
-#else
-#include <arpa/inet.h>
-#endif
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
@@ -30,23 +25,12 @@ public:
     virtual void run();
     virtual void handleRequest(Message mex);
 
-    /* Messages for Testing */
-    virtual void sendMessage(const char *message);
-    virtual void receiveMessage();
-
-    /* File Transfer API */
-    void sendFile(const char *filepath);
-    void retriveFile(const char *outputpath);
-
 private:
-    int socket_fd = 0;
+    int socket_fd = -1;
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE] = {0};
     
     FileLock file_lock;
     FileTransfer fileTransfer;
     SquidProtocol squidProtocol;
-
-    void sendName(int socket_fd);
-    // virtual bool requireLock(int fileId);
 };

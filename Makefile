@@ -2,19 +2,19 @@ CXX = g++
 CXXFLAGS = -std=c++17 -Wall -g -fsanitize=address
 LDFLAGS = -pthread -lstdc++fs
 
-INCLUDES = -Iserver/src -Idata-node/src -Iclient/src -Icommon/src
+INCLUDES = -Iserver/src -Idata-node/src -Iclient/src -Icommon/src/squidprotocol -Icommon/src/filesystem
 
 MAIN_SRC = main.cpp
 SERVER_SRC = server/src/server.cpp
 DATANODE_SRC = data-node/src/datanode.cpp
 CLIENT_SRC = client/src/client.cpp
 
-SQUIDPROTOCOL_SRC = common/src/squidprotocol.cpp
-SQUIDFORMATTER_SRC = common/src/squidprotocolformatter.cpp
+SQUIDPROTOCOL_SRC = common/src/squidprotocol/squidprotocol.cpp
+SQUIDFORMATTER_SRC = common/src/squidprotocol/squidprotocolformatter.cpp
 
-FILELOCK_SRC = client/src/filelock.cpp
-FILETRANSFER_SRC = common/src/filetransfer.cpp
-FILEMANAGER_SRC = client/src/filemanager.cpp
+FILELOCK_SRC = common/src/filesystem/filelock.cpp
+FILETRANSFER_SRC = common/src/filesystem/filetransfer.cpp
+FILEMANAGER_SRC = common/src/filesystem/filemanager.cpp
 
 MAIN_OBJ = $(MAIN_SRC:.cpp=.o)
 SERVER_OBJ = $(SERVER_SRC:.cpp=.o)

@@ -81,34 +81,3 @@ void DataNode::run()
     //handleRequest(squidProtocol.syncStatus());
     handleRequest(squidProtocol.closeConn());
 }
-
-void DataNode::sendName(int socket_fd)
-{
-    const char *name = "DATANODE";
-    send(socket_fd, name, strlen(name), 0);
-    std::cout << "[DATANODE]: Name sent: " << name << std::endl;
-}
-
-// /* ---- MESSAGE API ----- */
-void DataNode::sendMessage(const char *message)
-{
-    send(socket_fd, message, strlen(message), 0);
-    std::cout << "[DATANODE]: Message sent: " << message << std::endl;
-}
-
-void DataNode::receiveMessage()
-{
-    read(socket_fd, buffer, sizeof(buffer));
-    std::cout << "[DATANODE]: Server Reply: " << buffer << std::endl;
-}
-
-// /* ---- FILE TRANSFER API ----- */
-void DataNode::sendFile(const char *filepath)
-{
-    this->fileTransfer.sendFile(this->socket_fd, "[DATANODE]", filepath);
-}
-
-void DataNode::retriveFile(const char *outputpath)
-{
-    this->fileTransfer.receiveFile(this->socket_fd, "[DATANODE]", outputpath);
-}

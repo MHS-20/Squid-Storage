@@ -45,13 +45,6 @@ void Client::connectToServer()
     std::cout << "[CLIENT]: Connected to server...\n";
 }
 
-void Client::sendName(int socket_fd)
-{
-    const char *name = "CLIENT";
-    send(socket_fd, name, strlen(name), 0);
-    std::cout << "[CLIENT]: Name sent: " << name << std::endl;
-}
-
 void Client::handleRequest(Message mex)
 {
     try
@@ -87,29 +80,4 @@ void Client::run()
     //handleRequest(squidProtocol.deleteFile("./test_txt/clientfile.txt"));
     //handleRequest(squidProtocol.syncStatus());
     handleRequest(squidProtocol.closeConn());
-}
-
-/* ---- MESSAGE API ----- */
-void Client::sendMessage(const char *message)
-{
-    send(socket_fd, message, strlen(message), 0);
-    std::cout << "[CLIENT]: Message sent: " << message << std::endl;
-}
-
-void Client::receiveMessage()
-{
-    read(socket_fd, buffer, sizeof(buffer));
-    std::cout << "[CLIENT]: Server Reply: " << buffer << std::endl;
-}
-
-/* ---- FILE TRANSFER API ----- */
-
-void Client::sendFile(const char *filepath)
-{
-    this->fileTransfer.sendFile(this->socket_fd, "[CLIENT]", filepath);
-}
-
-void Client::retriveFile(const char *outputpath)
-{
-    this->fileTransfer.receiveFile(this->socket_fd, "[CLIENT]", outputpath);
 }

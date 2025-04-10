@@ -2,7 +2,7 @@
 #include "squidprotocolformatter.hpp"
 #include <sys/socket.h>
 #include "filetransfer.hpp"
-#include "../../client/src/filemanager.hpp" // ! to be changed
+#include "filemanager.hpp"
 #define BUFFER_SIZE 1024
 #define DEFAULT_FOLDER_PATH "./test_txt"
 
