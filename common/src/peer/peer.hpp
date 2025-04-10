@@ -24,8 +24,8 @@ public:
 
     virtual void connectToServer();
     virtual int getSocket();
-    
-    //virtual void run();
+
+    virtual void run() = 0;
     virtual void handleRequest(Message mex);
 
 protected:

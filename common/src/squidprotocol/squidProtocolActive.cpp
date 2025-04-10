@@ -180,12 +180,12 @@ void SquidProtocolActive::responseDispatcher(Message response)
         else
             std::cout << nodeType + ": Synchronization with server successful" << std::endl;
         break;
-    case IDENTIFY:
-        if (response.args["ACK"] != "ACK")
-            perror(std::string(nodeType + ": Error while identifying").c_str());
-        else
-            std::cout << nodeType + ": Identified successfully on server" << std::endl;
-        break;
+    // case IDENTIFY:
+    //     if (response.args["ACK"] != "ACK")
+    //         perror(std::string(nodeType + ": Error while identifying").c_str());
+    //     else
+    //         std::cout << nodeType + ": Identified successfully on server" << std::endl;
+    //     break;
     case CLOSE:
         if (response.args["ACK"] != "ACK")
             perror(std::string(nodeType + ": Error while closing connection").c_str());

@@ -23,8 +23,9 @@ public:
     DataNode(std::string nodeType, std::string processName);
     DataNode(const char *server_ip, int port, std::string nodeType, std::string processName);
     
-    virtual void run();
-    //virtual void handleRequest(Message mex);
+    void run() override;
+    void testing();
+    //void handleRequest(Message mex);
 
 private:
     // int socket_fd = -1;

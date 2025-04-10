@@ -9,7 +9,7 @@ int main()
 {
     std::thread server_thread([](){
         Server server(12345);
-        server.start(); });
+        server.run(); });
 
     std::this_thread::sleep_for(std::chrono::seconds(0));
 

@@ -35,6 +35,20 @@ void SquidProtocolPassive::response(bool lock)
     this->communicator.sendMessage(this->formatter.responseFormat(lock));
 }
 
+void SquidProtocolPassive::responseIdentify()
+{
+    this->response(this->nodeType, this->processName);
+    Message mex = communicator.receiveAndParseMessage();
+
+    if (mex.args["ACK"] == "ACK")
+        std::cout << nodeType + ": ACKed identify by server" << std::endl;
+    else
+    {
+        std::cerr << nodeType + ": Error while identifying with server" << std::endl;
+        return;
+    }
+}
+
 // ------------------------------
 // --------- DISPATCHER ---------
 // ------------------------------
@@ -43,9 +57,9 @@ void SquidProtocolPassive::requestDispatcher(Message message)
     switch (message.keyword)
     {
     case CREATE_FILE:
-        std::cout << nodeType + ": Dispatcher: create file\n";
+        std::cout << nodeType + ": creating file\n";
         this->response(std::string("ACK"));
-        std::cout << "calling file transfer.receiveFile" << std::endl;
+        std::cout << "receiving file" << std::endl;
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
         this->response(std::string("ACK"));
         break;
@@ -82,7 +96,7 @@ void SquidProtocolPassive::requestDispatcher(Message message)
         this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
         break;
     case IDENTIFY:
-        this->response(this->nodeType, this->processName);
+        responseIdentify();
         break;
     case CLOSE:
         this->response(std::string("ACK"));

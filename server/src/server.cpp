@@ -1,6 +1,7 @@
 #include "server.hpp"
 
-Server::Server() : Server(DEFAULT_PORT){
+Server::Server() : Server(DEFAULT_PORT)
+{
 }
 
 Server::Server(int port) : fileManager(FileManager::getInstance())
@@ -52,7 +53,7 @@ void printMap(std::map<std::string, SquidProtocol> &map, std::string name)
     }
 }
 
-void Server::start()
+void Server::run()
 {
     std::cout << "[SERVER]: Server Starting..." << std::endl;
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
@@ -83,11 +84,8 @@ void Server::start()
     }
 }
 
-void Server::handleConnection(int new_socket)
+void Server::identify(SquidProtocol protocol)
 {
-    SquidProtocol protocol = SquidProtocol(new_socket, "[SERVER]", "SERVER");
-    std::cout << "Checking for messages ...\n";
-
     Message mex = protocol.active.identify();
     std::cout << "[SERVER]: Identity received from peer: " + mex.args["processName"] << std::endl;
 
@@ -109,9 +107,16 @@ void Server::handleConnection(int new_socket)
 
     protocol.passive.response(std::string("ACK"));
     std::cout << "[SERVER]: Ack sent to client" << std::endl;
+}
 
-    std::this_thread::sleep_for(std::chrono::seconds(3));
+void Server::handleConnection(int new_socket)
+{
 
+    Message mex;
+    SquidProtocol protocol = SquidProtocol(new_socket, "[SERVER]", "SERVER");
+    identify(protocol);
+
+    std::cout << "Checking for messages ...\n";
     while (true)
     {
         std::cout << "[SERVER]: Waiting for messages..." << std::endl;

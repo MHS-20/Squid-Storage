@@ -21,6 +21,36 @@ DataNode::DataNode(const char *server_ip, int port, std::string nodeType, std::s
 
 void DataNode::run()
 {
+    Message mex;
+    this->connectToServer();
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    while (true)
+    {
+        std::cout << "[DATANODE]: Waiting for messages..." << std::endl;
+        if (squidProtocol.getSocket() < 0) // connection closed
+        {
+            std::cout << "[DATANODE]: Closing & Terminating" << std::endl;
+            break;
+        }
+
+        try
+        {
+            mex = squidProtocol.communicator.receiveAndParseMessage();
+            std::cout << "[DATANODE]: Received message: " + mex.keyword << std::endl;
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "[DATANODE]: Error receiving message: " << e.what() << std::endl;
+            break;
+        }
+
+        squidProtocol.passive.requestDispatcher(mex);
+    }
+}
+
+void DataNode::testing()
+{
     this->connectToServer();
     std::this_thread::sleep_for(std::chrono::seconds(1));
     Message mex = squidProtocol.communicator.receiveAndParseMessage();

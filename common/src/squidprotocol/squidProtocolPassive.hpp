@@ -22,6 +22,7 @@ public:
     void response(std::map<std::string, fs::file_time_type> filesLastWrite);
 
     void requestDispatcher(Message response);
+    void responseIdentify();
 
 private:
     int socket_fd;

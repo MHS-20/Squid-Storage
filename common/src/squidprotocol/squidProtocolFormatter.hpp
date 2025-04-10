@@ -27,6 +27,7 @@ class Message
 public:
     ProtocolKeyWord keyword;
     std::map<std::string, std::string> args;
+    Message() {};
     Message(ProtocolKeyWord keyword, std::map<std::string, std::string> args) : keyword(keyword), args(args) {}
 };
 

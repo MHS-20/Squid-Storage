@@ -24,8 +24,9 @@ public:
     Server();
     ~Server();
 
-    virtual void start();
-    virtual int getSocket();
+    void run();
+    int getSocket();
+    void identify(SquidProtocol protocol);
 
 private:
     int port;
