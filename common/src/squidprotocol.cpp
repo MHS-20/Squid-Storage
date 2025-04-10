@@ -2,7 +2,7 @@
 
 SquidProtocol::SquidProtocol() {}
 
-SquidProtocol::SquidProtocol(int socket_fd, std::string processName, std::string nodeType)
+SquidProtocol::SquidProtocol(int socket_fd, std::string nodeType, std::string processName)
 {
     this->socket_fd = socket_fd;
     this->processName = processName;
@@ -31,6 +31,10 @@ Message SquidProtocol::identify()
     return this->receiveAndParseMessage();
 }
 
+std::string SquidProtocol::toString() const {
+    return "Protocol{" + nodeType + ":" + processName + "}";
+}
+
 // ----------------------------
 // --------- REQUESTS ---------
 // ----------------------------
@@ -54,7 +58,6 @@ Message SquidProtocol::updateFile(std::string filePath)
     return receiveAndParseMessage();
 }
 
-// CHECK
 void SquidProtocol::transferFile(std::string filePath, Message response)
 {
     // std::cout << nodeType + ": trying transfering file" << std::endl;

@@ -11,7 +11,7 @@ class SquidProtocol
 public:
     SquidProtocol();
     ~SquidProtocol();
-    SquidProtocol(int socket_fd, std::string processName, std::string nodeType);
+    SquidProtocol(int socket_fd, std::string nodeType, std::string processName);
     virtual int getSocket();
 
     virtual Message receiveAndParseMessage();
@@ -22,6 +22,7 @@ public:
 
     virtual Message identify();
     virtual Message closeConn();
+    virtual std::string toString() const;
 
     virtual Message createFile(std::string filePath);
     virtual Message readFile(std::string filePath);
@@ -52,4 +53,6 @@ private:
     void sendMessage(std::string message);
     void transferFile(std::string filePath, Message response);
     void sendMessageWithLength(std::string &message);
+
+
 };

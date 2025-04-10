@@ -22,7 +22,7 @@ DataNode::DataNode(const char *server_ip, int port)
     }
 
     this->fileTransfer = FileTransfer();
-    this->squidProtocol = SquidProtocol(socket_fd, "datanode", "DATANODE");
+    this->squidProtocol = SquidProtocol(socket_fd, "[DATANODE]", "DATANODE");
 }
 
 DataNode::~DataNode()
@@ -65,7 +65,7 @@ void DataNode::run()
     Message mex = squidProtocol.receiveAndParseMessage();
     std::cout << "[DATANODE]: Identify  request received from server: " + mex.keyword << std::endl;
 
-    squidProtocol.response(std::string("datanode"), std::string("DATANODE"));
+    squidProtocol.response(std::string("DATANODE"), std::string("DATANODE"));
     mex = squidProtocol.receiveAndParseMessage();
 
     if (mex.args["ACK"] == "ACK")

@@ -42,9 +42,16 @@ int Server::getSocket()
     return server_fd;
 }
 
-void Server::initialize(){
+void printMap(std::map<std::string, SquidProtocol> &map, std::string name)
+{
+    std::cout << "[SERVER]: " << name << std::endl;
+    for (auto &pair : map)
+    {
+        std::cout << pair.first << " => " << pair.second.toString() << std::endl;
+    }
+}
 
-    //initialize file map 
+void Server::initialize(){
     std::vector<std::string> entries = fileManager.getFiles(DEFAULT_PATH);
     for (auto entry : entries)
     {
@@ -81,11 +88,11 @@ void Server::start()
 
 void Server::handleConnection(int new_socket)
 {
-    SquidProtocol protocol = SquidProtocol(new_socket, "server", "SERVER");
+    SquidProtocol protocol = SquidProtocol(new_socket, "[SERVER]", "SERVER");
     std::cout << "Checking for messages ...\n";
 
     Message mex = protocol.identify();
-    std::cout << "[SERVER]: Identity received from client: " + mex.args["processName"] << std::endl;
+    std::cout << "[SERVER]: Identity received from peer: " + mex.args["processName"] << std::endl;
 
     if (mex.args["nodeType"] == "CLIENT")
     {
@@ -126,16 +133,11 @@ void Server::handleConnection(int new_socket)
             break;
         }
 
+        printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
+
+
         protocol.requestDispatcher(mex);
         std::cout << "[SERVER]: Request dispatched" << std::endl;
     }
 }
 
-void printMap(std::map<std::string, int> &map, std::string name)
-{
-    std::cout << "[SERVER]: " << name << std::endl;
-    for (auto &pair : map)
-    {
-        std::cout << pair.first << " => " << pair.second << std::endl;
-    }
-}

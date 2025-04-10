@@ -22,7 +22,7 @@ Client::Client(const char *server_ip, int port)
     }
 
     this->fileTransfer = FileTransfer();
-    this->squidProtocol = SquidProtocol(socket_fd, "client", "CLIENT");
+    this->squidProtocol = SquidProtocol(socket_fd, "[CLIENT]", "CLIENT");
 }
 
 Client::~Client()
@@ -72,7 +72,7 @@ void Client::run()
     Message mex = squidProtocol.receiveAndParseMessage();
     std::cout << "[CLIENT]: Identify  request received from server: " + mex.keyword << std::endl;
 
-    squidProtocol.response(std::string("client"), std::string("CLIENT"));
+    squidProtocol.response(std::string("CLIENT"), std::string("CLIENT"));
     mex = squidProtocol.receiveAndParseMessage();
 
     if (mex.args["ACK"] == "ACK")
