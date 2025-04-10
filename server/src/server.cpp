@@ -27,7 +27,7 @@ Server::Server(int port)
     fileTransfer = FileTransfer();
     fileManager = FileManager();
 
-    fileMap = std::map<std::string, FileLock>();
+    fileMap = fileManager.getFileMap();
     clientEndpointMap = std::map<std::string, SquidProtocol>();
     dataNodeEndpointMap = std::map<std::string, SquidProtocol>();
 }
@@ -49,15 +49,6 @@ void printMap(std::map<std::string, SquidProtocol> &map, std::string name)
     {
         std::cout << pair.first << " => " << pair.second.toString() << std::endl;
     }
-}
-
-void Server::initialize(){
-    std::vector<std::string> entries = fileManager.getFiles(DEFAULT_PATH);
-    for (auto entry : entries)
-    {
-        fileMap[entry] = FileLock(entry);
-    }
-    std::cout << "[SERVER]: File map initialized" << std::endl;
 }
 
 void Server::start()
@@ -82,7 +73,12 @@ void Server::start()
         }
 
         std::cout << "Accepted connection: " << new_socket << "...\n";
-        this->handleConnection(new_socket);
+        //this->handleConnection(new_socket);
+
+        //new thread to handle connection: 
+        std::thread connectionThread(&Server::handleConnection, this, new_socket);
+        connectionThread.detach();
+        std::cout << "[SERVER]: New thread created to handle connection: " << new_socket << std::endl;
     }
 }
 
@@ -97,10 +93,12 @@ void Server::handleConnection(int new_socket)
     if (mex.args["nodeType"] == "CLIENT")
     {
         clientEndpointMap[mex.args["processName"]] = protocol;
+        printMap(clientEndpointMap, "DataNode Endpoint Map");
     }
     else if (mex.args["nodeType"] == "DATANODE")
     {
         dataNodeEndpointMap[mex.args["processName"]] = protocol;
+        printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
     }
     else
     {
@@ -133,11 +131,8 @@ void Server::handleConnection(int new_socket)
             break;
         }
 
-        printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
-
-
         protocol.requestDispatcher(mex);
         std::cout << "[SERVER]: Request dispatched" << std::endl;
     }
-}
+};
 

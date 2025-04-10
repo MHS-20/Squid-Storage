@@ -39,11 +39,8 @@ private:
 
     FileTransfer fileTransfer;
     FileManager fileManager;
-
-    // filename to file id
+    
     std::map<std::string, FileLock> fileMap;             
-
-    // client name to correspondent SquidProtocol instance
     std::map<std::string, SquidProtocol> clientEndpointMap;   
     std::map<std::string, SquidProtocol> dataNodeEndpointMap;
 

@@ -18,14 +18,16 @@ int main()
     std::this_thread::sleep_for(std::chrono::seconds(1));
     datanode.run(); });
 
-    // std::thread client_thread1([](){
-    // Client client("127.0.0.1", 12345);
-    // std::this_thread::sleep_for(std::chrono::seconds(1));
-    // client.run(); });
+    std::thread client_thread1([](){
+    Client client("127.0.0.1", 12345);
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    client.run(); });
 
     datanode_thread1.join();
     std::cout << "Datanode thread finished" << std::endl;
-    server_thread.join();
+
+    client_thread1.join();
+    std::cout << "Client thread finished" << std::endl;
 
     return 0;
 }
