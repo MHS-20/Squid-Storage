@@ -43,7 +43,6 @@ void Client::connectToServer()
         exit(EXIT_FAILURE);
     }
     std::cout << "[CLIENT]: Connected to server...\n";
-    // sendName(socket_fd);
 }
 
 void Client::sendName(int socket_fd)
@@ -88,8 +87,6 @@ void Client::run()
     handleRequest(squidProtocol.deleteFile("./test_txt/clientfile.txt"));
     handleRequest(squidProtocol.syncStatus());
     handleRequest(squidProtocol.closeConn());
-
-    close(socket_fd);
 }
 
 /* ---- MESSAGE API ----- */

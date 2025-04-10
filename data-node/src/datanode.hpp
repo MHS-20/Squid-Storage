@@ -4,6 +4,7 @@
 #include <string.h>
 #include <fstream>
 
+#include "filelock.hpp"
 #include "filetransfer.hpp"
 #include "squidprotocol.hpp"
 
@@ -20,7 +21,10 @@ public:
     ~DataNode();
 
     virtual void connectToServer();
-    // virtual void run();
+    virtual int getSocket();
+    
+    virtual void run();
+    virtual void handleRequest(Message mex);
 
     /* Messages for Testing */
     virtual void sendMessage(const char *message);
@@ -30,15 +34,14 @@ public:
     void sendFile(const char *filepath);
     void retriveFile(const char *outputpath);
 
-    // virtual bool sendFileToServer(int fileId);
-    // virtual bool receiveFileFromServer(int fileId);
-
 private:
     int socket_fd = 0;
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE] = {0};
     
+    FileLock file_lock;
     FileTransfer fileTransfer;
     SquidProtocol squidProtocol;
+
     void sendName(int socket_fd); 
 };
