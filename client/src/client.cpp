@@ -1,62 +1,23 @@
 #include "client.hpp"
-#include <thread>
 
-Client::Client() : Client(SERVER_IP, SERVER_PORT) {}
+Client::Client(): Peer() {}
 
-Client::Client(const char *server_ip, int port)
-{
-    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0)
-    {
-        perror("[CLIENT]: Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
+Client::Client(const char *server_ip, int port) : Peer(server_ip, port, "CLIENT", "CLIENT") {}
+Client::Client(std::string nodeType, std::string processName) : Peer(nodeType, processName) {}
+Client::Client(const char *server_ip, int port, std::string nodeType, std::string processName) : Peer(server_ip, port, nodeType, processName) {}
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-
-    if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0)
-    {
-        perror("[CLIENT]: Invalid address");
-        exit(EXIT_FAILURE);
-    }
-
-    this->fileTransfer = FileTransfer();
-    this->squidProtocol = SquidProtocol(socket_fd, "[CLIENT]", "CLIENT");
-}
-
-Client::~Client()
-{
-    close(socket_fd);
-}
-
-int Client::getSocket()
-{
-    return socket_fd;
-}
-
-void Client::connectToServer()
-{
-    if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        perror("[CLIENT]: connection to server failed");
-        exit(EXIT_FAILURE);
-    }
-    std::cout << "[CLIENT]: Connected to server...\n";
-}
-
-void Client::handleRequest(Message mex)
-{
-    try
-    {
-        std::cout << "[CLIENT]: Received message: " + mex.keyword << std::endl;
-    }
-    catch (std::exception &e)
-    {
-        std::cerr << "[CLIENT]: Error receiving message: " << e.what() << std::endl;
-    }
-    squidProtocol.responseDispatcher(mex);
-}
+// void Client::handleRequest(Message mex)
+// {
+//     try
+//     {
+//         std::cout << "[CLIENT]: Received message: " + mex.keyword << std::endl;
+//     }
+//     catch (std::exception &e)
+//     {
+//         std::cerr << "[CLIENT]: Error receiving message: " << e.what() << std::endl;
+//     }
+//     squidProtocol.responseDispatcher(mex);
+// }
 
 void Client::run()
 {

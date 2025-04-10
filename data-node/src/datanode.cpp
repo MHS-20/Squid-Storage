@@ -1,62 +1,23 @@
 #include "datanode.hpp"
-#include <thread>
 
 DataNode::DataNode() : DataNode(SERVER_IP, SERVER_PORT) {}
 
-DataNode::DataNode(const char *server_ip, int port)
-{
-    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0)
-    {
-        perror("[DATANODE]: Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
+DataNode::DataNode(const char *server_ip, int port) : Peer(server_ip, port, "DATANODE", "DATANODE") {}
+DataNode::DataNode(std::string nodeType, std::string processName) : Peer(nodeType, processName) {}
+DataNode::DataNode(const char *server_ip, int port, std::string nodeType, std::string processName) : Peer(server_ip, port, nodeType, processName) {}
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-
-    if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0)
-    {
-        perror("[DATANODE]: Invalid address");
-        exit(EXIT_FAILURE);
-    }
-
-    this->fileTransfer = FileTransfer();
-    this->squidProtocol = SquidProtocol(socket_fd, "[DATANODE]", "DATANODE");
-}
-
-DataNode::~DataNode()
-{
-    close(socket_fd);
-}
-
-int DataNode::getSocket()
-{
-    return socket_fd;
-}
-
-void DataNode::connectToServer()
-{
-    if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        perror("[DATANODE]: connection to server failed");
-        exit(EXIT_FAILURE);
-    }
-    std::cout << "[DATANODE]: Connected to server...\n";
-}
-
-void DataNode::handleRequest(Message mex)
-{
-    try
-    {
-        std::cout << "[DATANODE]: Received message: " + mex.keyword << std::endl;
-    }
-    catch (std::exception &e)
-    {
-        std::cerr << "[DATANODE]: Error receiving message: " << e.what() << std::endl;
-    }
-    squidProtocol.responseDispatcher(mex);
-}
+// void DataNode::handleRequest(Message mex)
+// {
+//     try
+//     {
+//         std::cout << "[DATANODE]: Received message: " + mex.keyword << std::endl;
+//     }
+//     catch (std::exception &e)
+//     {
+//         std::cerr << "[DATANODE]: Error receiving message: " << e.what() << std::endl;
+//     }
+//     squidProtocol.responseDispatcher(mex);
+// }
 
 void DataNode::run()
 {

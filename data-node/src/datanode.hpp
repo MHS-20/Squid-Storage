@@ -3,7 +3,9 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <fstream>
+#include <thread>
 
+#include "../../common/src/peer/peer.hpp"
 #include "filelock.hpp"
 #include "filetransfer.hpp"
 #include "squidprotocol.hpp"
@@ -12,26 +14,24 @@
 #define SERVER_PORT 8080
 #define BUFFER_SIZE 1024
 
-class DataNode
+class DataNode: public Peer
 {
 
 public:
     DataNode();
     DataNode(const char *server_ip, int port);
-    ~DataNode();
-
-    virtual void connectToServer();
-    virtual int getSocket();
+    DataNode(std::string nodeType, std::string processName);
+    DataNode(const char *server_ip, int port, std::string nodeType, std::string processName);
     
     virtual void run();
-    virtual void handleRequest(Message mex);
+    //virtual void handleRequest(Message mex);
 
 private:
-    int socket_fd = -1;
-    struct sockaddr_in server_addr;
-    char buffer[BUFFER_SIZE] = {0};
+    // int socket_fd = -1;
+    // struct sockaddr_in server_addr;
+    // char buffer[BUFFER_SIZE] = {0};
     
-    FileLock file_lock;
-    FileTransfer fileTransfer;
-    SquidProtocol squidProtocol;
+    // FileLock file_lock;
+    // FileTransfer fileTransfer;
+    // SquidProtocol squidProtocol;
 };
