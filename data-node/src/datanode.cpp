@@ -72,13 +72,13 @@ void DataNode::run()
         std::cout << "[DATANODE]: ACK received" << std::endl;
 
     handleRequest(squidProtocol.createFile("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.updateFile("./test_txt/datanodefile.txt"));
+    //handleRequest(squidProtocol.updateFile("./test_txt/datanodefile.txt"));
     handleRequest(squidProtocol.acquireLock("./test_txt/datanodefile.txt"));
     handleRequest(squidProtocol.releaseLock("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.heartbeat());
-    handleRequest(squidProtocol.readFile("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.deleteFile("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.syncStatus());
+    //handleRequest(squidProtocol.heartbeat());
+    //handleRequest(squidProtocol.readFile("./test_txt/datanodefile.txt"));
+    //handleRequest(squidProtocol.deleteFile("./test_txt/datanodefile.txt"));
+    //handleRequest(squidProtocol.syncStatus());
     handleRequest(squidProtocol.closeConn());
 }
 

@@ -1,8 +1,9 @@
 #include "server.hpp"
 
-Server::Server() : Server(DEFAULT_PORT) {}
+Server::Server() : Server(DEFAULT_PORT){
+}
 
-Server::Server(int port)
+Server::Server(int port) : fileManager(FileManager::getInstance())
 {
 
     this->port = port;
@@ -25,9 +26,9 @@ Server::Server(int port)
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
-    fileManager = FileManager();
+    // fileManager = FileManager::getInstance();
 
-    fileMap = fileManager.getFileMap();
+    // fileMap = fileManager.getFileMap();
     clientEndpointMap = std::map<std::string, SquidProtocol>();
     dataNodeEndpointMap = std::map<std::string, SquidProtocol>();
 }
@@ -73,9 +74,9 @@ void Server::start()
         }
 
         std::cout << "Accepted connection: " << new_socket << "...\n";
-        //this->handleConnection(new_socket);
+        // this->handleConnection(new_socket);
 
-        //new thread to handle connection: 
+        // new thread to handle connection:
         std::thread connectionThread(&Server::handleConnection, this, new_socket);
         connectionThread.detach();
         std::cout << "[SERVER]: New thread created to handle connection: " << new_socket << std::endl;
@@ -135,4 +136,3 @@ void Server::handleConnection(int new_socket)
         std::cout << "[SERVER]: Request dispatched" << std::endl;
     }
 };
-

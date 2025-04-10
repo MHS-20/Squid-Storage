@@ -1,7 +1,17 @@
 #include "filemanager.hpp"
 
-FileManager::FileManager()
+FileManager::FileManager(){
+    std::vector<std::string> entries = getFiles(DEFAULT_PATH);
+    for (auto entry : entries)
+    {
+        fileMap[entry] = FileLock(entry);
+    }
+    std::cout << "[FILEMANAGER]: File map initialized" << std::endl;
+}
+
+std::map<std::string, FileLock> FileManager::getFileMap()
 {
+    return fileMap;
 }
 
 std::vector<std::string> FileManager::getFiles(std::string path)
@@ -85,12 +95,33 @@ std::string FileManager::readFile(std::string path)
 
 bool FileManager::acquireLock(std::string path)
 {
-    return false;
+    if (fileMap.find(path) == fileMap.end())
+    {
+        std::cout << "[FILEMANAGER]: File not found in file map" << std::endl;
+        return false;
+    }
+
+    if (!fileMap[path].isLocked())
+    {
+        fileMap[path].setIsLocked(true);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 bool FileManager::releaseLock(std::string path)
 {
-    return false;
+    if (fileMap.find(path) == fileMap.end())
+    {
+        std::cout << "[FILEMANAGER]: File not found in file map" << std::endl;
+        return false;
+    }else {
+        fileMap[path].setIsLocked(false);
+        return true;
+    }
 }
 
 std::string FileManager::formatFileList(std::vector<std::string> files)

@@ -5,7 +5,7 @@ FileLock::FileLock(){}
 FileLock::FileLock(std::string filePath)
 {
     this->filePath = filePath;
-    this->isLocked = false;
+    this->locked = false;
 }
 
 std::string FileLock::getFilePath()
@@ -13,12 +13,12 @@ std::string FileLock::getFilePath()
     return this->filePath;
 }
 
-bool FileLock::getIsLocked()
+bool FileLock::isLocked()
 {
-    return this->isLocked;
+    return this->locked;
 }
 
-void FileLock::setIsLocked(bool isLocked)
+void FileLock::setIsLocked(bool locked)
 {
-    this->isLocked = isLocked;
+    this->locked = locked;
 }

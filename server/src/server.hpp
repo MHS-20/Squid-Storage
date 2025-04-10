@@ -26,7 +26,6 @@ public:
 
     virtual void start();
     virtual int getSocket();
-    virtual void initialize();
 
 private:
     int port;
@@ -38,9 +37,9 @@ private:
     socklen_t addrlen = sizeof(address);
 
     FileTransfer fileTransfer;
-    FileManager fileManager;
-    
-    std::map<std::string, FileLock> fileMap;             
+    FileManager& fileManager;
+
+    //std::map<std::string, FileLock> fileMap;             
     std::map<std::string, SquidProtocol> clientEndpointMap;   
     std::map<std::string, SquidProtocol> dataNodeEndpointMap;
 

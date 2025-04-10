@@ -1,6 +1,8 @@
 #include "squidprotocol.hpp"
 
-SquidProtocol::SquidProtocol() {}
+SquidProtocol::SquidProtocol()
+{
+}
 
 SquidProtocol::SquidProtocol(int socket_fd, std::string nodeType, std::string processName)
 {
@@ -8,7 +10,7 @@ SquidProtocol::SquidProtocol(int socket_fd, std::string nodeType, std::string pr
     this->processName = processName;
     this->nodeType = nodeType;
     this->fileTransfer = FileTransfer();
-    this->fileManager = FileManager();
+    // this->fileManager = FileManager::getInstance();
     this->formatter = SquidProtocolFormatter(nodeType);
 }
 
@@ -31,7 +33,8 @@ Message SquidProtocol::identify()
     return this->receiveAndParseMessage();
 }
 
-std::string SquidProtocol::toString() const {
+std::string SquidProtocol::toString() const
+{
     return "Protocol{" + nodeType + ":" + processName + "}";
 }
 
@@ -108,7 +111,7 @@ Message SquidProtocol::syncStatus()
     if (response.keyword == RESPONSE)
     {
         std::map<std::string, fs::file_time_type> filesLastWrite;
-        filesLastWrite = this->fileManager.getFilesLastWrite(DEFAULT_FOLDER_PATH);
+        filesLastWrite = FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH);
         for (auto localFile : filesLastWrite)
         {
             if (response.args.find(localFile.first) != response.args.end())
@@ -151,10 +154,6 @@ Message SquidProtocol::syncStatus()
 
 Message SquidProtocol::receiveAndParseMessage()
 {
-    // emptying the buffer
-    // memset(this->buffer, 0, sizeof(this->buffer));
-    // std::cout << nodeType + ": trying parsing" << std::endl;
-
     std::string receivedMessage = receiveMessageWithLength();
     std::cout << nodeType + ": Received message: " << receivedMessage << std::endl;
     return this->formatter.parseMessage(receivedMessage);
@@ -175,7 +174,6 @@ void checkBytesRead(ssize_t bytesRead, std::string nodeType)
     }
 }
 
-
 std::string SquidProtocol::receiveMessageWithLength()
 {
     // Read the length of the message
@@ -195,10 +193,9 @@ std::string SquidProtocol::receiveMessageWithLength()
     std::string message(buffer);
     delete[] buffer;
 
-    //std::cout << "[INFO]: Received message: " << message << std::endl;
+    // std::cout << "[INFO]: Received message: " << message << std::endl;
     return message;
 }
-
 
 // -----------------------------
 // --------- RESPONSES ---------
@@ -234,8 +231,7 @@ void SquidProtocol::sendMessage(std::string message)
 {
     // std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
     sendMessageWithLength(message);
-    //send(this->socket_fd, message.c_str(), message.length(), 0);
-
+    // send(this->socket_fd, message.c_str(), message.length(), 0);
 }
 
 void SquidProtocol::sendMessageWithLength(std::string &message)
@@ -290,21 +286,21 @@ void SquidProtocol::requestDispatcher(Message message)
         this->response(std::string("ACK"));
         break;
     case DELETE_FILE:
-        this->fileManager.deleteFile(message.args["filePath"]);
+        FileManager::getInstance().deleteFile(message.args["filePath"]);
         this->response(std::string("ACK"));
         break;
     case ACQUIRE_LOCK:
-        this->response(this->fileManager.acquireLock(message.args["filePath"]));
+        this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
         break;
     case RELEASE_LOCK:
-        this->fileManager.releaseLock(message.args["filePath"]);
+        FileManager::getInstance().releaseLock(message.args["filePath"]);
         this->response(std::string("ACK"));
         break;
     case HEARTBEAT:
         this->response(std::string("ACK"));
         break;
     case SYNC_STATUS:
-        this->response(this->fileManager.getFilesLastWrite(DEFAULT_FOLDER_PATH));
+        this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
         break;
     case IDENTIFY:
         this->response(this->nodeType, this->processName);

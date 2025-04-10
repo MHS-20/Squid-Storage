@@ -47,7 +47,7 @@ private:
     char buffer[BUFFER_SIZE] = {0};
 
     FileTransfer fileTransfer;
-    FileManager fileManager;
+    //FileManager& fileManager;
     SquidProtocolFormatter formatter;
 
     void sendMessage(std::string message);

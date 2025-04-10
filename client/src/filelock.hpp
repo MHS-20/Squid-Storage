@@ -6,12 +6,11 @@ class FileLock
 public:
     FileLock();
     FileLock(std::string filePath);
+    bool isLocked();
+    std::string getFilePath();
+    void setIsLocked(bool locked);
 
 private:
-    bool isLocked;
+    bool locked;
     std::string filePath;
-
-    bool getIsLocked();
-    std::string getFilePath();
-    void setIsLocked(bool isLocked);
 };
