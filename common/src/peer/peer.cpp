@@ -82,7 +82,7 @@ void Peer::handleRequest(Message mex)
     {
         std::cerr << nodeType + ": Error receiving message: " << e.what() << std::endl;
     }
-    squidProtocol.responseDispatcher(mex);
+    squidProtocol.active.responseDispatcher(mex);
 }
 
 // void Peer::run()

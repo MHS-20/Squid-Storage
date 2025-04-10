@@ -23,22 +23,22 @@ void DataNode::run()
 {
     this->connectToServer();
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    Message mex = squidProtocol.receiveAndParseMessage();
+    Message mex = squidProtocol.communicator.receiveAndParseMessage();
     std::cout << "[DATANODE]: Identify  request received from server: " + mex.keyword << std::endl;
 
-    squidProtocol.response(std::string("DATANODE"), std::string("DATANODE"));
-    mex = squidProtocol.receiveAndParseMessage();
+    squidProtocol.passive.response(std::string("DATANODE"), std::string("DATANODE"));
+    mex = squidProtocol.communicator.receiveAndParseMessage();
 
     if (mex.args["ACK"] == "ACK")
         std::cout << "[DATANODE]: ACK received" << std::endl;
 
-    handleRequest(squidProtocol.createFile("./test_txt/datanodefile.txt"));
-    //handleRequest(squidProtocol.updateFile("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.acquireLock("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.releaseLock("./test_txt/datanodefile.txt"));
-    //handleRequest(squidProtocol.heartbeat());
-    //handleRequest(squidProtocol.readFile("./test_txt/datanodefile.txt"));
-    //handleRequest(squidProtocol.deleteFile("./test_txt/datanodefile.txt"));
-    //handleRequest(squidProtocol.syncStatus());
-    handleRequest(squidProtocol.closeConn());
+    handleRequest(squidProtocol.active.createFile("./test_txt/datanodefile.txt"));
+    // handleRequest(squidProtocol.updateFile("./test_txt/datanodefile.txt"));
+    handleRequest(squidProtocol.active.acquireLock("./test_txt/datanodefile.txt"));
+    handleRequest(squidProtocol.active.releaseLock("./test_txt/datanodefile.txt"));
+    // handleRequest(squidProtocol.heartbeat());
+    // handleRequest(squidProtocol.readFile("./test_txt/datanodefile.txt"));
+    // handleRequest(squidProtocol.deleteFile("./test_txt/datanodefile.txt"));
+    // handleRequest(squidProtocol.syncStatus());
+    handleRequest(squidProtocol.active.closeConn());
 }

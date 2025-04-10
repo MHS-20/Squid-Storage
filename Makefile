@@ -2,7 +2,7 @@ CXX = g++
 CXXFLAGS = -std=c++17 -Wall -g -fsanitize=address
 LDFLAGS = -pthread -lstdc++fs
 
-INCLUDES = -Iserver/src -Idata-node/src -Iclient/src -Icommon/src/squidprotocol -Icommon/src/filesystem -Icommon/src/peer 
+INCLUDES = -Iserver/src -Idata-node/src -Iclient/src -Icommon/src/squidprotocol -Icommon/src/peer -Icommon/src/filesystem 
 
 MAIN_SRC = main.cpp
 SERVER_SRC = server/src/server.cpp
@@ -12,6 +12,10 @@ PEER_SRC = common/src/peer/peer.cpp
 
 SQUIDPROTOCOL_SRC = common/src/squidprotocol/squidprotocol.cpp
 SQUIDFORMATTER_SRC = common/src/squidprotocol/squidprotocolformatter.cpp
+
+SQUIDACTIVE_SRC = common/src/squidprotocol/squidProtocolActive.cpp
+SQUIDPASSIVE_SRC = common/src/squidprotocol/squidProtocolPassive.cpp
+SQUIDCOMMUNICATOR_SRC = common/src/squidprotocol/squidProtocolCommunicator.cpp
 
 FILELOCK_SRC = common/src/filesystem/filelock.cpp
 FILETRANSFER_SRC = common/src/filesystem/filetransfer.cpp
@@ -25,6 +29,9 @@ PEER_OBJ = $(PEER_SRC:.cpp=.o)
 
 SQUIDPROTOCOL_OBJ = $(SQUIDPROTOCOL_SRC:.cpp=.o)
 SQUIDFORMATTER_OBJ = $(SQUIDFORMATTER_SRC:.cpp=.o)
+SQUIDACTIVE_OBJ = $(SQUIDACTIVE_SRC:.cpp=.o)
+SQUIDPASSIVE_OBJ = $(SQUIDPASSIVE_SRC:.cpp=.o)
+SQUIDCOMMUNICATOR_OBJ = $(SQUIDCOMMUNICATOR_SRC:.cpp=.o)
 
 FILELOCK_OBJ = $(FILELOCK_SRC:.cpp=.o)
 FILETRANSFER_OBJ = $(FILETRANSFER_SRC:.cpp=.o)
@@ -32,14 +39,14 @@ FILEMANAGER_OBJ = $(FILEMANAGER_SRC:.cpp=.o)
 
 all: main
 
-main: $(MAIN_OBJ) $(SERVER_OBJ) $(DATANODE_OBJ) $(CLIENT_OBJ) $(FILELOCK_OBJ) $(FILETRANSFER_OBJ) $(SQUIDPROTOCOL_OBJ) $(SQUIDFORMATTER_OBJ) $(FILEMANAGER_OBJ) $(PEER_OBJ)
-		$(CXX) $(CXXFLAGS) -o main $(MAIN_OBJ) $(SERVER_OBJ) $(DATANODE_OBJ) $(CLIENT_OBJ) $(FILELOCK_OBJ) $(FILETRANSFER_OBJ) $(SQUIDPROTOCOL_OBJ) $(SQUIDFORMATTER_OBJ) $(FILEMANAGER_OBJ) $(PEER_OBJ) $(LDFLAGS) 
+main: $(MAIN_OBJ) $(SERVER_OBJ) $(DATANODE_OBJ) $(CLIENT_OBJ) $(FILELOCK_OBJ) $(FILETRANSFER_OBJ) $(SQUIDPROTOCOL_OBJ) $(SQUIDFORMATTER_OBJ) $(FILEMANAGER_OBJ) $(PEER_OBJ) $(SQUIDACTIVE_OBJ) $(SQUIDPASSIVE_OBJ) $(SQUIDCOMMUNICATOR_OBJ)
+		$(CXX) $(CXXFLAGS) -o main $(MAIN_OBJ) $(SERVER_OBJ) $(DATANODE_OBJ) $(CLIENT_OBJ) $(FILELOCK_OBJ) $(FILETRANSFER_OBJ) $(SQUIDPROTOCOL_OBJ) $(SQUIDFORMATTER_OBJ) $(FILEMANAGER_OBJ) $(PEER_OBJ) $(SQUIDACTIVE_OBJ) $(SQUIDPASSIVE_OBJ) $(SQUIDCOMMUNICATOR_OBJ) $(LDFLAGS) 
 
 %.o: %.cpp
 		$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
-		rm -f main $(MAIN_OBJ) $(SERVER_OBJ) $(DATANODE_OBJ) $(CLIENT_OBJ) $(FILELOCK_OBJ) $(FILETRANSFER_OBJ) $(SQUIDPROTOCOL_OBJ) $(SQUIDFORMATTER_OBJ) $(FILEMANAGER_OBJ) $(PEER_OBJ)
+		rm -f main $(MAIN_OBJ) $(SERVER_OBJ) $(DATANODE_OBJ) $(CLIENT_OBJ) $(FILELOCK_OBJ) $(FILETRANSFER_OBJ) $(SQUIDPROTOCOL_OBJ) $(SQUIDFORMATTER_OBJ) $(FILEMANAGER_OBJ) $(PEER_OBJ) $(SQUIDACTIVE_OBJ) $(SQUIDPASSIVE_OBJ) $(SQUIDCOMMUNICATOR_OBJ)
 
 run: main
 		./main
