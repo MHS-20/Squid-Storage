@@ -23,6 +23,12 @@ int SquidProtocol::getSocket()
     return socket_fd;
 }
 
+
+std::string SquidProtocol::toString() const
+{
+    return "Protocol{" + nodeType + ":" + processName + "}";
+}
+
 // Message SquidProtocol::closeConn()
 // {
 //     this->sendMessage(this->formatter.closeFormat());
@@ -34,11 +40,6 @@ int SquidProtocol::getSocket()
 //     this->sendMessage(this->formatter.identifyFormat());
 //     return this->receiveAndParseMessage();
 // }
-
-std::string SquidProtocol::toString() const
-{
-    return "Protocol{" + nodeType + ":" + processName + "}";
-}
 
 // ----------------------------
 // --------- REQUESTS ---------

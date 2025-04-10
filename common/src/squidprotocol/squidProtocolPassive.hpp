@@ -5,7 +5,7 @@
 #include "filemanager.hpp"
 
 #include "squidProtocolCommunicator.hpp"
-#include "squidprotocolformatter.hpp"
+#include "squidProtocolFormatter.hpp"
 
 #define BUFFER_SIZE 1024
 #define DEFAULT_FOLDER_PATH "./test_txt"

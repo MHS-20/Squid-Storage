@@ -1,5 +1,4 @@
-#include "squidprotocolformatter.hpp"
-#include <iostream>
+#include "squidProtocolFormatter.hpp"
 
 SquidProtocolFormatter::SquidProtocolFormatter() {};
 

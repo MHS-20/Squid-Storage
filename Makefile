@@ -11,8 +11,7 @@ CLIENT_SRC = client/src/client.cpp
 PEER_SRC = common/src/peer/peer.cpp
 
 SQUIDPROTOCOL_SRC = common/src/squidprotocol/squidprotocol.cpp
-SQUIDFORMATTER_SRC = common/src/squidprotocol/squidprotocolformatter.cpp
-
+SQUIDFORMATTER_SRC = common/src/squidprotocol/squidProtocolFormatter.cpp
 SQUIDACTIVE_SRC = common/src/squidprotocol/squidProtocolActive.cpp
 SQUIDPASSIVE_SRC = common/src/squidprotocol/squidProtocolPassive.cpp
 SQUIDCOMMUNICATOR_SRC = common/src/squidprotocol/squidProtocolCommunicator.cpp
