@@ -38,10 +38,6 @@ public:
     void sendFile(const char *filepath);
     void retriveFile(const char *outputpath);
 
-    // virtual bool createFile(int fileId);
-    // virtual bool updateFile(int fileId);
-    // virtual bool deleteFile(int fileId);
-
 private:
     int socket_fd = 0;
     struct sockaddr_in server_addr;

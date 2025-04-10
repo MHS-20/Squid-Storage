@@ -6,32 +6,27 @@
 #include <sys/socket.h>
 #include <fstream>
 #include <map>
+#include <thread>
 
+#include "filelock.hpp"
+#include "filemanager.hpp"
 #include "filetransfer.hpp"
 #include "squidprotocol.hpp"
 
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
+#define DEFAULT_PATH "./test_txt"
 
 class Server
 {
 public:
-    void start();
     Server(int port);
     Server();
     ~Server();
 
-    int getSocket();
-
-    void receiveFile(int client_socket, const char *outputpath);
-    void sendFile(int client_socket, const char *filepath);
-    // virtual bool listenForClients();
-    // virtual bool listenForDataNodes();
-    // virtual bool lock(int filedId);
-    // virtual bool unlock(int fileId);
-    // virtual bool updateFile(int fileId);
-    // virtual bool deleteFile(int fileId);
-    // virtual bool createFile(int fileId);
+    virtual void start();
+    virtual int getSocket();
+    virtual void initialize();
 
 private:
     int port;
@@ -43,14 +38,16 @@ private:
     socklen_t addrlen = sizeof(address);
 
     FileTransfer fileTransfer;
+    FileManager fileManager;
 
-    std::map<std::string, int> fileMap;             // filename to file id
-    std::map<std::string, int> clientEndpointMap;   // client ip/name to socket_fd
-    std::map<std::string, int> dataNodeEndpointMap; // datanode ip/name to socket_fd
+    // filename to file id
+    std::map<std::string, FileLock> fileMap;             
 
-    void identifyConnection(int client_socket);
-    void handleClient(int client_socket);
-    void handleClientMessage(int client_socket);
+    // client name to correspondent SquidProtocol instance
+    std::map<std::string, SquidProtocol> clientEndpointMap;   
+    std::map<std::string, SquidProtocol> dataNodeEndpointMap;
+
+    void handleConnection(int client_socket);
     // virtual bool replicateFileToDataNodes(int fileId, std::vector<int> ip);
     // virtual bool receiveFileFromDataNode(int fileId, int ip);
     // virtual bool sendFileToClient(int fileId, int ip);

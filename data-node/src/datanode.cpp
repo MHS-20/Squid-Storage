@@ -35,7 +35,6 @@ int DataNode::getSocket()
     return socket_fd;
 }
 
-
 void DataNode::connectToServer()
 {
     if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
@@ -44,7 +43,6 @@ void DataNode::connectToServer()
         exit(EXIT_FAILURE);
     }
     std::cout << "[DATANODE]: Connected to server...\n";
-    //sendName(socket_fd);
 }
 
 void DataNode::handleRequest(Message mex)

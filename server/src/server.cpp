@@ -1,5 +1,4 @@
 #include "server.hpp"
-#include <thread>
 
 Server::Server() : Server(DEFAULT_PORT) {}
 
@@ -26,9 +25,11 @@ Server::Server(int port)
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
-    fileMap = std::map<std::string, int>();
-    clientEndpointMap = std::map<std::string, int>();
-    dataNodeEndpointMap = std::map<std::string, int>();
+    fileManager = FileManager();
+
+    fileMap = std::map<std::string, FileLock>();
+    clientEndpointMap = std::map<std::string, SquidProtocol>();
+    dataNodeEndpointMap = std::map<std::string, SquidProtocol>();
 }
 
 Server::~Server()
@@ -39,6 +40,17 @@ Server::~Server()
 int Server::getSocket()
 {
     return server_fd;
+}
+
+void Server::initialize(){
+
+    //initialize file map 
+    std::vector<std::string> entries = fileManager.getFiles(DEFAULT_PATH);
+    for (auto entry : entries)
+    {
+        fileMap[entry] = FileLock(entry);
+    }
+    std::cout << "[SERVER]: File map initialized" << std::endl;
 }
 
 void Server::start()
@@ -63,19 +75,33 @@ void Server::start()
         }
 
         std::cout << "Accepted connection: " << new_socket << "...\n";
-        this->handleClient(new_socket);
+        this->handleConnection(new_socket);
     }
 }
 
-void Server::handleClient(int client_socket)
+void Server::handleConnection(int new_socket)
 {
-    SquidProtocol clientProtocol = SquidProtocol(client_socket, "server", "SERVER");
+    SquidProtocol protocol = SquidProtocol(new_socket, "server", "SERVER");
     std::cout << "Checking for messages ...\n";
 
-    Message mex = clientProtocol.identify();
+    Message mex = protocol.identify();
     std::cout << "[SERVER]: Identity received from client: " + mex.args["processName"] << std::endl;
 
-    clientProtocol.response(std::string("ACK"));
+    if (mex.args["nodeType"] == "CLIENT")
+    {
+        clientEndpointMap[mex.args["processName"]] = protocol;
+    }
+    else if (mex.args["nodeType"] == "DATANODE")
+    {
+        dataNodeEndpointMap[mex.args["processName"]] = protocol;
+    }
+    else
+    {
+        std::cout << "[SERVER]: Unknown node type\n";
+        return;
+    }
+
+    protocol.response(std::string("ACK"));
     std::cout << "[SERVER]: Ack sent to client" << std::endl;
 
     std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -83,7 +109,7 @@ void Server::handleClient(int client_socket)
     while (true)
     {
         std::cout << "[SERVER]: Waiting for messages..." << std::endl;
-        if(clientProtocol.getSocket() < 0) // connection closed
+        if (protocol.getSocket() < 0) // connection closed
         {
             std::cout << "[SERVER]: Closing & Terminating" << std::endl;
             break;
@@ -91,7 +117,7 @@ void Server::handleClient(int client_socket)
 
         try
         {
-            mex = clientProtocol.receiveAndParseMessage();
+            mex = protocol.receiveAndParseMessage();
             std::cout << "[SERVER]: Received message: " + mex.keyword << std::endl;
         }
         catch (std::exception &e)
@@ -100,7 +126,7 @@ void Server::handleClient(int client_socket)
             break;
         }
 
-        clientProtocol.requestDispatcher(mex);
+        protocol.requestDispatcher(mex);
         std::cout << "[SERVER]: Request dispatched" << std::endl;
     }
 }
@@ -112,56 +138,4 @@ void printMap(std::map<std::string, int> &map, std::string name)
     {
         std::cout << pair.first << " => " << pair.second << std::endl;
     }
-}
-
-void Server::identifyConnection(int new_socket)
-{
-    char buffer[BUFFER_SIZE] = {0};
-    char connection_ip[INET_ADDRSTRLEN];
-
-    inet_ntop(AF_INET, &address.sin_addr, connection_ip, INET_ADDRSTRLEN);
-    std::string new_endpoint = std::string(connection_ip) + ":" + std::to_string(ntohs(address.sin_port));
-    std::cout << "[SERVER]: Connection from " << new_endpoint << std::endl;
-
-    read(new_socket, buffer, sizeof(buffer));
-    std::cout << "[SERVER]: Connection identified as: " << buffer << std::endl;
-
-    if (strcmp(buffer, "CLIENT") == 0)
-    {
-        clientEndpointMap[new_endpoint] = new_socket;
-    }
-    else if (strcmp(buffer, "DATANODE") == 0)
-    {
-        dataNodeEndpointMap[new_endpoint] = new_socket;
-    }
-    else
-    {
-        std::cout << "[SERVER]: Unknown client type\n";
-    }
-
-    printMap(clientEndpointMap, "CLIENTS MAP");
-    printMap(dataNodeEndpointMap, "DATANODES MAP");
-}
-
-void Server::handleClientMessage(int client_socket)
-{
-    char buffer[BUFFER_SIZE] = {0};
-
-    read(client_socket, buffer, sizeof(buffer));
-    std::cout << "[SERVER]: Received: " << buffer << std::endl;
-
-    const char *message = "Hello from server";
-    send(client_socket, message, strlen(message), 0);
-    std::cout << "[SERVER]: Reply sent\n";
-}
-
-/* ---- FILE TRANSFER API ----- */
-void Server::sendFile(int client_socket, const char *filepath)
-{
-    this->fileTransfer.sendFile(client_socket, "[SERVER]", filepath);
-}
-
-void Server::receiveFile(int client_socket, const char *outputpath)
-{
-    this->fileTransfer.receiveFile(client_socket, "[SERVER]", outputpath);
 }

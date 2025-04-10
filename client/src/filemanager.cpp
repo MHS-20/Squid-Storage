@@ -13,6 +13,7 @@ std::vector<std::string> FileManager::getFiles(std::string path)
 
     return files;
 }
+
 std::vector<fs::directory_entry> FileManager::getFileEntries(std::string path)
 {   
 	std::vector<fs::directory_entry> entries;
@@ -21,6 +22,7 @@ std::vector<fs::directory_entry> FileManager::getFileEntries(std::string path)
 
     return entries;
 }
+
 std::map<std::string, fs::file_time_type> FileManager::getFilesLastWrite(std::string path)
 {
     auto files = this->getFiles(path);
