@@ -37,7 +37,15 @@ add_executable(SquidStorage
 )
 
 # Collega le librerie SDL2 e OpenGL
-target_link_libraries(SquidStorage
-    ${SDL2_LIBRARIES}         # Librerie SDL2 trovate con pkg-config
-    "-framework OpenGL"       # Link con OpenGL su macOS
-)
+if(APPLE)
+    target_link_libraries(SquidStorage
+        ${SDL2_LIBRARIES}
+        "-framework OpenGL"
+    )
+elseif(UNIX)
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(SquidStorage
+        ${SDL2_LIBRARIES}
+        ${OPENGL_gl_LIBRARY}
+    )
+endif()

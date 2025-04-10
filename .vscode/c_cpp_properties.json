@@ -4,7 +4,8 @@
             "name": "macos-clang-x64",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/Cellar/sdl2/2.32.2/include/SDL2"
+                "/usr/local/Cellar/sdl2/2.32.2/include/SDL2",
+                "${workspaceFolder}/common/src/filesystem"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",
