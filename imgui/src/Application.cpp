@@ -8,7 +8,6 @@ namespace SquidStorage
     std::string currentPath = fs::current_path().string(); // current directory
     std::string selectedFile = "";                         // selected file
     std::string fileContent = "";                          // selected file content
-    FileManager fm = FileManager();
     bool showFileSavedMessage = false;
     bool showFileDeleteButton = false;
     bool showFileEditor = false;
@@ -131,7 +130,7 @@ namespace SquidStorage
         ImGui::BeginChild("FileListFrame", ImVec2(0, 450), true);
 
         // files and directories list
-        std::vector<fs::directory_entry> entries = fm.getFileEntries(currentPath);
+        std::vector<fs::directory_entry> entries = FileManager::getInstance().getFileEntries(currentPath);
 
         for (const auto &entry : entries)
         {
@@ -150,7 +149,7 @@ namespace SquidStorage
                 if (ImGui::Selectable(("- " + name).c_str(), selectedFile == name))
                 {
                     selectedFile = entry.path().string();
-                    fileContent = fm.readFile(selectedFile);
+                    fileContent = FileManager::getInstance().readFile(selectedFile);
                     showFileDeleteButton = true;
                     showFileEditor = true;
                 }
@@ -173,7 +172,7 @@ namespace SquidStorage
             ImGui::InputText("File name", newFileName, 128);
             if (ImGui::Button("Create"))
             {
-                if (fm.createFile(newFileName))
+                if (FileManager::getInstance().createFile(newFileName))
                 {
                     fileContent = "";
                     newFileButtonPressed = false;
@@ -187,7 +186,7 @@ namespace SquidStorage
 
         if (deleteButtonPressed)
         {
-            if (fm.deleteFile(selectedFile))
+            if (FileManager::getInstance().deleteFile(selectedFile))
             {
                 selectedFile = "";
                 fileContent = "";
@@ -218,7 +217,7 @@ namespace SquidStorage
 
             if (ImGui::Button("Save"))
             {
-                if (fm.updateFile(selectedFile, fileContent))
+                if (FileManager::getInstance().updateFile(selectedFile, fileContent))
                 {
                     showFileSavedMessage = true;
                 }

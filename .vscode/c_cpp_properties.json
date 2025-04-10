@@ -3,7 +3,8 @@
         {
             "name": "macos-clang-x64",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "/usr/local/Cellar/sdl2/2.32.2/include/SDL2"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",
