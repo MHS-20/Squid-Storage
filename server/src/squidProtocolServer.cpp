@@ -5,9 +5,9 @@ class SquidProtocolServer : public SquidProtocol
 {
 
 public:
-    SquidProtocolServer::SquidProtocolServer() : SquidProtocol() {}
+    SquidProtocolServer() : SquidProtocol() {}
 
-    SquidProtocolServer::SquidProtocolServer(int socket_fd, std::string nodeType, std::string processName)
+    SquidProtocolServer(int socket_fd, std::string nodeType, std::string processName)
     {
         this->socket_fd = socket_fd;
         this->processName = processName;

@@ -6,8 +6,7 @@ public:
     SquidProtocolPassiveServer() : SquidProtocolPassive() {}
     SquidProtocolPassiveServer(int socket_fd, std::string nodeType, std::string processName, SquidProtocolCommunicator communicator) : SquidProtocolPassive(socket_fd, nodeType, processName, communicator) {}
 
-    // override dispatcher
-    void SquidProtocolPassiveServer::requestDispatcher(Message message) override
+    void requestDispatcher(Message message) override
     {
         switch (message.keyword)
         {
@@ -17,6 +16,10 @@ public:
             std::cout << "receiving file" << std::endl;
             this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
             this->response(std::string("ACK"));
+
+            // ! propagate updates to client
+            // ! replicate on datanode
+
             break;
         case TRANSFER_FILE:
             this->response(std::string("ACK"));
@@ -32,10 +35,16 @@ public:
             this->response(std::string("ACK"));
             this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
             this->response(std::string("ACK"));
+
+            // ! propagate updates
+
             break;
         case DELETE_FILE:
             FileManager::getInstance().deleteFile(message.args["filePath"]);
             this->response(std::string("ACK"));
+
+            // ! propagate updates
+
             break;
         case ACQUIRE_LOCK:
             this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
@@ -49,9 +58,6 @@ public:
             break;
         case SYNC_STATUS:
             this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
-            break;
-        case IDENTIFY:
-            responseIdentify();
             break;
         case CLOSE:
             this->response(std::string("ACK"));

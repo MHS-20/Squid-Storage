@@ -41,10 +41,10 @@ void SquidProtocolPassive::responseIdentify()
     Message mex = communicator.receiveAndParseMessage();
 
     if (mex.args["ACK"] == "ACK")
-        std::cout << nodeType + ": ACKed identify by server" << std::endl;
+        std::cout << nodeType + ": Identify acked by server" << std::endl;
     else
     {
-        std::cerr << nodeType + ": Error while identifying with server" << std::endl;
+        std::cerr << nodeType + ": Refused identifying by server" << std::endl;
         return;
     }
 }
@@ -95,7 +95,7 @@ void SquidProtocolPassive::requestDispatcher(Message message)
     case SYNC_STATUS:
         this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
         break;
-    case IDENTIFY:
+    case IDENTIFY: //used by client/datanode
         responseIdentify();
         break;
     case CLOSE:
