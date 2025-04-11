@@ -55,7 +55,7 @@ public:
     // virtual void response(std::string nodeType, std::string processName);
     // virtual void response(std::map<std::string, fs::file_time_type> filesLastWrite);
 
-private:
+protected:
     int socket_fd;
     std::string processName;
     std::string nodeType;

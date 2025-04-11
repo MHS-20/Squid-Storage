@@ -34,7 +34,7 @@ public:
     virtual Message heartbeat();
     virtual Message syncStatus();
 
-private:
+protected:
     int socket_fd;
     std::string processName;
     std::string nodeType;

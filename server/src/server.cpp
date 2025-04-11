@@ -30,8 +30,8 @@ Server::Server(int port) : fileManager(FileManager::getInstance())
     // fileManager = FileManager::getInstance();
 
     // fileMap = fileManager.getFileMap();
-    clientEndpointMap = std::map<std::string, SquidProtocol>();
-    dataNodeEndpointMap = std::map<std::string, SquidProtocol>();
+    clientEndpointMap = std::map<std::string, SquidProtocolServer>();
+    dataNodeEndpointMap = std::map<std::string, SquidProtocolServer>();
 }
 
 Server::~Server()
@@ -44,7 +44,7 @@ int Server::getSocket()
     return server_fd;
 }
 
-void printMap(std::map<std::string, SquidProtocol> &map, std::string name)
+void printMap(std::map<std::string, SquidProtocolServer> &map, std::string name)
 {
     std::cout << "[SERVER]: " << name << std::endl;
     for (auto &pair : map)
@@ -84,7 +84,7 @@ void Server::run()
     }
 }
 
-void Server::identify(SquidProtocol protocol)
+void Server::identify(SquidProtocolServer protocol)
 {
     Message mex = protocol.active.identify();
     std::cout << "[SERVER]: Identity received from peer: " + mex.args["processName"] << std::endl;
@@ -113,7 +113,7 @@ void Server::handleConnection(int new_socket)
 {
 
     Message mex;
-    SquidProtocol protocol = SquidProtocol(new_socket, "[SERVER]", "SERVER");
+    SquidProtocolServer protocol = SquidProtocolServer(new_socket, "[SERVER]", "SERVER");
     identify(protocol);
 
     std::cout << "Checking for messages ...\n";

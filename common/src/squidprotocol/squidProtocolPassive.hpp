@@ -21,10 +21,10 @@ public:
     void response(std::string nodeType, std::string processName);
     void response(std::map<std::string, fs::file_time_type> filesLastWrite);
 
-    void requestDispatcher(Message response);
-    void responseIdentify();
+    virtual void requestDispatcher(Message response);
+    virtual void responseIdentify();
 
-private:
+protected:
     int socket_fd;
     std::string processName;
     std::string nodeType;

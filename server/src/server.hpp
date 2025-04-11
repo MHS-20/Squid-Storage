@@ -11,7 +11,7 @@
 #include "filelock.hpp"
 #include "filemanager.hpp"
 #include "filetransfer.hpp"
-#include "squidprotocol.hpp"
+#include "squidProtocolServer.cpp"
 
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
@@ -26,7 +26,7 @@ public:
 
     void run();
     int getSocket();
-    void identify(SquidProtocol protocol);
+    void identify(SquidProtocolServer protocol);
 
 private:
     int port;
@@ -41,8 +41,8 @@ private:
     FileManager& fileManager;
 
     //std::map<std::string, FileLock> fileMap;             
-    std::map<std::string, SquidProtocol> clientEndpointMap;   
-    std::map<std::string, SquidProtocol> dataNodeEndpointMap;
+    std::map<std::string, SquidProtocolServer> clientEndpointMap;   
+    std::map<std::string, SquidProtocolServer> dataNodeEndpointMap;
 
     void handleConnection(int client_socket);
     // virtual bool replicateFileToDataNodes(int fileId, std::vector<int> ip);

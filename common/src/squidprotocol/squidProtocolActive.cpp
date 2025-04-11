@@ -1,7 +1,8 @@
 #include "squidProtocolActive.hpp"
 
-SquidProtocolActive::SquidProtocolActive(){};
-SquidProtocolActive::SquidProtocolActive(int socket_fd, std::string nodeType, std::string processName, SquidProtocolCommunicator communicator){
+SquidProtocolActive::SquidProtocolActive() {};
+SquidProtocolActive::SquidProtocolActive(int socket_fd, std::string nodeType, std::string processName, SquidProtocolCommunicator communicator)
+{
     this->socket_fd = socket_fd;
     this->processName = processName;
     this->nodeType = nodeType;
@@ -180,12 +181,6 @@ void SquidProtocolActive::responseDispatcher(Message response)
         else
             std::cout << nodeType + ": Synchronization with server successful" << std::endl;
         break;
-    // case IDENTIFY:
-    //     if (response.args["ACK"] != "ACK")
-    //         perror(std::string(nodeType + ": Error while identifying").c_str());
-    //     else
-    //         std::cout << nodeType + ": Identified successfully on server" << std::endl;
-    //     break;
     case CLOSE:
         if (response.args["ACK"] != "ACK")
             perror(std::string(nodeType + ": Error while closing connection").c_str());
@@ -196,6 +191,12 @@ void SquidProtocolActive::responseDispatcher(Message response)
             std::cout << nodeType + ": Connection closed successfully" << std::endl;
         }
         break;
+    // case IDENTIFY:
+    //     if (response.args["ACK"] != "ACK")
+    //         perror(std::string(nodeType + ": Error while identifying").c_str());
+    //     else
+    //         std::cout << nodeType + ": Identified successfully on server" << std::endl;
+    //     break;
     default:
         break;
     }
