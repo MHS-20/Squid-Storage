@@ -4,6 +4,7 @@
 #include "filetransfer.hpp"
 #include "filemanager.hpp"
 
+#include "squidProtocolServer.cpp"
 #include "squidProtocolCommunicator.hpp"
 #include "squidProtocolFormatter.hpp"
 
@@ -21,7 +22,13 @@ public:
     void response(std::string nodeType, std::string processName);
     void response(std::map<std::string, fs::file_time_type> filesLastWrite);
 
-    virtual void requestDispatcher(Message response);
+    void propagateUpdate(Message message,
+                    std::map<std::string, SquidProtocolServer> clientEndpointMap,
+                    std::map<std::string, SquidProtocolServer> dataNodeEndpointMap);
+
+    virtual void requestDispatcher(Message response,
+                                   std::map<std::string, SquidProtocolServer> clientEndpointMap,
+                                   std::map<std::string, SquidProtocolServer> dataNodeEndpointMap);
     virtual void responseIdentify();
 
 protected:
