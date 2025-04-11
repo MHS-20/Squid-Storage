@@ -9,34 +9,42 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL2 REQUIRED sdl2)
 
-# Aggiungi include directories
+# === INCLUDE PATH ===
 include_directories(
-    ${SDL2_INCLUDE_DIRS}               # Include path di SDL2 trovato con pkg-config
-    ${CMAKE_SOURCE_DIR}/imgui         # ImGui core
-    ${CMAKE_SOURCE_DIR}/imgui/backends # ImGui backends
-    ${CMAKE_SOURCE_DIR}/common/src    # Tuoi file .h
+    ${SDL2_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/imgui
+    ${CMAKE_SOURCE_DIR}/imgui/backends
+    ${CMAKE_SOURCE_DIR}/common/src
+    ${CMAKE_SOURCE_DIR}/common/src/squidprotocol
+    ${CMAKE_SOURCE_DIR}/common/src/filesystem
+    ${CMAKE_SOURCE_DIR}/server/src
 )
 
-# Aggiungi i file sorgente di ImGui
+# === FILES COMUNI ===
+set(COMMON_SOURCES
+    common/src/filesystem/filemanager.cpp
+    common/src/filesystem/filelock.cpp
+)
+
+# === IMGUI FILES ===
 file(GLOB IMGUI_SOURCES
     ${CMAKE_SOURCE_DIR}/imgui/imgui*.cpp
 )
 
-# Aggiungi il percorso di libreria specifico per SDL2 se è necessario (per /usr/local/lib)
+# === LINKER PATH (solo se necessario) ===
 link_directories(/usr/local/lib)
 
-# Crea l'eseguibile con i sorgenti necessari
+# === EXECUTABLE: SquidStorage (GUI) ===
 add_executable(SquidStorage
     imgui/src/main.cpp
     imgui/src/Application.cpp
-    common/src/filesystem/filemanager.cpp
-    common/src/filesystem/filelock.cpp
+    ${COMMON_SOURCES}
     imgui/backends/imgui_impl_sdl2.cpp
     imgui/backends/imgui_impl_opengl2.cpp
     ${IMGUI_SOURCES}
 )
 
-# Collega le librerie SDL2 e OpenGL
+# === LINK LIBRARIES ===
 if(APPLE)
     target_link_libraries(SquidStorage
         ${SDL2_LIBRARIES}
@@ -49,3 +57,16 @@ elseif(UNIX)
         ${OPENGL_gl_LIBRARY}
     )
 endif()
+
+# === EXECUTABLE: SquidStorageServer ===
+add_executable(SquidStorageServer
+    server/src/main.cpp
+    server/src/server.cpp
+    common/src/squidprotocol/squidprotocol.cpp
+    common/src/squidprotocol/squidProtocolActive.cpp
+    common/src/squidprotocol/squidProtocolPassive.cpp
+    common/src/squidprotocol/squidProtocolCommunicator.cpp
+    common/src/squidprotocol/squidProtocolFormatter.cpp
+    common/src/filesystem/filetransfer.cpp
+    ${COMMON_SOURCES}
+)

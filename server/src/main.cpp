@@ -1,20 +1,16 @@
 #include <iostream>
 #include <thread>
 #include "server.hpp"
-#include "squidprotocol.hpp"
 
 using namespace std;
-int main()
+int main(int argc, char **argv)
 {
-    Server server = Server(12345);
-    SquidProtocol squidProtocol = SquidProtocol(server.getSocket(), "server", "SERVER");    
-
-    server.start();
-    int socket = server.getSocket();
-
-    while (true)
+    int port = 12345;
+    if (argc > 1)
     {
-        squidProtocol.requestDispatcher(squidProtocol.receiveAndParseMessage());
+        port = atoi(argv[1]);
     }
-
+    std::cout << "Starting server on port: " << port << std::endl;
+    Server server = Server(port);
+    server.start();
 }
