@@ -16,11 +16,19 @@ Server::Server(int port) : fileManager(FileManager::getInstance())
         exit(EXIT_FAILURE);
     }
 
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0)
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
     {
-        perror("[SERVER]: setsockopt failed");
+        perror("[SERVER]: setsockopt failed (SO_REUSEADDR)");
         exit(EXIT_FAILURE);
     }
+
+#ifdef SO_REUSEPORT
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0)
+    {
+        perror("[SERVER]: setsockopt failed (SO_REUSEPORT)");
+        exit(EXIT_FAILURE);
+    }
+#endif
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;

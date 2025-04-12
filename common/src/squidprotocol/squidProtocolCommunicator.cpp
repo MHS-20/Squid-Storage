@@ -1,7 +1,8 @@
 #include "squidProtocolCommunicator.hpp"
 
 SquidProtocolCommunicator::SquidProtocolCommunicator() {};
-SquidProtocolCommunicator::SquidProtocolCommunicator(int socket_fd, std::string nodeType, std::string processName){
+SquidProtocolCommunicator::SquidProtocolCommunicator(int socket_fd, std::string nodeType, std::string processName)
+{
     this->socket_fd = socket_fd;
     this->processName = processName;
     this->nodeType = nodeType;

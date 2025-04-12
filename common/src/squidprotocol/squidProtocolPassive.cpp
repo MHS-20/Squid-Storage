@@ -29,10 +29,18 @@ void SquidProtocolPassive::response(std::map<std::string, fs::file_time_type> fi
     this->communicator.sendMessage(this->formatter.responseFormat(filesLastWrite));
 }
 
+void SquidProtocolPassive::propagateUpdate(Message message, std::map<std::string, SquidProtocolServer> clientEndpointMap, std::map<std::string, SquidProtocolServer> dataNodeEndpointMap)
+{
+}
+
 void SquidProtocolPassive::response(bool lock)
 {
     std::cout << "Sending response: " << lock << std::endl;
     this->communicator.sendMessage(this->formatter.responseFormat(lock));
+}
+
+void SquidProtocolPassive::requestDispatcher(Message response, std::map<std::string, SquidProtocolServer> clientEndpointMap, std::map<std::string, SquidProtocolServer> dataNodeEndpointMap)
+{
 }
 
 void SquidProtocolPassive::responseIdentify()
@@ -52,6 +60,8 @@ void SquidProtocolPassive::responseIdentify()
 // ------------------------------
 // --------- DISPATCHER ---------
 // ------------------------------
+
+/*
 void SquidProtocolPassive::requestDispatcher(Message message)
 {
     switch (message.keyword)
@@ -108,3 +118,4 @@ void SquidProtocolPassive::requestDispatcher(Message message)
         break;
     }
 }
+*/

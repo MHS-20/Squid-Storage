@@ -1,13 +1,13 @@
 #include "squidprotocol.hpp"
 
-SquidProtocol::SquidProtocol(){}
+SquidProtocol::SquidProtocol() {}
 
 SquidProtocol::SquidProtocol(int socket_fd, std::string nodeType, std::string processName)
 {
     this->socket_fd = socket_fd;
     this->processName = processName;
     this->nodeType = nodeType;
-    
+
     this->fileTransfer = FileTransfer();
     this->formatter = SquidProtocolFormatter(nodeType);
 }
@@ -18,7 +18,6 @@ int SquidProtocol::getSocket()
 {
     return socket_fd;
 }
-
 
 std::string SquidProtocol::toString() const
 {

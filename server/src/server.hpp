@@ -15,7 +15,7 @@
 
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
-#define DEFAULT_PATH "./test_txt"
+#define DEFAULT_PATH "../../test_txt"
 
 class Server
 {
@@ -38,10 +38,10 @@ private:
     socklen_t addrlen = sizeof(address);
 
     FileTransfer fileTransfer;
-    FileManager& fileManager;
+    FileManager &fileManager;
 
-    //std::map<std::string, FileLock> fileMap;             
-    std::map<std::string, SquidProtocolServer> clientEndpointMap;   
+    // std::map<std::string, FileLock> fileMap;
+    std::map<std::string, SquidProtocolServer> clientEndpointMap;
     std::map<std::string, SquidProtocolServer> dataNodeEndpointMap;
 
     void handleConnection(int client_socket);

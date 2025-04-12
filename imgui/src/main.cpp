@@ -103,6 +103,7 @@ int main(int, char **)
 
     // Main loop
     bool done = false;
+    SquidStorage::runClient();
     while (!done)
     {
         // Poll and handle events (inputs, window resize, etc.)

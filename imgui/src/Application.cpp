@@ -14,6 +14,13 @@ namespace SquidStorage
     bool newFileButtonPressed = false;
     bool deleteButtonPressed = false;
     char newFileName[128];
+    Client client("127.0.0.1", 12345);
+
+    void runClient()
+    {
+        client.run();
+    }
+
     void RenderUI()
     {
         static bool opt_fullscreen = true;

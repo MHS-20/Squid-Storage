@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/local/Cellar/sdl2/2.32.2/include/SDL2",
-                "${workspaceFolder}/common/src/filesystem"
+                "${workspaceFolder}/common/src/filesystem",
+                "${workspaceFolder}/common/src/squidprotocol"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",

@@ -17,13 +17,19 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/common/src
     ${CMAKE_SOURCE_DIR}/common/src/squidprotocol
     ${CMAKE_SOURCE_DIR}/common/src/filesystem
+    ${CMAKE_SOURCE_DIR}/common/src/peer
     ${CMAKE_SOURCE_DIR}/server/src
+    ${CMAKE_SOURCE_DIR}/client/src
 )
 
 # === FILES COMUNI ===
 set(COMMON_SOURCES
+    common/src/squidprotocol/squidprotocol.cpp
+    common/src/squidprotocol/squidProtocolFormatter.cpp
     common/src/filesystem/filemanager.cpp
     common/src/filesystem/filelock.cpp
+    common/src/peer/peer.cpp
+    common/src/filesystem/filetransfer.cpp
 )
 
 # === IMGUI FILES ===
@@ -38,6 +44,7 @@ link_directories(/usr/local/lib)
 add_executable(SquidStorage
     imgui/src/main.cpp
     imgui/src/Application.cpp
+    client/src/client.cpp
     ${COMMON_SOURCES}
     imgui/backends/imgui_impl_sdl2.cpp
     imgui/backends/imgui_impl_opengl2.cpp
@@ -62,8 +69,5 @@ endif()
 add_executable(SquidStorageServer
     server/src/main.cpp
     server/src/server.cpp
-    common/src/squidprotocol/squidprotocol.cpp
-    common/src/squidprotocol/squidProtocolFormatter.cpp
-    common/src/filesystem/filetransfer.cpp
     ${COMMON_SOURCES}
 )
