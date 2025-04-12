@@ -63,9 +63,6 @@ add_executable(SquidStorageServer
     server/src/main.cpp
     server/src/server.cpp
     common/src/squidprotocol/squidprotocol.cpp
-    common/src/squidprotocol/squidProtocolActive.cpp
-    common/src/squidprotocol/squidProtocolPassive.cpp
-    common/src/squidprotocol/squidProtocolCommunicator.cpp
     common/src/squidprotocol/squidProtocolFormatter.cpp
     common/src/filesystem/filetransfer.cpp
     ${COMMON_SOURCES}
