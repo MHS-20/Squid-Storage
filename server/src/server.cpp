@@ -86,7 +86,7 @@ void Server::run()
 
 void Server::identify(SquidProtocolServer protocol)
 {
-    Message mex = protocol.active.identify();
+    Message mex = protocol.identify();
     std::cout << "[SERVER]: Identity received from peer: " + mex.args["processName"] << std::endl;
 
     if (mex.args["nodeType"] == "CLIENT")
@@ -105,7 +105,7 @@ void Server::identify(SquidProtocolServer protocol)
         return;
     }
 
-    protocol.passive.response(std::string("ACK"));
+    protocol.response(std::string("ACK"));
     std::cout << "[SERVER]: Ack sent to client" << std::endl;
 }
 
@@ -113,7 +113,7 @@ void Server::handleConnection(int new_socket)
 {
 
     Message mex;
-    SquidProtocolServer protocol = SquidProtocolServer(new_socket, "[SERVER]", "SERVER");
+    SquidProtocolServer protocol = SquidProtocolServer(new_socket, "[SERVER]", "SERVER", clientEndpointMap, dataNodeEndpointMap);
     identify(protocol);
 
     std::cout << "Checking for messages ...\n";
@@ -128,7 +128,7 @@ void Server::handleConnection(int new_socket)
 
         try
         {
-            mex = protocol.communicator.receiveAndParseMessage();
+            mex = protocol.receiveAndParseMessage();
             std::cout << "[SERVER]: Received message: " + mex.keyword << std::endl;
         }
         catch (std::exception &e)
@@ -137,7 +137,7 @@ void Server::handleConnection(int new_socket)
             break;
         }
 
-        protocol.passive.requestDispatcher(mex);
+        protocol.requestDispatcher(mex);
         std::cout << "[SERVER]: Request dispatched" << std::endl;
     }
 };

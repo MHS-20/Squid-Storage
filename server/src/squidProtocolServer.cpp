@@ -1,13 +1,16 @@
 #include "squidprotocol.hpp"
-#include "squidProtocolPassiveServer.cpp"
 
 class SquidProtocolServer : public SquidProtocol
 {
 
 public:
+    std::map<std::string, SquidProtocolServer> clientEndpointMap;
+    std::map<std::string, SquidProtocolServer> dataNodeEndpointMap;
     SquidProtocolServer() : SquidProtocol() {}
 
-    SquidProtocolServer(int socket_fd, std::string nodeType, std::string processName)
+    SquidProtocolServer(int socket_fd, std::string nodeType, std::string processName,
+                        std::map<std::string, SquidProtocolServer> clientEndpointMap,
+                        std::map<std::string, SquidProtocolServer> dataNodeEndpointMap)
     {
         this->socket_fd = socket_fd;
         this->processName = processName;
@@ -16,8 +19,71 @@ public:
         this->fileTransfer = FileTransfer();
         this->formatter = SquidProtocolFormatter(nodeType);
 
-        this->communicator = SquidProtocolCommunicator(socket_fd, nodeType, processName);
-        this->passive = SquidProtocolPassiveServer(socket_fd, nodeType, processName, communicator);
-        this->active = SquidProtocolActive(socket_fd, nodeType, processName, communicator);
+        this->clientEndpointMap = clientEndpointMap;
+        this->dataNodeEndpointMap = dataNodeEndpointMap;
+    }
+
+    void requestDispatcher(Message message) override
+    {
+        switch (message.keyword)
+        {
+        case CREATE_FILE:
+            this->response(std::string("ACK"));
+            this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+            this->response(std::string("ACK"));
+            for (auto &client : clientEndpointMap)
+                client.second.createFile(message.args["filePath"]);
+            for (auto &datanode : dataNodeEndpointMap)
+                datanode.second.createFile(message.args["filePath"]);
+            break;
+        case TRANSFER_FILE:
+            this->response(std::string("ACK"));
+            this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+            this->response(std::string("ACK"));
+            break;
+        case READ_FILE:
+            this->response(std::string("ACK"));
+            this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+            this->response(std::string("ACK"));
+            break;
+        case UPDATE_FILE:
+            this->response(std::string("ACK"));
+            this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+            this->response(std::string("ACK"));
+            for (auto &client : clientEndpointMap)
+                client.second.updateFile(message.args["filePath"]);
+            for (auto &datanode : dataNodeEndpointMap)
+                datanode.second.updateFile(message.args["filePath"]);
+            break;
+        case DELETE_FILE:
+            FileManager::getInstance().deleteFile(message.args["filePath"]);
+            this->response(std::string("ACK"));
+            for (auto &client : clientEndpointMap)
+                client.second.deleteFile(message.args["filePath"]);
+            for (auto &datanode : dataNodeEndpointMap)
+                datanode.second.deleteFile(message.args["filePath"]);
+            break;
+        case ACQUIRE_LOCK:
+            this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
+            break;
+        case RELEASE_LOCK:
+            FileManager::getInstance().releaseLock(message.args["filePath"]);
+            this->response(std::string("ACK"));
+            break;
+        case HEARTBEAT:
+            this->response(std::string("ACK"));
+            break;
+        case SYNC_STATUS:
+            this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
+            break;
+        case CLOSE:
+            this->response(std::string("ACK"));
+            close(this->socket_fd);
+            socket_fd = -1;
+            std::cout << nodeType + ": Connection closed" << std::endl;
+            break;
+        default:
+            break;
+        }
     }
 };

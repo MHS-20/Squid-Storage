@@ -12,5 +12,5 @@ int main(int argc, char **argv)
     }
     std::cout << "Starting server on port: " << port << std::endl;
     Server server = Server(port);
-    server.start();
+    server.run();
 }
