@@ -48,7 +48,7 @@ private:
     std::map<std::string, SquidProtocolServer> dataNodeEndpointMap;
 
     // maps filename to datanode endpoint map holding that file
-    std::map<std::string, std::map<std::string, SquidProtocolServer>> dataNodeReplicationMap;
+    //std::map<std::string, std::map<std::string, SquidProtocolServer>> dataNodeReplicationMap;
 
     void handleConnection(int client_socket);
     // virtual bool replicateFileToDataNodes(int fileId, std::vector<int> ip);

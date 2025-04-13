@@ -5,17 +5,23 @@ class SquidProtocolServer : public SquidProtocol
 
 public:
     int replicationFactor;
-    std::map<std::string, SquidProtocolServer> clientEndpointMap;
-    std::map<std::string, SquidProtocolServer> dataNodeEndpointMap;
+    std::map<std::string, SquidProtocolServer> *clientEndpointMap;
+    std::map<std::string, SquidProtocolServer> *dataNodeEndpointMap;
     std::map<std::string, std::map<std::string, SquidProtocolServer>> dataNodeReplicationMap;
-    std::map<std::string, SquidProtocolServer>::iterator endpointIterator;
 
-    SquidProtocolServer() : SquidProtocol() {}
+    std::map<std::string, SquidProtocolServer>::iterator endpointIterator;
+    std::map<std::string, SquidProtocolServer>::iterator readsLoadBalancingIterator;
+
+    SquidProtocolServer() : SquidProtocol() {
+        this->replicationFactor = 0;
+        this->clientEndpointMap = nullptr;
+        this->dataNodeEndpointMap = nullptr;
+        this->dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
+    }
     SquidProtocolServer(int socket_fd, int replicationFactor,
                         std::string nodeType, std::string processName,
-                        std::map<std::string, SquidProtocolServer> &clientEndpointMap,
-                        std::map<std::string, SquidProtocolServer> &dataNodeEndpointMap,
-                        std::map<std::string, std::map<std::string, SquidProtocolServer>> &dataNodeReplicationMap)
+                        std::map<std::string, SquidProtocolServer> *clientEndpointMap,
+                        std::map<std::string, SquidProtocolServer> *dataNodeEndpointMap)
     {
         this->socket_fd = socket_fd;
         this->replicationFactor = replicationFactor;
@@ -27,8 +33,8 @@ public:
 
         this->clientEndpointMap = clientEndpointMap;
         this->dataNodeEndpointMap = dataNodeEndpointMap;
-        this->dataNodeReplicationMap = dataNodeReplicationMap;
-        auto endpointIterator = dataNodeEndpointMap.begin();
+        this->dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
+        this->endpointIterator = dataNodeEndpointMap->begin();
     }
 
     void createFileReplication(std::string filePath)
@@ -36,12 +42,22 @@ public:
         auto fileHoldersMap = std::map<std::string, SquidProtocolServer>();
         for (int i = 0; i < replicationFactor; i++)
         {
-            if (endpointIterator == dataNodeEndpointMap.end())
-                endpointIterator = dataNodeEndpointMap.begin();
+            if (endpointIterator == dataNodeEndpointMap->end())
+                endpointIterator = dataNodeEndpointMap->begin();
             fileHoldersMap.insert({endpointIterator->first, endpointIterator->second});
             endpointIterator++;
         }
         dataNodeReplicationMap.insert({filePath, fileHoldersMap});
+        this->readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
+    }
+
+    void getFileFromDataNode(std::string filePath)
+    {
+        auto &fileHoldersMap = dataNodeReplicationMap[filePath];
+        if (readsLoadBalancingIterator == fileHoldersMap.end())
+            readsLoadBalancingIterator = fileHoldersMap.begin();
+        this->responseDispatcher(readsLoadBalancingIterator->second.readFile(filePath));
+        readsLoadBalancingIterator++;
     }
 
     void requestDispatcher(Message message) override
@@ -52,35 +68,41 @@ public:
             this->response(std::string("ACK"));
             this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
             this->response(std::string("ACK"));
-            for (auto &client : clientEndpointMap)
+            for (auto &client : *clientEndpointMap)
                 client.second.createFile(message.args["filePath"]);
             createFileReplication(message.args["filePath"]);
             for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
                 datanode.second.createFile(message.args["filePath"]);
+            // FileManager::getInstance().deleteFile(message.args["filePath"]);
             break;
         case TRANSFER_FILE:
             this->response(std::string("ACK"));
+            getFileFromDataNode(message.args["filePath"]);
             this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
             this->response(std::string("ACK"));
+            // FileManager::getInstance().deleteFile(message.args["filePath"]);
             break;
         case READ_FILE:
             this->response(std::string("ACK"));
+            getFileFromDataNode(message.args["filePath"]);
             this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
             this->response(std::string("ACK"));
+            // FileManager::getInstance().deleteFile(message.args["filePath"]);
             break;
         case UPDATE_FILE:
             this->response(std::string("ACK"));
             this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
             this->response(std::string("ACK"));
-            for (auto &client : clientEndpointMap)
+            for (auto &client : *clientEndpointMap)
                 client.second.updateFile(message.args["filePath"]);
             for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
                 datanode.second.updateFile(message.args["filePath"]);
+            // FileManager::getInstance().deleteFile(message.args["filePath"]);
             break;
         case DELETE_FILE:
             FileManager::getInstance().deleteFile(message.args["filePath"]);
             this->response(std::string("ACK"));
-            for (auto &client : clientEndpointMap)
+            for (auto &client : *clientEndpointMap)
                 client.second.deleteFile(message.args["filePath"]);
             for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
                 datanode.second.deleteFile(message.args["filePath"]);

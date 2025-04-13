@@ -37,7 +37,6 @@ Server::Server(int port, int replicationFactor) : fileManager(FileManager::getIn
 
     fileTransfer = FileTransfer();
     // fileMap = FileManager::getInstance().getFileMap();
-    dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
     clientEndpointMap = std::map<std::string, SquidProtocolServer>();
     dataNodeEndpointMap = std::map<std::string, SquidProtocolServer>();
 }
@@ -103,7 +102,7 @@ void Server::identify(SquidProtocolServer protocol)
     }
     else if (mex.args["nodeType"] == "DATANODE")
     {
-        //dataNodeReplicationMap[mex.args["processName"]] = std::map<std::string, SquidProtocolServer>();
+        // dataNodeReplicationMap[mex.args["processName"]] = std::map<std::string, SquidProtocolServer>();
         dataNodeEndpointMap[mex.args["processName"]] = protocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
     }
@@ -121,7 +120,9 @@ void Server::handleConnection(int new_socket)
 {
 
     Message mex;
-    SquidProtocolServer protocol = SquidProtocolServer(new_socket, replicationFactor, "[SERVER]", "SERVER", clientEndpointMap, dataNodeEndpointMap, dataNodeReplicationMap);
+    SquidProtocolServer protocol = SquidProtocolServer(new_socket, replicationFactor,
+                                                       "[SERVER]", "SERVER",
+                                                       &clientEndpointMap, &dataNodeEndpointMap);
     identify(protocol);
 
     std::cout << "Checking for messages ...\n";
