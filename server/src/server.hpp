@@ -16,11 +16,13 @@
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
 #define DEFAULT_PATH "../../test_txt"
+#define DEFAULT_REPLICATION_FACTOR 3
 
 class Server
 {
 public:
     Server(int port);
+    Server(int port, int replicationFactor);
     Server();
     ~Server();
 
@@ -33,6 +35,7 @@ private:
     int opt = 1;
     char buffer[BUFFER_SIZE] = {0};
 
+    int replicationFactor;
     int server_fd, new_socket;
     struct sockaddr_in address;
     socklen_t addrlen = sizeof(address);
@@ -44,9 +47,9 @@ private:
     std::map<std::string, SquidProtocolServer> clientEndpointMap;
     std::map<std::string, SquidProtocolServer> dataNodeEndpointMap;
 
+    // maps filename to datanode endpoint map holding that file
+    std::map<std::string, std::map<std::string, SquidProtocolServer>> dataNodeReplicationMap;
+
     void handleConnection(int client_socket);
     // virtual bool replicateFileToDataNodes(int fileId, std::vector<int> ip);
-    // virtual bool receiveFileFromDataNode(int fileId, int ip);
-    // virtual bool sendFileToClient(int fileId, int ip);
-    // virtual bool receiveFileFromClient(int fileId, int ip);
 };

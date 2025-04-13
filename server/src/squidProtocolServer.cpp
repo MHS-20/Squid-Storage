@@ -4,15 +4,21 @@ class SquidProtocolServer : public SquidProtocol
 {
 
 public:
+    int replicationFactor;
     std::map<std::string, SquidProtocolServer> clientEndpointMap;
     std::map<std::string, SquidProtocolServer> dataNodeEndpointMap;
-    SquidProtocolServer() : SquidProtocol() {}
+    std::map<std::string, std::map<std::string, SquidProtocolServer>> dataNodeReplicationMap;
+    std::map<std::string, SquidProtocolServer>::iterator endpointIterator;
 
-    SquidProtocolServer(int socket_fd, std::string nodeType, std::string processName,
-                        std::map<std::string, SquidProtocolServer> clientEndpointMap,
-                        std::map<std::string, SquidProtocolServer> dataNodeEndpointMap)
+    SquidProtocolServer() : SquidProtocol() {}
+    SquidProtocolServer(int socket_fd, int replicationFactor,
+                        std::string nodeType, std::string processName,
+                        std::map<std::string, SquidProtocolServer> &clientEndpointMap,
+                        std::map<std::string, SquidProtocolServer> &dataNodeEndpointMap,
+                        std::map<std::string, std::map<std::string, SquidProtocolServer>> &dataNodeReplicationMap)
     {
         this->socket_fd = socket_fd;
+        this->replicationFactor = replicationFactor;
         this->processName = processName;
         this->nodeType = nodeType;
 
@@ -21,6 +27,21 @@ public:
 
         this->clientEndpointMap = clientEndpointMap;
         this->dataNodeEndpointMap = dataNodeEndpointMap;
+        this->dataNodeReplicationMap = dataNodeReplicationMap;
+        auto endpointIterator = dataNodeEndpointMap.begin();
+    }
+
+    void createFileReplication(std::string filePath)
+    { // round robin replication
+        auto fileHoldersMap = std::map<std::string, SquidProtocolServer>();
+        for (int i = 0; i < replicationFactor; i++)
+        {
+            if (endpointIterator == dataNodeEndpointMap.end())
+                endpointIterator = dataNodeEndpointMap.begin();
+            fileHoldersMap.insert({endpointIterator->first, endpointIterator->second});
+            endpointIterator++;
+        }
+        dataNodeReplicationMap.insert({filePath, fileHoldersMap});
     }
 
     void requestDispatcher(Message message) override
@@ -33,7 +54,8 @@ public:
             this->response(std::string("ACK"));
             for (auto &client : clientEndpointMap)
                 client.second.createFile(message.args["filePath"]);
-            for (auto &datanode : dataNodeEndpointMap)
+            createFileReplication(message.args["filePath"]);
+            for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
                 datanode.second.createFile(message.args["filePath"]);
             break;
         case TRANSFER_FILE:
@@ -52,7 +74,7 @@ public:
             this->response(std::string("ACK"));
             for (auto &client : clientEndpointMap)
                 client.second.updateFile(message.args["filePath"]);
-            for (auto &datanode : dataNodeEndpointMap)
+            for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
                 datanode.second.updateFile(message.args["filePath"]);
             break;
         case DELETE_FILE:
@@ -60,8 +82,9 @@ public:
             this->response(std::string("ACK"));
             for (auto &client : clientEndpointMap)
                 client.second.deleteFile(message.args["filePath"]);
-            for (auto &datanode : dataNodeEndpointMap)
+            for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
                 datanode.second.deleteFile(message.args["filePath"]);
+            dataNodeReplicationMap.erase(message.args["filePath"]);
             break;
         case ACQUIRE_LOCK:
             this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));

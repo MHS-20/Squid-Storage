@@ -1,13 +1,14 @@
 #include "server.hpp"
 
-Server::Server() : Server(DEFAULT_PORT)
-{
-}
+Server::Server() : Server(DEFAULT_PORT, DEFAULT_REPLICATION_FACTOR) {}
 
-Server::Server(int port) : fileManager(FileManager::getInstance())
+Server::Server(int port) : Server(port, DEFAULT_REPLICATION_FACTOR) {}
+
+Server::Server(int port, int replicationFactor) : fileManager(FileManager::getInstance())
 {
 
     this->port = port;
+    this->replicationFactor = replicationFactor;
     this->server_fd = socket(AF_INET, SOCK_STREAM, 0);
     std::cout << "[SERVER]: Initializing..." + server_fd << std::endl;
     if (server_fd < 0)
@@ -35,9 +36,8 @@ Server::Server(int port) : fileManager(FileManager::getInstance())
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
-    // fileManager = FileManager::getInstance();
-
-    // fileMap = fileManager.getFileMap();
+    // fileMap = FileManager::getInstance().getFileMap();
+    dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
     clientEndpointMap = std::map<std::string, SquidProtocolServer>();
     dataNodeEndpointMap = std::map<std::string, SquidProtocolServer>();
 }
@@ -83,7 +83,6 @@ void Server::run()
         }
 
         std::cout << "Accepted connection: " << new_socket << "...\n";
-        // this->handleConnection(new_socket);
 
         // new thread to handle connection:
         std::thread connectionThread(&Server::handleConnection, this, new_socket);
@@ -104,6 +103,7 @@ void Server::identify(SquidProtocolServer protocol)
     }
     else if (mex.args["nodeType"] == "DATANODE")
     {
+        //dataNodeReplicationMap[mex.args["processName"]] = std::map<std::string, SquidProtocolServer>();
         dataNodeEndpointMap[mex.args["processName"]] = protocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
     }
@@ -121,14 +121,14 @@ void Server::handleConnection(int new_socket)
 {
 
     Message mex;
-    SquidProtocolServer protocol = SquidProtocolServer(new_socket, "[SERVER]", "SERVER", clientEndpointMap, dataNodeEndpointMap);
+    SquidProtocolServer protocol = SquidProtocolServer(new_socket, replicationFactor, "[SERVER]", "SERVER", clientEndpointMap, dataNodeEndpointMap, dataNodeReplicationMap);
     identify(protocol);
 
     std::cout << "Checking for messages ...\n";
     while (true)
     {
         std::cout << "[SERVER]: Waiting for messages..." << std::endl;
-        if (protocol.getSocket() < 0) // connection closed
+        if (protocol.getSocket() < 0)
         {
             std::cout << "[SERVER]: Closing & Terminating" << std::endl;
             break;

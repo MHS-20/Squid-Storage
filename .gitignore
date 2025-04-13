@@ -1,5 +1,4 @@
 *.o
-/build/
+build/
 main
 TopLevelMakefile
-/build
