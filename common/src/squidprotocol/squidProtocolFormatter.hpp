@@ -29,6 +29,15 @@ public:
     std::map<std::string, std::string> args;
     Message() {};
     Message(ProtocolKeyWord keyword, std::map<std::string, std::string> args) : keyword(keyword), args(args) {}
+
+    std::string toString(){
+        std::string result = "Message: \n";
+        for (const auto &arg : args)
+        {
+            result += arg.first + ": " + arg.second + "\n";
+        }
+        return result;
+    }
 };
 
 class SquidProtocolFormatter

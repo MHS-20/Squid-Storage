@@ -14,7 +14,8 @@ public:
     SquidProtocol();
     ~SquidProtocol();
     SquidProtocol(int socket_fd, std::string nodeType, std::string processName);
-    
+
+    virtual bool isAlive();
     virtual int getSocket();
     virtual std::string toString() const;
 
@@ -49,10 +50,12 @@ public:
 
 protected:
     int socket_fd;
-    std::string processName;
-    std::string nodeType;
     char buffer[BUFFER_SIZE] = {0};
 
+    bool alive; 
+    std::string processName;
+    std::string nodeType;
+    
     FileTransfer fileTransfer;
     SquidProtocolFormatter formatter;
 };

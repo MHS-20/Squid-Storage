@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -g -fsanitize=address
+CXXFLAGS = -std=c++17 -Wall -g #-fsanitize=address
 LDFLAGS = -pthread -lstdc++fs
 
 INCLUDES = -Iserver/src -Idata-node/src -Iclient/src -Icommon/src/squidprotocol -Icommon/src/peer -Icommon/src/filesystem 

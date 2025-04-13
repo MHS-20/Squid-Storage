@@ -22,6 +22,7 @@ public:
     Client(std::string nodeType, std::string processName);
     Client(const char *server_ip, int port, std::string nodeType, std::string processName);
 
+    virtual void testing();
     virtual void run();
     // virtual void handleRequest(Message mex);
 

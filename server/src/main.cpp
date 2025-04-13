@@ -2,7 +2,6 @@
 #include <thread>
 #include "server.hpp"
 
-using namespace std;
 int main(int argc, char **argv)
 {
     int port = 12345;

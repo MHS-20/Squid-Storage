@@ -15,7 +15,7 @@
 
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
-#define DEFAULT_PATH "../../test_txt"
+#define DEFAULT_PATH "./test_txt/test_server"
 #define DEFAULT_REPLICATION_FACTOR 3
 
 class Server
@@ -27,8 +27,13 @@ public:
     ~Server();
 
     void run();
-    int getSocket();
-    void identify(SquidProtocolServer protocol);
+    //int getSocket();
+
+    void identify(SquidProtocol clientProtocol);
+    void createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol);
+    void updateFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol);
+    void getFileFromDataNode(std::string filePath, SquidProtocol clientProtocol);
+    void deleteFileFromDataNodes(std::string filePath, SquidProtocol clientProtocol);
 
 private:
     int port;
@@ -44,12 +49,15 @@ private:
     FileManager &fileManager;
 
     // std::map<std::string, FileLock> fileMap;
-    std::map<std::string, SquidProtocolServer> clientEndpointMap;
-    std::map<std::string, SquidProtocolServer> dataNodeEndpointMap;
+    std::map<std::string, SquidProtocol> clientEndpointMap;
+    std::map<std::string, SquidProtocol> dataNodeEndpointMap;
 
     // maps filename to datanode endpoint map holding that file
-    //std::map<std::string, std::map<std::string, SquidProtocolServer>> dataNodeReplicationMap;
+    std::map<std::string, std::map<std::string, SquidProtocol>> dataNodeReplicationMap;
+
+    // iterators for round robin redundancy
+    std::map<std::string, SquidProtocol>::iterator endpointIterator;
+    std::map<std::string, SquidProtocol>::iterator readsLoadBalancingIterator;
 
     void handleConnection(int client_socket);
-    // virtual bool replicateFileToDataNodes(int fileId, std::vector<int> ip);
 };

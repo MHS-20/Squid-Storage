@@ -19,6 +19,7 @@ DataNode::DataNode(const char *server_ip, int port, std::string nodeType, std::s
 //     squidProtocol.responseDispatcher(mex);
 // }
 
+// passive deamon
 void DataNode::run()
 {
     Message mex;
@@ -62,13 +63,17 @@ void DataNode::testing()
     if (mex.args["ACK"] == "ACK")
         std::cout << "[DATANODE]: ACK received" << std::endl;
 
-    handleRequest(squidProtocol.createFile("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.updateFile("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.acquireLock("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.releaseLock("./test_txt/datanodefile.txt"));
+    handleRequest(squidProtocol.createFile("./test_txt/test_datanode/datanodefile.txt"));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    handleRequest(squidProtocol.updateFile("./test_txt/test_datanode/datanodefile.txt"));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    handleRequest(squidProtocol.acquireLock("./test_txt/test_datanode/datanodefile.txt"));
+    handleRequest(squidProtocol.releaseLock("./test_txt/test_datanode/datanodefile.txt"));
     handleRequest(squidProtocol.heartbeat());
-    handleRequest(squidProtocol.readFile("./test_txt/datanodefile.txt"));
-    handleRequest(squidProtocol.deleteFile("./test_txt/datanodefile.txt"));
+    handleRequest(squidProtocol.readFile("./test_txt/test_datanode/datanodefile.txt"));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     handleRequest(squidProtocol.syncStatus());
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    handleRequest(squidProtocol.deleteFile("./test_txt/test_datanode/datanodefile.txt"));
     handleRequest(squidProtocol.closeConn());
 }
