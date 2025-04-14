@@ -61,7 +61,7 @@ void FileTransfer::receiveFile(int socket, const char *rolename, const char *out
         filesize -= received;
     }
 
-    std::string msg = std::string(rolename) + " File received \n";
+    std::string msg = std::string(rolename) + " File " + std::string(outputpath) + "received \n";
     std::cout << msg.c_str();
     outfile.close();
 }

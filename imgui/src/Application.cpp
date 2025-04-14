@@ -155,7 +155,7 @@ namespace SquidStorage
             {
                 if (ImGui::Selectable(("- " + name).c_str(), selectedFile == name))
                 {
-                    selectedFile = entry.path().string();
+                    selectedFile = entry.path().filename().string();
                     fileContent = FileManager::getInstance().readFile(selectedFile);
                     showFileDeleteButton = true;
                     showFileEditor = true;
@@ -239,6 +239,7 @@ namespace SquidStorage
             if (ImGui::Button("Close"))
             {
                 showFileEditor = false;
+                showFileSavedMessage = false;
             }
 
             if (showFileSavedMessage)

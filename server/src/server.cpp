@@ -128,8 +128,8 @@ void Server::handleConnection(int new_socket)
             break;
         case UPDATE_FILE:
             clientProtocol.requestDispatcher(mex);
-            updateFileOnDataNodes(mex.args["filePath"], clientProtocol);
-            dataNodeReplicationMap.erase(mex.args["filePath"]);
+            //updateFileOnDataNodes(mex.args["filePath"], clientProtocol);
+            //dataNodeReplicationMap.erase(mex.args["filePath"]);
             break;
         case DELETE_FILE:
             clientProtocol.requestDispatcher(mex);

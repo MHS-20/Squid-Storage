@@ -287,11 +287,13 @@ void SquidProtocol::requestDispatcher(Message message)
         this->response(std::string("ACK"));
         break;
     case UPDATE_FILE:
+        std::cout << nodeType + ": received update file request\n";
         this->response(std::string("ACK"));
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
         this->response(std::string("ACK"));
         break;
     case DELETE_FILE:
+        std::cout << nodeType + ": received delete file request\n";
         FileManager::getInstance().deleteFile(message.args["filePath"]);
         this->response(std::string("ACK"));
         break;
