@@ -7,7 +7,7 @@
 #include <filesystem>
 #include "filelock.hpp"
 
-#define DEFAULT_PATH "."
+#define DEFAULT_PATH fs::current_path().string() // current directory
 namespace fs = std::filesystem;
 
 // Singleton class: private constructor and prevent copying

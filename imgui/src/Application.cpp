@@ -18,7 +18,7 @@ namespace SquidStorage
 
     void runClient()
     {
-        client.run();
+        client.initiateConnection();
     }
 
     void RenderUI()
@@ -175,12 +175,12 @@ namespace SquidStorage
 
         if (newFileButtonPressed)
         {
-
             ImGui::InputText("File name", newFileName, 128);
             if (ImGui::Button("Create"))
             {
                 if (FileManager::getInstance().createFile(newFileName))
                 {
+                    client.createFile(newFileName);
                     fileContent = "";
                     newFileButtonPressed = false;
                 }
@@ -195,6 +195,7 @@ namespace SquidStorage
         {
             if (FileManager::getInstance().deleteFile(selectedFile))
             {
+                client.deleteFile(selectedFile);
                 selectedFile = "";
                 fileContent = "";
                 deleteButtonPressed = false;
@@ -226,6 +227,7 @@ namespace SquidStorage
             {
                 if (FileManager::getInstance().updateFile(selectedFile, fileContent))
                 {
+                    client.updateFile(selectedFile);
                     showFileSavedMessage = true;
                 }
                 else

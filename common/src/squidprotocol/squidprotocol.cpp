@@ -49,6 +49,7 @@ Message SquidProtocol::identify()
 Message SquidProtocol::createFile(std::string filePath)
 {
     std::cout << nodeType + ": sending create file request" << std::endl;
+    std::cout << "file name: " + filePath << std::endl;
     this->sendMessage(this->formatter.createFileFormat(filePath));
     // std::cout << nodeType + ": sent create file request" << std::endl;
     Message response = receiveAndParseMessage();
@@ -325,6 +326,12 @@ void SquidProtocol::responseDispatcher(Message response)
 {
     switch (response.keyword)
     {
+    case RESPONSE:
+        if (response.args["ACK"] != "ACK")
+            std::cerr << nodeType + ": Error from server " << std::endl;
+        else
+            std::cout << nodeType + ": Operation performed" << std::endl;
+        break;
     case CREATE_FILE:
         if (response.args["ACK"] != "ACK")
             std::cerr << nodeType + ": Error while creating file: " + response.args["filePath"] << std::endl;

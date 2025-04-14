@@ -24,6 +24,10 @@ public:
 
     virtual void testing();
     virtual void run();
+    virtual void initiateConnection();
+    virtual void createFile(std::string filePath);
+    virtual void deleteFile(std::string filePath);
+    virtual void updateFile(std::string filePath);
     // virtual void handleRequest(Message mex);
 
 private:

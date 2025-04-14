@@ -49,18 +49,38 @@ void Client::run()
     }
 }
 
-void Client::testing()
+void Client::initiateConnection()
 {
     this->connectToServer();
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     Message mex = squidProtocol.receiveAndParseMessage();
-    std::cout << "[CLIENT]: Identify  request received from server: " + mex.keyword << std::endl;
-
+    std::cout << "[CLIENT]: Identify request received from server: " + mex.keyword << std::endl;
     squidProtocol.response(std::string("CLIENT"), std::string("CLIENT"));
     mex = squidProtocol.receiveAndParseMessage();
-
     if (mex.args["ACK"] == "ACK")
         std::cout << "[CLIENT]: ACK received" << std::endl;
+    else
+        std::cerr << "[CLIENT]: Error: ACK not received" << std::endl;
+}
+
+void Client::createFile(std::string filePath)
+{
+    handleRequest(squidProtocol.createFile(filePath));
+}
+
+void Client::deleteFile(std::string filePath)
+{
+    handleRequest(squidProtocol.deleteFile(filePath));
+}
+
+void Client::updateFile(std::string filePath)
+{
+    handleRequest(squidProtocol.updateFile(filePath));
+}
+
+void Client::testing()
+{
+    this->initiateConnection();
 
     handleRequest(squidProtocol.createFile("./test_txt/test_client/clientfile.txt"));
     handleRequest(squidProtocol.updateFile("./test_txt/test_client/clientfile.txt"));

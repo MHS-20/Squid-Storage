@@ -1,6 +1,7 @@
 #include "filemanager.hpp"
 
-FileManager::FileManager(){
+FileManager::FileManager()
+{
     std::vector<std::string> entries = getFiles(DEFAULT_PATH);
     for (auto entry : entries)
     {
@@ -25,9 +26,9 @@ std::vector<std::string> FileManager::getFiles(std::string path)
 }
 
 std::vector<fs::directory_entry> FileManager::getFileEntries(std::string path)
-{   
-	std::vector<fs::directory_entry> entries;
-    for (const auto& entry : fs::directory_iterator(path))
+{
+    std::vector<fs::directory_entry> entries;
+    for (const auto &entry : fs::directory_iterator(path))
         entries.push_back(entry);
 
     return entries;
@@ -118,7 +119,9 @@ bool FileManager::releaseLock(std::string path)
     {
         std::cout << "[FILEMANAGER]: File not found in file map" << std::endl;
         return false;
-    }else {
+    }
+    else
+    {
         fileMap[path].setIsLocked(false);
         return true;
     }
