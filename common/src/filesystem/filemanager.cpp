@@ -119,7 +119,13 @@ bool FileManager::releaseLock(std::string path)
 {
     if (fileMap.find(path) == fileMap.end())
     {
-        std::cout << "[FILEMANAGER]: File not found in file map" << std::endl;
+        std::cout << "[FILEMANAGER]: File not found in file map...updating file map" << std::endl;
+        this->updateFileMap();
+        if (fileMap.find(path) == fileMap.end())
+        {
+            std::cout << "[FILEMANAGER]: File not found" << std::endl;
+            return false;
+        }
         return false;
     }
     else
@@ -138,4 +144,14 @@ std::string FileManager::formatFileList(std::vector<std::string> files)
     }
     fileList.pop_back();
     return fileList;
+}
+
+void FileManager::updateFileMap()
+{
+    std::vector<std::string> entries = getFiles(DEFAULT_PATH);
+    for (auto entry : entries)
+    {
+        if (fileMap.find(entry) == fileMap.end())
+            fileMap[entry] = FileLock(entry);
+    }
 }

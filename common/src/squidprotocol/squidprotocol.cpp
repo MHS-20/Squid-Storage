@@ -96,6 +96,7 @@ Message SquidProtocol::deleteFile(std::string filePath)
 
 Message SquidProtocol::acquireLock(std::string filePath)
 {
+    std::cout << nodeType + ": sending acquire lock request for " << filePath << std::endl;
     this->sendMessage(this->formatter.acquireLockFormat(filePath));
     return receiveAndParseMessage();
 }
@@ -312,6 +313,7 @@ void SquidProtocol::requestDispatcher(Message message)
         this->response(std::string("ACK"));
         break;
     case ACQUIRE_LOCK:
+        std::cout << nodeType + ": received acquire lock request for " << message.args["filePath"] << std::endl;
         this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
         break;
     case RELEASE_LOCK:

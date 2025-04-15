@@ -85,7 +85,7 @@ void Client::syncStatus()
 
 bool Client::acquireLock(std::string filePath)
 {
-    return squidProtocol.acquireLock(filePath).args["isLocked"] == "true";
+    return squidProtocol.acquireLock(filePath).args["isLocked"] == "1";
 }
 
 void Client::releaseLock(std::string filePath)

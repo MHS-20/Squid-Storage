@@ -43,6 +43,6 @@ private:
     // Prevent copying and assignment
     FileManager(const FileManager &) = delete;
     FileManager &operator=(const FileManager &) = delete;
-
+    void updateFileMap();
     std::map<std::string, FileLock> fileMap;
 };

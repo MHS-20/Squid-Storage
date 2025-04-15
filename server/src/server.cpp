@@ -123,7 +123,7 @@ void Server::handleConnection(int new_socket)
             createFileOnDataNodes(mex.args["filePath"], clientProtocol);
             break;
         case READ_FILE:
-            getFileFromDataNode(mex.args["filePath"], clientProtocol);
+            // getFileFromDataNode(mex.args["filePath"], clientProtocol);
             clientProtocol.requestDispatcher(mex);
             break;
         case UPDATE_FILE:
@@ -142,6 +142,11 @@ void Server::handleConnection(int new_socket)
         case ACQUIRE_LOCK:
             clientProtocol.requestDispatcher(mex);
             break;
+        case RELEASE_LOCK:
+            clientProtocol.requestDispatcher(mex);
+            break;
+        default:
+            clientProtocol.requestDispatcher(mex);
         }
         std::cout << "[SERVER]: Request dispatched" << std::endl;
     }

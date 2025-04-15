@@ -1,6 +1,6 @@
 #include "filelock.hpp"
 
-FileLock::FileLock(){}
+FileLock::FileLock() {}
 
 FileLock::FileLock(std::string filePath)
 {
