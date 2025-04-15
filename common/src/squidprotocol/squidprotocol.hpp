@@ -6,7 +6,7 @@
 #include "squidProtocolFormatter.hpp"
 
 #define BUFFER_SIZE 1024
-#define DEFAULT_FOLDER_PATH "./test_txt"
+#define DEFAULT_FOLDER_PATH fs::current_path().string() // current directory
 
 class SquidProtocol
 {
@@ -52,10 +52,10 @@ protected:
     int socket_fd;
     char buffer[BUFFER_SIZE] = {0};
 
-    bool alive; 
+    bool alive;
     std::string processName;
     std::string nodeType;
-    
+
     FileTransfer fileTransfer;
     SquidProtocolFormatter formatter;
 };

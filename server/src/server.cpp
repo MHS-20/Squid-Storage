@@ -92,7 +92,7 @@ void Server::handleConnection(int new_socket)
 {
 
     Message mex;
-    SquidProtocol clientProtocol = SquidProtocol(new_socket,"[SERVER]", "SERVER");
+    SquidProtocol clientProtocol = SquidProtocol(new_socket, "[SERVER]", "SERVER");
     identify(clientProtocol);
 
     std::cout << "Checking for messages ...\n";
@@ -128,13 +128,16 @@ void Server::handleConnection(int new_socket)
             break;
         case UPDATE_FILE:
             clientProtocol.requestDispatcher(mex);
-            //updateFileOnDataNodes(mex.args["filePath"], clientProtocol);
-            //dataNodeReplicationMap.erase(mex.args["filePath"]);
+            updateFileOnDataNodes(mex.args["filePath"], clientProtocol);
+            dataNodeReplicationMap.erase(mex.args["filePath"]);
             break;
         case DELETE_FILE:
             clientProtocol.requestDispatcher(mex);
             deleteFileFromDataNodes(mex.args["filePath"], clientProtocol);
             dataNodeReplicationMap.erase(mex.args["filePath"]);
+            break;
+        case SYNC_STATUS:
+            clientProtocol.requestDispatcher(mex);
             break;
         }
         std::cout << "[SERVER]: Request dispatched" << std::endl;
@@ -190,7 +193,8 @@ void Server::updateFileOnDataNodes(std::string filePath, SquidProtocol clientPro
 
 void Server::deleteFileFromDataNodes(std::string filePath, SquidProtocol clientProtocol)
 {
-    for (auto &client : clientEndpointMap){
+    for (auto &client : clientEndpointMap)
+    {
         if (client.second.getSocket() != clientProtocol.getSocket())
             client.second.deleteFile(filePath);
     }

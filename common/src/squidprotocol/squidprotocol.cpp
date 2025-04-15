@@ -80,6 +80,7 @@ void SquidProtocol::transferFile(std::string filePath, Message response)
 
 Message SquidProtocol::readFile(std::string filePath)
 {
+    std::cout << nodeType + ": sending read file request" << std::endl;
     this->sendMessage(this->formatter.readFileFormat(filePath));
     Message response = receiveAndParseMessage();
     if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
@@ -113,32 +114,38 @@ Message SquidProtocol::heartbeat()
 
 Message SquidProtocol::syncStatus()
 {
+    std::cout << nodeType + ": sending sync status request" << std::endl;
     this->sendMessage(this->formatter.syncStatusFormat());
     Message response = receiveAndParseMessage();
     if (response.keyword == RESPONSE)
     {
+        std::cout << nodeType + ": received sync status response" << std::endl;
         std::map<std::string, fs::file_time_type> filesLastWrite;
         filesLastWrite = FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH);
+        std::cout << nodeType + ": checking files: " << std::endl;
         for (auto localFile : filesLastWrite)
         {
             if (response.args.find(localFile.first) != response.args.end())
             {
+                std::cout << nodeType + ": found file that already exists on server " << localFile.first << std::endl;
                 if (localFile.second.time_since_epoch().count() > std::stoll(response.args[localFile.first]))
                 {
                     // in this case server needs to update the file
                     this->updateFile(localFile.first);
-                    this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
+                    // this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
                 }
                 else if (localFile.second.time_since_epoch().count() < std::stoll(response.args[localFile.first]))
                 {
                     // in this case client needs to update the file
-                    this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
+                    // this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
+                    this->readFile(localFile.first);
                 }
                 response.args.erase(localFile.first);
             }
             else
             {
                 // in this case server needs to create the file
+                std::cout << nodeType + ": server needs to create the file: " + localFile.first << std::endl;
                 this->createFile(localFile.first);
             }
         }
@@ -146,7 +153,9 @@ Message SquidProtocol::syncStatus()
         {
             for (auto remoteFile : response.args)
             {
-                // in this case client needs to delete the file
+                // in this case client needs to create the file
+                // this->fileManager.deleteFile(remoteFile.first);
+                std::cout << nodeType + ": client needs to create the file: " + remoteFile.first << std::endl;
                 this->readFile(remoteFile.first);
             }
         }
@@ -243,7 +252,11 @@ void SquidProtocol::sendMessage(std::string message)
 void SquidProtocol::sendMessageWithLength(std::string &message)
 {
     uint32_t messageLength = htonl(message.size());
-
+    if (socket_fd < 0)
+    {
+        std::cerr << nodeType + "[ERROR]: Invalid socket_fd" << std::endl;
+        return;
+    }
     // Send the length of the message
     if (send(socket_fd, &messageLength, sizeof(messageLength), 0) < 0)
     {
@@ -282,6 +295,7 @@ void SquidProtocol::requestDispatcher(Message message)
         this->response(std::string("ACK"));
         break;
     case READ_FILE:
+        std::cout << nodeType + ": received read file request\n";
         this->response(std::string("ACK"));
         this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
         this->response(std::string("ACK"));
@@ -308,6 +322,7 @@ void SquidProtocol::requestDispatcher(Message message)
         this->response(std::string("ACK"));
         break;
     case SYNC_STATUS:
+        std::cout << nodeType + ": received sync status request\n";
         this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
         break;
     case IDENTIFY:

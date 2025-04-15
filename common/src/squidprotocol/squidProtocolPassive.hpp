@@ -9,7 +9,7 @@
 #include "squidProtocolFormatter.hpp"
 
 #define BUFFER_SIZE 1024
-#define DEFAULT_FOLDER_PATH "./test_txt"
+#define DEFAULT_FOLDER_PATH fs::current_path().string() // current directory
 
 class SquidProtocolPassive
 {
@@ -23,8 +23,8 @@ public:
     void response(std::map<std::string, fs::file_time_type> filesLastWrite);
 
     void propagateUpdate(Message message,
-                    std::map<std::string, SquidProtocolServer> clientEndpointMap,
-                    std::map<std::string, SquidProtocolServer> dataNodeEndpointMap);
+                         std::map<std::string, SquidProtocolServer> clientEndpointMap,
+                         std::map<std::string, SquidProtocolServer> dataNodeEndpointMap);
 
     virtual void requestDispatcher(Message response,
                                    std::map<std::string, SquidProtocolServer> clientEndpointMap,

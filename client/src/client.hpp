@@ -28,6 +28,7 @@ public:
     virtual void createFile(std::string filePath);
     virtual void deleteFile(std::string filePath);
     virtual void updateFile(std::string filePath);
+    virtual void syncStatus();
     // virtual void handleRequest(Message mex);
 
 private:

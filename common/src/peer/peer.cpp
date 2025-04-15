@@ -76,7 +76,7 @@ void Peer::handleRequest(Message mex)
 {
     try
     {
-        std::cout << nodeType + (": Received message: " + mex.keyword) << std::endl;
+        std::cout << nodeType << ": Received message: " << mex.keyword << std::endl;
     }
     catch (std::exception &e)
     {

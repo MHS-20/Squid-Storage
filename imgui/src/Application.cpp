@@ -19,6 +19,7 @@ namespace SquidStorage
     void runClient()
     {
         client.initiateConnection();
+        client.syncStatus();
     }
 
     void RenderUI()

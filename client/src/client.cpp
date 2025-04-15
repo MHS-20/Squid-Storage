@@ -78,6 +78,11 @@ void Client::updateFile(std::string filePath)
     handleRequest(squidProtocol.updateFile(filePath));
 }
 
+void Client::syncStatus()
+{
+    handleRequest(squidProtocol.syncStatus());
+}
+
 void Client::testing()
 {
     this->initiateConnection();

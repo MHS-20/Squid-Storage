@@ -4,12 +4,11 @@
 #include "filetransfer.hpp"
 #include "filemanager.hpp"
 
-
 #include "squidProtocolCommunicator.hpp"
 #include "squidProtocolFormatter.hpp"
 
 #define BUFFER_SIZE 1024
-#define DEFAULT_FOLDER_PATH "./test_txt"
+#define DEFAULT_FOLDER_PATH fs::current_path().string() // current directory
 
 // Requester
 class SquidProtocolActive
@@ -17,7 +16,7 @@ class SquidProtocolActive
 public:
     SquidProtocolActive();
     SquidProtocolActive(int socket_fd, std::string nodeType, std::string processName, SquidProtocolCommunicator communicator);
-    
+
     virtual void responseDispatcher(Message response);
 
     virtual Message identify();

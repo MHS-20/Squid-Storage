@@ -5,7 +5,7 @@
 #include "squidProtocolFormatter.hpp"
 
 #define BUFFER_SIZE 1024
-#define DEFAULT_FOLDER_PATH "./test_txt"
+#define DEFAULT_FOLDER_PATH fs::current_path().string() // current directory
 
 class SquidProtocolCommunicator
 {
@@ -30,5 +30,4 @@ private:
 
     void sendMessageWithLength(std::string &message);
     virtual std::string receiveMessageWithLength();
-
 };
