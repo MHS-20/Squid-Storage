@@ -139,6 +139,9 @@ void Server::handleConnection(int new_socket)
         case SYNC_STATUS:
             clientProtocol.requestDispatcher(mex);
             break;
+        case ACQUIRE_LOCK:
+            clientProtocol.requestDispatcher(mex);
+            break;
         }
         std::cout << "[SERVER]: Request dispatched" << std::endl;
     }

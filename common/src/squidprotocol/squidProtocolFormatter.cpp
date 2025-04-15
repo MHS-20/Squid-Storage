@@ -63,7 +63,7 @@ std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::
         message.pop_back();
     message += ">";
 
-    //std::cout <<  "FORMATTER: " + message << std::endl;
+    // std::cout <<  "FORMATTER: " + message << std::endl;
     return message;
 }
 
@@ -164,7 +164,7 @@ std::string SquidProtocolFormatter::responseFormat(std::string nodeType, std::st
 
 std::string SquidProtocolFormatter::responseFormat(bool lock)
 {
-    return this->createMessage(RESPONSE, {"lock:" + std::to_string(lock)});
+    return this->createMessage(RESPONSE, {"isLocked:" + std::to_string(lock)});
 }
 
 std::string SquidProtocolFormatter::responseFormat(std::map<std::string, fs::file_time_type> filesLastWrite)

@@ -9,12 +9,14 @@ namespace SquidStorage
     std::string selectedFile = "";                         // selected file
     std::string fileContent = "";                          // selected file content
     bool showFileSavedMessage = false;
+    bool showFileSaveButton = false;
     bool showFileDeleteButton = false;
     bool showFileEditor = false;
     bool newFileButtonPressed = false;
     bool deleteButtonPressed = false;
     char newFileName[128];
     Client client("127.0.0.1", 12345);
+    FileLock fileLock;
 
     void runClient()
     {
@@ -221,31 +223,46 @@ namespace SquidStorage
             {
                 fileContent = std::string(buffer);
                 showFileSavedMessage = false;
+                showFileSaveButton = fileCanBeSaved();
             }
             ImGui::EndChild();
-
-            if (ImGui::Button("Save"))
+            if (showFileSaveButton)
             {
-                if (FileManager::getInstance().updateFile(selectedFile, fileContent))
+                if (ImGui::Button("Save"))
                 {
-                    client.updateFile(selectedFile);
-                    showFileSavedMessage = true;
-                }
-                else
-                {
-                    showFileSavedMessage = false;
+                    if (FileManager::getInstance().updateFile(selectedFile, fileContent))
+                    {
+                        client.updateFile(selectedFile);
+                        showFileSavedMessage = true;
+                    }
+                    else
+                    {
+                        showFileSavedMessage = false;
+                    }
                 }
             }
+            else
+            {
+                ImGui::Separator();
+            }
+
             ImGui::SameLine();
             if (ImGui::Button("Close"))
             {
+                client.releaseLock(selectedFile);
                 showFileEditor = false;
                 showFileSavedMessage = false;
+                showFileSaveButton = false;
             }
 
             if (showFileSavedMessage)
                 ImGui::Text("File saved!");
         }
         ImGui::End();
+    }
+
+    bool fileCanBeSaved()
+    {
+        return client.acquireLock(selectedFile);
     }
 }

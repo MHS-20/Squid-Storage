@@ -8,4 +8,5 @@ namespace SquidStorage
     void RenderUI();
     void renderFileExplorer();
     void renderFileEditor();
+    bool fileCanBeSaved();
 }

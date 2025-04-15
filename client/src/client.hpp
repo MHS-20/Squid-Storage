@@ -29,6 +29,8 @@ public:
     virtual void deleteFile(std::string filePath);
     virtual void updateFile(std::string filePath);
     virtual void syncStatus();
+    virtual bool acquireLock(std::string filePath);
+    virtual void releaseLock(std::string filePath);
     // virtual void handleRequest(Message mex);
 
 private:

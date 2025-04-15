@@ -83,6 +83,16 @@ void Client::syncStatus()
     handleRequest(squidProtocol.syncStatus());
 }
 
+bool Client::acquireLock(std::string filePath)
+{
+    return squidProtocol.acquireLock(filePath).args["isLocked"] == "true";
+}
+
+void Client::releaseLock(std::string filePath)
+{
+    handleRequest(squidProtocol.releaseLock(filePath));
+}
+
 void Client::testing()
 {
     this->initiateConnection();
