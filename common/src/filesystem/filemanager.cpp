@@ -100,7 +100,13 @@ bool FileManager::acquireLock(std::string path)
 {
     if (fileMap.find(path) == fileMap.end())
     {
-        std::cout << "[FILEMANAGER]: File not found in file map" << std::endl;
+        std::cout << "[FILEMANAGER]: File not found in file map...updating file map" << std::endl;
+        this->updateFileMap();
+        if (fileMap.find(path) == fileMap.end())
+        {
+            std::cout << "[FILEMANAGER]: File not found" << std::endl;
+            return false;
+        }
         return false;
     }
 

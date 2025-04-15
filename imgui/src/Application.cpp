@@ -263,6 +263,18 @@ namespace SquidStorage
 
     bool fileCanBeSaved()
     {
-        return client.acquireLock(selectedFile);
+        if (selectedFile.empty())
+            return false;
+        if (fileLock.getFilePath() == selectedFile)
+        {
+            return !fileLock.isLocked();
+        }
+        else
+        {
+            fileLock = FileLock(selectedFile);
+            fileLock.setIsLocked(!client.acquireLock(selectedFile));
+            return !fileLock.isLocked();
+        }
+        return false;
     }
 }
