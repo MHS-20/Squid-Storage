@@ -101,51 +101,6 @@ std::string FileManager::readFile(std::string path)
     return fileContent;
 }
 
-bool FileManager::acquireLock(std::string path)
-{
-    if (fileMap.find(path) == fileMap.end())
-    {
-        std::cout << "[FILEMANAGER]: File not found in file map...updating file map" << std::endl;
-        this->updateFileMap();
-        if (fileMap.find(path) == fileMap.end())
-        {
-            std::cout << "[FILEMANAGER]: File not found" << std::endl;
-            return false;
-        }
-        return false;
-    }
-
-    if (!fileMap[path].isLocked())
-    {
-        fileMap[path].setIsLocked(true);
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-bool FileManager::releaseLock(std::string path)
-{
-    if (fileMap.find(path) == fileMap.end())
-    {
-        std::cout << "[FILEMANAGER]: File not found in file map...updating file map" << std::endl;
-        this->updateFileMap();
-        if (fileMap.find(path) == fileMap.end())
-        {
-            std::cout << "[FILEMANAGER]: File not found" << std::endl;
-            return false;
-        }
-        return false;
-    }
-    else
-    {
-        fileMap[path].setIsLocked(false);
-        return true;
-    }
-}
-
 std::string FileManager::formatFileList(std::vector<std::string> files)
 {
     std::string fileList = "";

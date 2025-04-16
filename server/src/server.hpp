@@ -47,8 +47,11 @@ private:
     socklen_t addrlen = sizeof(address);
 
     FileTransfer fileTransfer;
-    FileManager &fileManager;
+    //FileManager &fileManager;
     std::map<std::string, FileLock> fileMap;
+
+    bool releaseLock(std::string path);
+    bool acquireLock(std::string path);
 
     // std::map<std::string, FileLock> fileMap;
     std::map<std::string, SquidProtocol> clientEndpointMap;

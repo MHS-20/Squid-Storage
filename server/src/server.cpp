@@ -4,7 +4,7 @@ Server::Server() : Server(DEFAULT_PORT, DEFAULT_REPLICATION_FACTOR) {}
 
 Server::Server(int port) : Server(port, DEFAULT_REPLICATION_FACTOR) {}
 
-Server::Server(int port, int replicationFactor) : fileManager(FileManager::getInstance())
+Server::Server(int port, int replicationFactor) // : fileManager(FileManager::getInstance())
 {
 
     this->port = port;
@@ -37,7 +37,6 @@ Server::Server(int port, int replicationFactor) : fileManager(FileManager::getIn
 
     fileTransfer = FileTransfer();
     fileMap = std::map<std::string, FileLock>();
-    // fileMap = FileManager::getInstance().getFileMap();
     clientEndpointMap = std::map<std::string, SquidProtocol>();
     dataNodeEndpointMap = std::map<std::string, SquidProtocol>();
     dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocol>>();
@@ -94,7 +93,6 @@ void Server::run()
 // ------------------------------
 void Server::handleConnection(int new_socket)
 {
-
     Message mex;
     SquidProtocol clientProtocol = SquidProtocol(new_socket, "[SERVER]", "SERVER");
     identify(clientProtocol);
@@ -185,6 +183,55 @@ void Server::identify(SquidProtocol clientProtocol)
     std::cout << "[SERVER]: Ack sent to client" << std::endl;
 }
 
+// -----------------------
+// ---- FILE LOCKING -----
+// -----------------------
+
+bool Server::acquireLock(std::string path)
+{
+    if (fileMap.find(path) == fileMap.end())
+    {
+        std::cout << "[SERVER]: File not found in file map... updating file map" << std::endl;
+        buildFileMap();
+        if (fileMap.find(path) == fileMap.end())
+        {
+            std::cout << "[SERVER]: File not found" << std::endl;
+            return false;
+        }
+        return false;
+    }
+
+    if (!fileMap[path].isLocked())
+    {
+        fileMap[path].setIsLocked(true);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+bool Server::releaseLock(std::string path)
+{
+    if (fileMap.find(path) == fileMap.end())
+    {
+        std::cout << "[SERVER]: File not found in file map... updating file map" << std::endl;
+        buildFileMap();
+        if (fileMap.find(path) == fileMap.end())
+        {
+            std::cout << "[SERVER]: File not found" << std::endl;
+            return false;
+        }
+        return false;
+    }
+    else
+    {
+        fileMap[path].setIsLocked(false);
+        return true;
+    }
+}
+
 // -------------------------------
 // ---- DATANODE REPLICATION -----
 // -------------------------------
@@ -210,7 +257,6 @@ void Server::buildFileMap()
             std::cout << "[SERVER]: File: " + file.first + " added to datanode: " + datanodeEndpoint.first << std::endl;
         }
     }
-    fileManager.setFileMap(fileMap);
     std::cout << "[SERVER]: File map built successfully" << std::endl;
 }
 
@@ -254,7 +300,6 @@ void Server::deleteFileFromDataNodes(std::string filePath, SquidProtocol clientP
         datanode.second.deleteFile(filePath);
 
     fileMap.erase(filePath);
-    FileManager::getInstance().setFileMap(fileMap);
 }
 
 void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol)
@@ -281,7 +326,6 @@ void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientPro
     std::cout << "iterated" << std::endl;
     dataNodeReplicationMap.insert({filePath, fileHoldersMap});
     fileMap.insert({filePath, FileLock(filePath)});
-    FileManager::getInstance().setFileMap(fileMap);
     this->readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
 
     for (auto &client : clientEndpointMap)
