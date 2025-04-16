@@ -322,14 +322,14 @@ void SquidProtocol::requestDispatcher(Message message)
         FileManager::getInstance().deleteFile(message.args["filePath"]);
         this->response(std::string("ACK"));
         break;
-    case ACQUIRE_LOCK:
-        std::cout << nodeType + ": received acquire lock request for " << message.args["filePath"] << std::endl;
-        this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
-        break;
-    case RELEASE_LOCK:
-        FileManager::getInstance().releaseLock(message.args["filePath"]);
-        this->response(std::string("ACK"));
-        break;
+    // case ACQUIRE_LOCK:
+    //     std::cout << nodeType + ": received acquire lock request for " << message.args["filePath"] << std::endl;
+    //     this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
+    //     break;
+    // case RELEASE_LOCK:
+    //     FileManager::getInstance().releaseLock(message.args["filePath"]);
+    //     this->response(std::string("ACK"));
+    //     break;
     case HEARTBEAT:
         this->response(std::string("ACK"));
         break;

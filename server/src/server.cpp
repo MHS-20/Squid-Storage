@@ -145,10 +145,12 @@ void Server::handleConnection(int new_socket)
             clientProtocol.requestDispatcher(mex);
             break;
         case ACQUIRE_LOCK:
-            clientProtocol.requestDispatcher(mex);
+            std::cout << "[SERVER]: received acquire lock request for " << mex.args["filePath"] << std::endl;
+            clientProtocol.response(this->acquireLock(mex.args["filePath"]));
             break;
         case RELEASE_LOCK:
-            clientProtocol.requestDispatcher(mex);
+            this->releaseLock(mex.args["filePath"]);
+            clientProtocol.response(std::string("ACK"));
             break;
         default:
             clientProtocol.requestDispatcher(mex);
