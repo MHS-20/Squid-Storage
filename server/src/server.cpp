@@ -200,7 +200,7 @@ void Server::buildFileMap()
         {
             if (fileMap.find(file.first) == fileMap.end())
             {
-                fileMap[file.first] = FileLock();
+                fileMap[file.first] = FileLock(file.first);
             }
 
             if (dataNodeReplicationMap.find(file.first) == dataNodeReplicationMap.end())
@@ -280,7 +280,7 @@ void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientPro
 
     std::cout << "iterated" << std::endl;
     dataNodeReplicationMap.insert({filePath, fileHoldersMap});
-    fileMap.insert({filePath, FileLock()});
+    fileMap.insert({filePath, FileLock(filePath)});
     FileManager::getInstance().setFileMap(fileMap);
     this->readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
 
