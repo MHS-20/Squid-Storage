@@ -36,10 +36,13 @@ Server::Server(int port, int replicationFactor) // : fileManager(FileManager::ge
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
-    fileMap = std::map<std::string, FileLock>();
+    fileLockMap = std::map<std::string, FileLock>();
+    fileTimeMap = std::map<std::string, long long>();
+
     clientEndpointMap = std::map<std::string, SquidProtocol>();
     dataNodeEndpointMap = std::map<std::string, SquidProtocol>();
     dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocol>>();
+
     endpointIterator = dataNodeEndpointMap.begin();
     // readsLoadBalancingIterator = dataNodeReplicationMap.begin();
 }
@@ -142,7 +145,8 @@ void Server::handleConnection(int new_socket)
             FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case SYNC_STATUS:
-            clientProtocol.requestDispatcher(mex);
+            std::cout << "SERVER: received sync status request\n";
+            clientProtocol.response(fileTimeMap);
             break;
         case ACQUIRE_LOCK:
             std::cout << "[SERVER]: received acquire lock request for " << mex.args["filePath"] << std::endl;
@@ -173,7 +177,7 @@ void Server::identify(SquidProtocol clientProtocol)
     {
         dataNodeEndpointMap[mex.args["processName"]] = clientProtocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
-        buildFileMap();
+        buildFileLockMap();
     }
     else
     {
@@ -191,11 +195,11 @@ void Server::identify(SquidProtocol clientProtocol)
 
 bool Server::acquireLock(std::string path)
 {
-    if (fileMap.find(path) == fileMap.end())
+    if (fileLockMap.find(path) == fileLockMap.end())
     {
         std::cout << "[SERVER]: File not found in file map... updating file map" << std::endl;
-        buildFileMap();
-        if (fileMap.find(path) == fileMap.end())
+        buildFileLockMap();
+        if (fileLockMap.find(path) == fileLockMap.end())
         {
             std::cout << "[SERVER]: File not found" << std::endl;
             return false;
@@ -203,9 +207,9 @@ bool Server::acquireLock(std::string path)
         return false;
     }
 
-    if (!fileMap[path].isLocked())
+    if (!fileLockMap[path].isLocked())
     {
-        fileMap[path].setIsLocked(true);
+        fileLockMap[path].setIsLocked(true);
         return true;
     }
     else
@@ -216,11 +220,11 @@ bool Server::acquireLock(std::string path)
 
 bool Server::releaseLock(std::string path)
 {
-    if (fileMap.find(path) == fileMap.end())
+    if (fileLockMap.find(path) == fileLockMap.end())
     {
         std::cout << "[SERVER]: File not found in file map... updating file map" << std::endl;
-        buildFileMap();
-        if (fileMap.find(path) == fileMap.end())
+        buildFileLockMap();
+        if (fileLockMap.find(path) == fileLockMap.end())
         {
             std::cout << "[SERVER]: File not found" << std::endl;
             return false;
@@ -229,7 +233,7 @@ bool Server::releaseLock(std::string path)
     }
     else
     {
-        fileMap[path].setIsLocked(false);
+        fileLockMap[path].setIsLocked(false);
         return true;
     }
 }
@@ -238,18 +242,19 @@ bool Server::releaseLock(std::string path)
 // ---- DATANODE REPLICATION -----
 // -------------------------------
 
-void Server::buildFileMap()
+void Server::buildFileLockMap()
 {
     std::cout << "[SERVER]: Building file map..." << std::endl;
     for (auto &datanodeEndpoint : dataNodeEndpointMap)
     {
         std::cout << "[SERVER]: Building file map from datanode: " + datanodeEndpoint.first << std::endl;
-        Message files = datanodeEndpoint.second.listFiles();
+        Message files = datanodeEndpoint.second.listFiles(); // <filename; last write time>
         for (auto &file : files.args)
         {
-            if (fileMap.find(file.first) == fileMap.end())
+            if (fileLockMap.find(file.first) == fileLockMap.end())
             {
-                fileMap[file.first] = FileLock(file.first);
+                fileLockMap[file.first] = FileLock(file.first);
+                fileTimeMap[file.first] = std::stoll(file.second);
             }
 
             if (dataNodeReplicationMap.find(file.first) == dataNodeReplicationMap.end())
@@ -264,7 +269,7 @@ void Server::buildFileMap()
 
 void Server::getFileFromDataNode(std::string filePath, SquidProtocol clientProtocol)
 {
-    std::cout<< "retriving file " + filePath << std::endl;
+    std::cout << "retriving file " + filePath << std::endl;
     if (dataNodeReplicationMap.find(filePath) == dataNodeReplicationMap.end())
     {
         std::cout << "[SERVER]: File not found in datanode replication map" << std::endl;
@@ -301,7 +306,7 @@ void Server::deleteFileFromDataNodes(std::string filePath, SquidProtocol clientP
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.deleteFile(filePath);
 
-    fileMap.erase(filePath);
+    fileLockMap.erase(filePath);
 }
 
 void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol)
@@ -327,7 +332,7 @@ void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientPro
 
     std::cout << "iterated" << std::endl;
     dataNodeReplicationMap.insert({filePath, fileHoldersMap});
-    fileMap.insert({filePath, FileLock(filePath)});
+    fileLockMap.insert({filePath, FileLock(filePath)});
     this->readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
 
     for (auto &client : clientEndpointMap)

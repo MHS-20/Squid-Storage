@@ -177,6 +177,16 @@ std::string SquidProtocolFormatter::responseFormat(std::map<std::string, fs::fil
     return this->createMessage(RESPONSE, arguments);
 }
 
+std::string SquidProtocolFormatter::responseFormat(std::map<std::string, long long> fileTimeMap)
+{
+    std::vector<std::string> arguments;
+    for (auto arg : fileTimeMap)
+    {
+        arguments.push_back(arg.first + ":" + std::to_string(arg.second));
+    }
+    return this->createMessage(RESPONSE, arguments);
+}
+
 Message SquidProtocolFormatter::parseMessage(std::string message)
 {
     std::string keyword = message.substr(0, message.find("<"));

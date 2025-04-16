@@ -244,6 +244,10 @@ void SquidProtocol::response(std::map<std::string, fs::file_time_type> filesLast
     this->sendMessage(this->formatter.responseFormat(filesLastWrite));
 }
 
+void SquidProtocol::response(std::map<std::string, long long> fileTimeMap){
+    this->sendMessage(this->formatter.responseFormat(fileTimeMap));
+}
+
 void SquidProtocol::response(bool lock)
 {
     std::cout << nodeType + "Sending response: " << lock << std::endl;
@@ -333,10 +337,10 @@ void SquidProtocol::requestDispatcher(Message message)
     case HEARTBEAT:
         this->response(std::string("ACK"));
         break;
-    case SYNC_STATUS:
-        std::cout << nodeType + ": received sync status request\n";
-        this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
-        break;
+    // case SYNC_STATUS:
+    //     std::cout << nodeType + ": received sync status request\n";
+    //     this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
+    //     break;
     case IDENTIFY:
         this->response(this->nodeType, this->processName);
         break;
@@ -357,7 +361,7 @@ void SquidProtocol::responseDispatcher(Message response)
     {
     case RESPONSE:
         if (response.args["ACK"] != "ACK")
-            std::cerr << nodeType + ": Error from server " << std::endl;
+            std::cerr << nodeType + ": Error from server " + response.toString() << std::endl;
         else
             std::cout << nodeType + ": Operation performed" << std::endl;
         break;
