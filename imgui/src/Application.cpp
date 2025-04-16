@@ -267,6 +267,10 @@ namespace SquidStorage
             return false;
         if (fileLock.getFilePath() == selectedFile)
         {
+            if (fileLock.isLocked())
+            {
+                fileLock.setIsLocked(!client.acquireLock(selectedFile));
+            }
             return !fileLock.isLocked();
         }
         else
