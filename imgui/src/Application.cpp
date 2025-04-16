@@ -1,6 +1,7 @@
 ﻿#include "Application.hpp"
 #include "../imgui.h"
 #include <iostream>
+#define UPDATE_EVERY 60 // frames
 
 namespace SquidStorage
 {
@@ -17,6 +18,7 @@ namespace SquidStorage
     char newFileName[128];
     Client client("127.0.0.1", 12345);
     FileLock fileLock;
+    int currentFrame = 0;
 
     void runClient()
     {
@@ -26,6 +28,12 @@ namespace SquidStorage
 
     void RenderUI()
     {
+        if (currentFrame == UPDATE_EVERY)
+        {
+            client.syncStatus();
+            currentFrame = 0;
+        }
+        currentFrame++;
         static bool opt_fullscreen = true;
         static bool opt_padding = false;
 
