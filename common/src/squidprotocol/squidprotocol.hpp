@@ -27,6 +27,7 @@ public:
 
     virtual Message identify();
     virtual Message closeConn();
+    virtual Message listFiles();
 
     virtual Message createFile(std::string filePath);
     virtual Message readFile(std::string filePath);

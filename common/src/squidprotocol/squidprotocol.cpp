@@ -113,6 +113,15 @@ Message SquidProtocol::heartbeat()
     return receiveAndParseMessage();
 }
 
+Message SquidProtocol::listFiles()
+{
+    std::cout << nodeType + ": sending list files request" << std::endl;
+    this->sendMessage(this->formatter.syncStatusFormat());
+    Message response = receiveAndParseMessage();
+    std::cout << nodeType + ": received list files response" << std::endl;
+    return response;
+}
+
 Message SquidProtocol::syncStatus()
 {
     std::cout << nodeType + ": sending sync status request" << std::endl;

@@ -2,6 +2,7 @@
 
 DataNode::DataNode() : DataNode(SERVER_IP, SERVER_PORT) {}
 
+DataNode::DataNode(int port) : Peer(SERVER_IP, port, "DATANODE", "DATANODE") {}
 DataNode::DataNode(const char *server_ip, int port) : Peer(server_ip, port, "DATANODE", "DATANODE") {}
 DataNode::DataNode(std::string nodeType, std::string processName) : Peer(nodeType, processName) {}
 DataNode::DataNode(const char *server_ip, int port, std::string nodeType, std::string processName) : Peer(server_ip, port, nodeType, processName) {}

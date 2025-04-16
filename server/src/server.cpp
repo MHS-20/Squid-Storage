@@ -36,6 +36,7 @@ Server::Server(int port, int replicationFactor) : fileManager(FileManager::getIn
     address.sin_port = htons(port);
 
     fileTransfer = FileTransfer();
+    fileMap = std::map<std::string, FileLock>();
     // fileMap = FileManager::getInstance().getFileMap();
     clientEndpointMap = std::map<std::string, SquidProtocol>();
     dataNodeEndpointMap = std::map<std::string, SquidProtocol>();
@@ -88,6 +89,9 @@ void Server::run()
     }
 }
 
+// ------------------------------
+// --- COMMUNICATION HANDLING ---
+// ------------------------------
 void Server::handleConnection(int new_socket)
 {
 
@@ -121,20 +125,23 @@ void Server::handleConnection(int new_socket)
         case CREATE_FILE:
             clientProtocol.requestDispatcher(mex);
             createFileOnDataNodes(mex.args["filePath"], clientProtocol);
+            // FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case READ_FILE:
-            // getFileFromDataNode(mex.args["filePath"], clientProtocol);
+            getFileFromDataNode(mex.args["filePath"], clientProtocol);
             clientProtocol.requestDispatcher(mex);
+            // FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case UPDATE_FILE:
             clientProtocol.requestDispatcher(mex);
             updateFileOnDataNodes(mex.args["filePath"], clientProtocol);
-            dataNodeReplicationMap.erase(mex.args["filePath"]);
+            // FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case DELETE_FILE:
             clientProtocol.requestDispatcher(mex);
             deleteFileFromDataNodes(mex.args["filePath"], clientProtocol);
             dataNodeReplicationMap.erase(mex.args["filePath"]);
+            // FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case SYNC_STATUS:
             clientProtocol.requestDispatcher(mex);
@@ -164,9 +171,9 @@ void Server::identify(SquidProtocol clientProtocol)
     }
     else if (mex.args["nodeType"] == "DATANODE")
     {
-        // dataNodeReplicationMap[mex.args["processName"]] = std::map<std::string, SquidProtocol>();
         dataNodeEndpointMap[mex.args["processName"]] = clientProtocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
+        buildFileMap();
     }
     else
     {
@@ -178,8 +185,38 @@ void Server::identify(SquidProtocol clientProtocol)
     std::cout << "[SERVER]: Ack sent to client" << std::endl;
 }
 
+// -------------------------------
+// ---- DATANODE REPLICATION -----
+// -------------------------------
+
+void Server::buildFileMap()
+{
+    std::cout << "[SERVER]: Building file map..." << std::endl;
+    for (auto &datanodeEndpoint : dataNodeEndpointMap)
+    {
+        std::cout << "[SERVER]: Building file map from datanode: " + datanodeEndpoint.first << std::endl;
+        Message files = datanodeEndpoint.second.listFiles();
+        for (auto &file : files.args)
+        {
+            if (fileMap.find(file.first) == fileMap.end())
+            {
+                fileMap[file.first] = FileLock();
+            }
+
+            if (dataNodeReplicationMap.find(file.first) == dataNodeReplicationMap.end())
+            {
+                dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
+            }
+            std::cout << "[SERVER]: File: " + file.first + " added to datanode: " + datanodeEndpoint.first << std::endl;
+        }
+    }
+    fileManager.setFileMap(fileMap);
+    std::cout << "[SERVER]: File map built successfully" << std::endl;
+}
+
 void Server::getFileFromDataNode(std::string filePath, SquidProtocol clientProtocol)
 {
+    std::cout<< "retriving file " + filePath + "from datanode" << std::endl;
     auto &fileHoldersMap = dataNodeReplicationMap[filePath];
     if (readsLoadBalancingIterator == fileHoldersMap.end())
         readsLoadBalancingIterator = fileHoldersMap.begin();
@@ -209,11 +246,13 @@ void Server::deleteFileFromDataNodes(std::string filePath, SquidProtocol clientP
 
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.deleteFile(filePath);
+
+    fileMap.erase(filePath);
+    FileManager::getInstance().setFileMap(fileMap);
 }
 
 void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol)
 { // round robin replication
-    // std::cout << "replicating" << std::endl;
     auto fileHoldersMap = std::map<std::string, SquidProtocol>();
 
     if (dataNodeEndpointMap.empty())
@@ -235,6 +274,8 @@ void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientPro
 
     std::cout << "iterated" << std::endl;
     dataNodeReplicationMap.insert({filePath, fileHoldersMap});
+    fileMap.insert({filePath, FileLock()});
+    FileManager::getInstance().setFileMap(fileMap);
     this->readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
 
     for (auto &client : clientEndpointMap)

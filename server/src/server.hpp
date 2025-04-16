@@ -29,6 +29,7 @@ public:
     void run();
     //int getSocket();
 
+    void buildFileMap();
     void identify(SquidProtocol clientProtocol);
     void createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol);
     void updateFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol);
@@ -47,12 +48,13 @@ private:
 
     FileTransfer fileTransfer;
     FileManager &fileManager;
+    std::map<std::string, FileLock> fileMap;
 
     // std::map<std::string, FileLock> fileMap;
     std::map<std::string, SquidProtocol> clientEndpointMap;
     std::map<std::string, SquidProtocol> dataNodeEndpointMap;
 
-    // maps filename to datanode endpoint map holding that file
+    // maps filename to datanode holding that file (datanode, socket)
     std::map<std::string, std::map<std::string, SquidProtocol>> dataNodeReplicationMap;
 
     // iterators for round robin redundancy

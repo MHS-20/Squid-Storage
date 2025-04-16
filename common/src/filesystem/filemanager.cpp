@@ -10,6 +10,11 @@ FileManager::FileManager()
     std::cout << "[FILEMANAGER]: File map initialized" << std::endl;
 }
 
+void FileManager::setFileMap(std::map<std::string, FileLock> fileMap)
+{
+    this->fileMap = fileMap;
+}
+
 std::map<std::string, FileLock> FileManager::getFileMap()
 {
     return fileMap;

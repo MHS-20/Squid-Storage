@@ -22,6 +22,8 @@ public:
     }
 
     std::map<std::string, FileLock> getFileMap();
+    void setFileMap(std::map<std::string, FileLock> fileMap);
+
     std::vector<std::string> getFiles(std::string path);
     std::vector<fs::directory_entry> getFileEntries(std::string path);
     std::map<std::string, fs::file_time_type> getFilesLastWrite(std::string path);
@@ -41,8 +43,8 @@ private:
     ~FileManager() {};
 
     // Prevent copying and assignment
+    void updateFileMap();
     FileManager(const FileManager &) = delete;
     FileManager &operator=(const FileManager &) = delete;
-    void updateFileMap();
     std::map<std::string, FileLock> fileMap;
 };
