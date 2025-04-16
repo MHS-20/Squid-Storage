@@ -20,6 +20,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/common/src/peer
     ${CMAKE_SOURCE_DIR}/server/src
     ${CMAKE_SOURCE_DIR}/client/src
+    ${CMAKE_SOURCE_DIR}/data-node/src
 )
 
 # === FILES COMUNI ===
@@ -69,5 +70,12 @@ endif()
 add_executable(SquidStorageServer
     server/src/main.cpp
     server/src/server.cpp
+    ${COMMON_SOURCES}
+)
+
+# === EXECUTABLE: SquidStorageServer ===
+add_executable(DataNode
+    data-node/src/datanode.cpp
+    data-node/src/main.cpp
     ${COMMON_SOURCES}
 )
