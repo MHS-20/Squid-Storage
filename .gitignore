@@ -1,5 +1,7 @@
 *.o
 test_txt/
-build/
 main
-TopLevelMakefile
+
+build/*
+CMakeFiles/*
+!build/build.sh

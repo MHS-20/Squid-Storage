@@ -125,23 +125,23 @@ void Server::handleConnection(int new_socket)
         case CREATE_FILE:
             clientProtocol.requestDispatcher(mex);
             createFileOnDataNodes(mex.args["filePath"], clientProtocol);
-            // FileManager::getInstance().deleteFile(mex.args["filePath"]);
+            FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case READ_FILE:
             getFileFromDataNode(mex.args["filePath"], clientProtocol);
             clientProtocol.requestDispatcher(mex);
-            // FileManager::getInstance().deleteFile(mex.args["filePath"]);
+            FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case UPDATE_FILE:
             clientProtocol.requestDispatcher(mex);
             updateFileOnDataNodes(mex.args["filePath"], clientProtocol);
-            // FileManager::getInstance().deleteFile(mex.args["filePath"]);
+            FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case DELETE_FILE:
             clientProtocol.requestDispatcher(mex);
             deleteFileFromDataNodes(mex.args["filePath"], clientProtocol);
             dataNodeReplicationMap.erase(mex.args["filePath"]);
-            // FileManager::getInstance().deleteFile(mex.args["filePath"]);
+            FileManager::getInstance().deleteFile(mex.args["filePath"]);
             break;
         case SYNC_STATUS:
             clientProtocol.requestDispatcher(mex);
@@ -216,7 +216,13 @@ void Server::buildFileMap()
 
 void Server::getFileFromDataNode(std::string filePath, SquidProtocol clientProtocol)
 {
-    std::cout<< "retriving file " + filePath + "from datanode" << std::endl;
+    std::cout<< "retriving file " + filePath << std::endl;
+    if (dataNodeReplicationMap.find(filePath) == dataNodeReplicationMap.end())
+    {
+        std::cout << "[SERVER]: File not found in datanode replication map" << std::endl;
+        return;
+    }
+
     auto &fileHoldersMap = dataNodeReplicationMap[filePath];
     if (readsLoadBalancingIterator == fileHoldersMap.end())
         readsLoadBalancingIterator = fileHoldersMap.begin();
