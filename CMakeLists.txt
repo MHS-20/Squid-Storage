@@ -73,7 +73,7 @@ add_executable(SquidStorageServer
     ${COMMON_SOURCES}
 )
 
-# === EXECUTABLE: SquidStorageServer ===
+# === EXECUTABLE: DataNode ===
 add_executable(DataNode
     data-node/src/datanode.cpp
     data-node/src/main.cpp

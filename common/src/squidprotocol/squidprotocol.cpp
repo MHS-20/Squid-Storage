@@ -113,6 +113,7 @@ Message SquidProtocol::heartbeat()
     return receiveAndParseMessage();
 }
 
+// executed by server
 Message SquidProtocol::listFiles()
 {
     std::cout << nodeType + ": sending list files request" << std::endl;
@@ -122,6 +123,7 @@ Message SquidProtocol::listFiles()
     return response;
 }
 
+// executed by client
 Message SquidProtocol::syncStatus()
 {
     std::cout << nodeType + ": sending sync status request" << std::endl;
@@ -287,7 +289,6 @@ void SquidProtocol::sendMessageWithLength(std::string &message)
 // -------------------------------
 // --------- DISPATCHERS ---------
 // -------------------------------
-
 void SquidProtocol::requestDispatcher(Message message)
 {
     switch (message.keyword)

@@ -1,11 +1,9 @@
 #!/bin/bash
-
 # Build the project
 cmake ..
 make -j 8
 
 # Move executables to their respective directories
-pwd
 mv ./SquidStorage ../test_txt/test_client/SquidStorage
 mv ./SquidStorageServer ../test_txt/test_server/SquidStorageServer
 mv ./DataNode ../test_txt/test_datanode/DataNode
