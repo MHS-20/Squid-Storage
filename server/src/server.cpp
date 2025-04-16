@@ -293,6 +293,9 @@ void Server::updateFileOnDataNodes(std::string filePath, SquidProtocol clientPro
 
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.updateFile(filePath);
+
+    fileTimeMap[filePath] = std::chrono::system_clock::now().time_since_epoch().count();
+
 }
 
 void Server::deleteFileFromDataNodes(std::string filePath, SquidProtocol clientProtocol)
@@ -307,6 +310,8 @@ void Server::deleteFileFromDataNodes(std::string filePath, SquidProtocol clientP
         datanode.second.deleteFile(filePath);
 
     fileLockMap.erase(filePath);
+    fileTimeMap.erase(filePath);
+    dataNodeReplicationMap.erase(filePath);
 }
 
 void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol)
@@ -332,8 +337,13 @@ void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientPro
 
     std::cout << "iterated" << std::endl;
     dataNodeReplicationMap.insert({filePath, fileHoldersMap});
+    //readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
+
     fileLockMap.insert({filePath, FileLock(filePath)});
-    this->readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
+    fileTimeMap.insert({filePath, std::chrono::system_clock::now().time_since_epoch().count()});
+
+    for (auto &datanode : dataNodeReplicationMap[filePath])
+    datanode.second.createFile(filePath);
 
     for (auto &client : clientEndpointMap)
     {
@@ -341,6 +351,4 @@ void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientPro
             client.second.createFile(filePath);
     }
 
-    for (auto &datanode : dataNodeReplicationMap[filePath])
-        datanode.second.createFile(filePath);
 }
