@@ -16,7 +16,7 @@ tmux new-session -d -s $SESSION_NAME
 
 # Run SquidStorageServer in the first pane
 tmux rename-window -t $SESSION_NAME "Server"
-tmux send-keys -t $SESSION_NAME "cd ../test_txt/test_server && SquidStorageServer" C-m
+tmux send-keys -t $SESSION_NAME "cd ../test_txt/test_server && ./SquidStorageServer" C-m
 
 # Split the window and run DataNode in the second pane
 tmux split-window -h
