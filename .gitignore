@@ -5,3 +5,4 @@ main
 build/*
 CMakeFiles/*
 !build/build.sh
+!build/buildTestMultiCLient.sh
