@@ -182,7 +182,7 @@ Message SquidProtocol::syncStatus()
 Message SquidProtocol::receiveAndParseMessage()
 {
     std::string receivedMessage = receiveMessageWithLength();
-    // std::cout << nodeType + ": Received message: " << receivedMessage << std::endl;
+    std::cout << nodeType + ": Received message: " << receivedMessage << std::endl;
     return this->formatter.parseMessage(receivedMessage);
 }
 
@@ -195,8 +195,7 @@ void checkBytesRead(ssize_t bytesRead, std::string nodeType)
     }
     else if (bytesRead < 0)
     {
-        std::string msg = std::string(nodeType) + ": Failed to receive message";
-        std::cerr << (msg.c_str());
+        //std::cerr << std::string(nodeType) + ": Failed to receive message";
         throw std::runtime_error("Failed to receive message");
     }
 }
@@ -209,7 +208,8 @@ std::string SquidProtocol::receiveMessageWithLength()
     checkBytesRead(bytesRead, nodeType);
 
     messageLength = ntohl(messageLength);
-    // std::cout << nodeType + ": Expecting message of length: " << messageLength << std::endl;
+    std::cout << std::this_thread::get_id();
+    std::cout << nodeType + ": Expecting message of length: " << messageLength << std::endl;
 
     // Read the actual message
     char *buffer = new char[messageLength + 1];
@@ -220,7 +220,8 @@ std::string SquidProtocol::receiveMessageWithLength()
     std::string message(buffer);
     delete[] buffer;
 
-    // std::cout << "[INFO]: Received message: " << message << std::endl;
+    std::cout << std::this_thread::get_id();
+    std::cout << "[INFO]: Received message: " << message << std::endl;
     return message;
 }
 
@@ -273,6 +274,7 @@ void SquidProtocol::sendMessageWithLength(std::string &message)
         std::cerr << nodeType + "[ERROR]: Invalid socket_fd" << std::endl;
         return;
     }
+    
     // Send the length of the message
     if (send(socket_fd, &messageLength, sizeof(messageLength), 0) < 0)
     {
@@ -287,7 +289,8 @@ void SquidProtocol::sendMessageWithLength(std::string &message)
         return;
     }
 
-    // std::cout << nodeType + ": Sent message with length: " << message.size() << std::endl;
+    std::cout << std::this_thread::get_id();
+    std::cout << nodeType + ": Sent message with length: " << message.size() << std::endl;
 }
 
 // -------------------------------
@@ -337,10 +340,10 @@ void SquidProtocol::requestDispatcher(Message message)
     case HEARTBEAT:
         this->response(std::string("ACK"));
         break;
-    // case SYNC_STATUS:
-    //     std::cout << nodeType + ": received sync status request\n";
-    //     this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
-    //     break;
+    case SYNC_STATUS:
+        std::cout << nodeType + ": received sync status request\n";
+        this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
+        break;
     case IDENTIFY:
         this->response(this->nodeType, this->processName);
         break;

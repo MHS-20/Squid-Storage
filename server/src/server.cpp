@@ -44,21 +44,12 @@ Server::Server(int port, int replicationFactor) // : fileManager(FileManager::ge
     dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocol>>();
 
     endpointIterator = dataNodeEndpointMap.begin();
-    // readsLoadBalancingIterator = dataNodeReplicationMap.begin();
+    //readsLoadBalancingIterator = dataNodeReplicationMap.begin();
 }
 
 Server::~Server()
 {
     close(server_fd);
-}
-
-void printMap(std::map<std::string, SquidProtocol> &map, std::string name)
-{
-    std::cout << "[SERVER]: " << name << std::endl;
-    for (auto &pair : map)
-    {
-        std::cout << pair.first << " => " << pair.second.toString() << std::endl;
-    }
 }
 
 void Server::run()
@@ -113,6 +104,7 @@ void Server::handleConnection(int new_socket)
         try
         {
             mex = clientProtocol.receiveAndParseMessage();
+            std::cout << std::this_thread::get_id();
             std::cout << "[SERVER]: Received message: " + mex.keyword << std::endl;
         }
         catch (std::exception &e)
@@ -159,7 +151,12 @@ void Server::handleConnection(int new_socket)
         default:
             clientProtocol.requestDispatcher(mex);
         }
+
         std::cout << "[SERVER]: Request dispatched" << std::endl;
+
+        printMap(fileLockMap, "File Lock Map");
+        printMap(fileTimeMap, "File Time Map");
+        printMap(dataNodeReplicationMap, "DataNode Replication Map");
     }
 };
 
@@ -177,7 +174,11 @@ void Server::identify(SquidProtocol clientProtocol)
     {
         dataNodeEndpointMap[mex.args["processName"]] = clientProtocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
+        std::cout << "[SERVER]: Building file map..." << std::endl;
         buildFileLockMap();
+        printMap(fileLockMap, "File Lock Map");
+        printMap(fileTimeMap, "File Time Map");
+        printMap(dataNodeReplicationMap, "DataNode Replication Map");
     }
     else
     {
@@ -276,11 +277,15 @@ void Server::getFileFromDataNode(std::string filePath, SquidProtocol clientProto
         return;
     }
 
+    std::cout << "file found on datanode" << std::endl;
     auto &fileHoldersMap = dataNodeReplicationMap[filePath];
-    if (readsLoadBalancingIterator == fileHoldersMap.end())
-        readsLoadBalancingIterator = fileHoldersMap.begin();
-    clientProtocol.responseDispatcher(readsLoadBalancingIterator->second.readFile(filePath));
-    readsLoadBalancingIterator++;
+    clientProtocol.responseDispatcher(fileHoldersMap.begin()->second.readFile(filePath));
+
+    // if (readsLoadBalancingIterator == fileHoldersMap.end())
+    //     readsLoadBalancingIterator = fileHoldersMap.begin();
+    // clientProtocol.responseDispatcher(readsLoadBalancingIterator->second.readFile(filePath));
+    // readsLoadBalancingIterator++;
+
 }
 
 void Server::updateFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol)
@@ -295,7 +300,6 @@ void Server::updateFileOnDataNodes(std::string filePath, SquidProtocol clientPro
         datanode.second.updateFile(filePath);
 
     fileTimeMap[filePath] = std::chrono::system_clock::now().time_since_epoch().count();
-
 }
 
 void Server::deleteFileFromDataNodes(std::string filePath, SquidProtocol clientProtocol)
@@ -337,18 +341,62 @@ void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientPro
 
     std::cout << "iterated" << std::endl;
     dataNodeReplicationMap.insert({filePath, fileHoldersMap});
-    //readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
+    // readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
 
     fileLockMap.insert({filePath, FileLock(filePath)});
     fileTimeMap.insert({filePath, std::chrono::system_clock::now().time_since_epoch().count()});
 
     for (auto &datanode : dataNodeReplicationMap[filePath])
-    datanode.second.createFile(filePath);
+        datanode.second.createFile(filePath);
 
     for (auto &client : clientEndpointMap)
     {
         if (client.second.getSocket() != clientProtocol.getSocket())
             client.second.createFile(filePath);
     }
+}
 
+// -----------------------
+// ------ PRINT MAPS -----
+// -----------------------
+
+void Server::printMap(std::map<std::string, SquidProtocol> &map, std::string name)
+{
+    std::cout << "[SERVER]: " << name << std::endl;
+    for (auto &pair : map)
+    {
+        std::cout << pair.first << " => " << pair.second.toString() << std::endl;
+    }
+}
+
+void Server::printMap(std::map<std::string, FileLock> &map, std::string name)
+{
+    std::cout << "[SERVER]: " << name << std::endl;
+    for (auto &pair : map)
+    {
+        std::cout << pair.first << " => " << pair.second.getFilePath() << " : " << pair.second.isLocked() << std::endl;
+    }
+}
+
+void Server::printMap(std::map<std::string, std::map<std::string, SquidProtocol>> &map, std::string name)
+{
+    std::cout << "[SERVER]: " << name << std::endl;
+    for (auto &pair : map)
+    {
+        std::cout << pair.first << " => ";
+        for (auto &innerPair : pair.second)
+        {
+            std::cout << innerPair.first << " : " << innerPair.second.toString() << ", ";
+        }
+        std::cout << std::endl;
+    }
+}
+
+void Server::printMap(std::map<std::string, long long> &map, std::string name)
+{
+    std::cout << "[SERVER]: " << name << std::endl;
+    for (auto &pair : map)
+    {
+        std::cout << pair.first << " => " << pair.second << std::endl;
+    }
 }

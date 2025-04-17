@@ -65,4 +65,8 @@ private:
     std::map<std::string, SquidProtocol>::iterator readsLoadBalancingIterator;
 
     void handleConnection(int client_socket);
+    void printMap(std::map<std::string, SquidProtocol> &map, std::string name);
+    void printMap(std::map<std::string, FileLock> &map, std::string name);
+    void printMap(std::map<std::string, std::map<std::string, SquidProtocol>> &map, std::string name);
+    void printMap(std::map<std::string, long long> &map, std::string name);
 };

@@ -1,6 +1,6 @@
 #pragma once
 #include <sys/socket.h>
-
+#include <thread>
 #include "filetransfer.hpp"
 #include "filemanager.hpp"
 #include "squidProtocolFormatter.hpp"
