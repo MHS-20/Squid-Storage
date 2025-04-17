@@ -32,7 +32,7 @@ public:
     void buildFileLockMap();
     bool releaseLock(std::string path);
     bool acquireLock(std::string path);
-    void identify(SquidProtocol clientProtocol);
+    bool identify(SquidProtocol clientProtocol);
     void createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol);
     void updateFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol);
     void getFileFromDataNode(std::string filePath, SquidProtocol clientProtocol);
@@ -49,7 +49,6 @@ private:
     socklen_t addrlen = sizeof(address);
 
     FileTransfer fileTransfer;
-
     std::map<std::string, FileLock> fileLockMap;
     std::map<std::string, long long> fileTimeMap;
 

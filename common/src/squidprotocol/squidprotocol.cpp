@@ -83,8 +83,11 @@ Message SquidProtocol::readFile(std::string filePath)
     std::cout << nodeType + ": sending read file request" << std::endl;
     this->sendMessage(this->formatter.readFileFormat(filePath));
     Message response = receiveAndParseMessage();
+    std::cout << "received response 1" << std::endl;
     if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
+    
+    std::cout << "checking response 2" << std::endl;
     return receiveAndParseMessage();
 }
 
@@ -182,7 +185,7 @@ Message SquidProtocol::syncStatus()
 Message SquidProtocol::receiveAndParseMessage()
 {
     std::string receivedMessage = receiveMessageWithLength();
-    std::cout << nodeType + ": Received message: " << receivedMessage << std::endl;
+    //std::cout << nodeType + ": Received message: " << receivedMessage << std::endl;
     return this->formatter.parseMessage(receivedMessage);
 }
 
@@ -208,7 +211,7 @@ std::string SquidProtocol::receiveMessageWithLength()
     checkBytesRead(bytesRead, nodeType);
 
     messageLength = ntohl(messageLength);
-    std::cout << std::this_thread::get_id();
+    // std::cout << std::this_thread::get_id();
     std::cout << nodeType + ": Expecting message of length: " << messageLength << std::endl;
 
     // Read the actual message
@@ -220,7 +223,7 @@ std::string SquidProtocol::receiveMessageWithLength()
     std::string message(buffer);
     delete[] buffer;
 
-    std::cout << std::this_thread::get_id();
+   // std::cout << std::this_thread::get_id();
     std::cout << "[INFO]: Received message: " << message << std::endl;
     return message;
 }

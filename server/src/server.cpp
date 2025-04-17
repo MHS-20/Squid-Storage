@@ -44,7 +44,7 @@ Server::Server(int port, int replicationFactor) // : fileManager(FileManager::ge
     dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocol>>();
 
     endpointIterator = dataNodeEndpointMap.begin();
-    //readsLoadBalancingIterator = dataNodeReplicationMap.begin();
+    // readsLoadBalancingIterator = dataNodeReplicationMap.begin();
 }
 
 Server::~Server()
@@ -89,7 +89,8 @@ void Server::handleConnection(int new_socket)
 {
     Message mex;
     SquidProtocol clientProtocol = SquidProtocol(new_socket, "[SERVER]", "SERVER");
-    identify(clientProtocol);
+    if (!identify(clientProtocol))
+        return;
 
     std::cout << "Checking for messages ...\n";
     while (true)
@@ -160,7 +161,7 @@ void Server::handleConnection(int new_socket)
     }
 };
 
-void Server::identify(SquidProtocol clientProtocol)
+bool Server::identify(SquidProtocol clientProtocol)
 {
     Message mex = clientProtocol.identify();
     std::cout << "[SERVER]: Identity received from peer: " + mex.args["processName"] << std::endl;
@@ -169,25 +170,36 @@ void Server::identify(SquidProtocol clientProtocol)
     {
         clientEndpointMap[mex.args["processName"]] = clientProtocol;
         printMap(clientEndpointMap, "Client Endpoint Map");
+        std::cout << std::this_thread::get_id();
+        std::cout << " attached to client ";
     }
     else if (mex.args["nodeType"] == "DATANODE")
     {
         dataNodeEndpointMap[mex.args["processName"]] = clientProtocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
+        std::cout << std::this_thread::get_id();
+        std::cout << " attached to datanode";
+
         std::cout << "[SERVER]: Building file map..." << std::endl;
         buildFileLockMap();
         printMap(fileLockMap, "File Lock Map");
         printMap(fileTimeMap, "File Time Map");
         printMap(dataNodeReplicationMap, "DataNode Replication Map");
+        std::cout << "exiting...";
     }
     else
     {
         std::cout << "[SERVER]: Unknown node type\n";
-        return;
+        return false;
     }
 
     clientProtocol.response(std::string("ACK"));
     std::cout << "[SERVER]: Ack sent to client" << std::endl;
+
+    if (mex.args["nodeType"] == "CLIENT")
+        return true;
+    else
+        return false;
 }
 
 // -----------------------
@@ -279,13 +291,19 @@ void Server::getFileFromDataNode(std::string filePath, SquidProtocol clientProto
 
     std::cout << "file found on datanode" << std::endl;
     auto &fileHoldersMap = dataNodeReplicationMap[filePath];
-    clientProtocol.responseDispatcher(fileHoldersMap.begin()->second.readFile(filePath));
+    // clientProtocol.responseDispatcher(fileHoldersMap.begin()->second.readFile(filePath));
+
+    SquidProtocol dataNodeHolderProtocol = fileHoldersMap.begin()->second;
+    Message mex = dataNodeHolderProtocol.readFile(filePath);
+    if (mex.args["ACK"] != "ACK")
+        std::cerr << "Error while retriving file from datanode";
+    else
+        std::cout << "Retrived file from datanode holder";
 
     // if (readsLoadBalancingIterator == fileHoldersMap.end())
     //     readsLoadBalancingIterator = fileHoldersMap.begin();
     // clientProtocol.responseDispatcher(readsLoadBalancingIterator->second.readFile(filePath));
     // readsLoadBalancingIterator++;
-
 }
 
 void Server::updateFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol)
