@@ -115,7 +115,6 @@ void Server::run()
 // ------------------------------
 // --- COMMUNICATION HANDLING ---
 // ------------------------------
-
 void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
 {
     SquidProtocol primaryProtocol = SquidProtocol(new_socket, "[SERVER_PRIMARY]", "SERVER_PRIMARY");

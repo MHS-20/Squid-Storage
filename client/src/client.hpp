@@ -12,6 +12,7 @@
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
+#define CLIENT_PORT 8081
 #define BUFFER_SIZE 1024
 
 class Client : public Peer
@@ -31,14 +32,7 @@ public:
     virtual void syncStatus();
     virtual bool acquireLock(std::string filePath);
     virtual void releaseLock(std::string filePath);
-    // virtual void handleRequest(Message mex);
 
 private:
-    // int socket_fd = -1;
-    // struct sockaddr_in server_addr;
-    // char buffer[BUFFER_SIZE] = {0};
-
-    // FileLock file_lock;
-    // FileTransfer fileTransfer;
-    // SquidProtocol squidProtocol;
+    SquidProtocol secondarySquidProtocol;
 };

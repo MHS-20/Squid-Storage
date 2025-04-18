@@ -47,6 +47,7 @@ public:
     void sendMessageWithLength(string &message);
 
     virtual void response(bool lock);
+    virtual void response(int port);
     virtual void response(string ack);
     virtual void response(string nodeType, string processName);
     virtual void response(map<string, fs::file_time_type> filesLastWrite);

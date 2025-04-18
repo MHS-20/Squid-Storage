@@ -84,27 +84,3 @@ void Peer::handleRequest(Message mex)
     }
     squidProtocol.responseDispatcher(mex);
 }
-
-// void Peer::run()
-// {
-//     this->connectToServer();
-//     std::this_thread::sleep_for(std::chrono::seconds(1));
-//     Message mex = squidProtocol.receiveAndParseMessage();
-//     std::cout << nodeType + (": Identify  request received from server: " + mex.keyword) << std::endl;
-
-//     squidProtocol.response(std::string("Peer"), std::string("Peer"));
-//     mex = squidProtocol.receiveAndParseMessage();
-
-//     if (mex.args["ACK"] == "ACK")
-//         std::cout << nodeType + ": ACK received" << std::endl;
-
-//     handleRequest(squidProtocol.createFile("./test_txt/clientfile.txt"));
-//     // handleRequest(squidProtocol.updateFile("./test_txt/clientfile.txt"));
-//     handleRequest(squidProtocol.acquireLock("./test_txt/clientfile.txt"));
-//     handleRequest(squidProtocol.releaseLock("./test_txt/clientfile.txt"));
-//     // handleRequest(squidProtocol.heartbeat());
-//     // handleRequest(squidProtocol.readFile("./test_txt/clientfile.txt"));
-//     // handleRequest(squidProtocol.deleteFile("./test_txt/clientfile.txt"));
-//     // handleRequest(squidProtocol.syncStatus());
-//     handleRequest(squidProtocol.closeConn());
-// }
