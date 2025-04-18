@@ -164,7 +164,7 @@ std::string SquidProtocolFormatter::identifyFormat()
 
 std::string SquidProtocolFormatter::responseFormat(int port)
 {
-    return this->createMessage(RESPONSE, {"port:" + port});
+    return this->createMessage(RESPONSE, {"port:" + std::to_string(port)});
 }
 
 std::string SquidProtocolFormatter::responseFormat(std::string ack)

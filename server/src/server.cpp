@@ -82,6 +82,7 @@ void Server::run()
                 max_sd = sd;
         }
 
+        readfds = master_set;
         if (select(max_sd + 1, &readfds, NULL, NULL, NULL) < 0)
         {
             cerr << "[SERVER]: Select failed" << endl;

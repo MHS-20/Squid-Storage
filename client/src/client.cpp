@@ -52,10 +52,6 @@ void Client::initiateConnection()
         cerr << "[CLIENT]: Error: ACK not received" << endl;
 
     // accepting connection from server
-    mex = squidProtocol.receiveAndParseMessage();
-    if(to_string(mex.keyword) != "CONNECT")
-        cerr << "Error while connecting second channel" << endl;
-
     // listen on port
     int secondary_fd = socket(AF_INET, SOCK_STREAM, 0);
     sockaddr_in secondary_addr{};
@@ -73,6 +69,9 @@ void Client::initiateConnection()
         return;
     }
     cout << "[CLIENT]: Listening on port: " << CLIENT_PORT << endl;
+
+    mex = squidProtocol.receiveAndParseMessage();
+    cout << mex.keyword << endl;
     squidProtocol.response(CLIENT_PORT);
 
     // accept connection
