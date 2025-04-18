@@ -6,7 +6,6 @@ Server::Server(int port) : Server(port, DEFAULT_REPLICATION_FACTOR) {}
 
 Server::Server(int port, int replicationFactor) // : fileManager(FileManager::getInstance())
 {
-
     this->port = port;
     this->replicationFactor = replicationFactor;
     this->server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -338,6 +337,7 @@ void Server::deleteFileFromDataNodes(std::string filePath, SquidProtocol clientP
 
 void Server::createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol)
 { // round robin replication
+    std::lock_guard<std::mutex> lock(mapMutex);
     auto fileHoldersMap = std::map<std::string, SquidProtocol>();
 
     if (dataNodeEndpointMap.empty())

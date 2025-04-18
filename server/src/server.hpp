@@ -7,6 +7,7 @@
 #include <fstream>
 #include <map>
 #include <thread>
+#include <mutex>
 
 #include "filelock.hpp"
 #include "filemanager.hpp"
@@ -27,7 +28,7 @@ public:
     ~Server();
 
     void run();
-    //int getSocket();
+    // int getSocket();
 
     void buildFileLockMap();
     bool releaseLock(std::string path);
@@ -52,6 +53,7 @@ private:
     std::map<std::string, FileLock> fileLockMap;
     std::map<std::string, long long> fileTimeMap;
 
+    std::mutex mapMutex;
     // std::map<std::string, FileLock> fileMap;
     std::map<std::string, SquidProtocol> clientEndpointMap;
     std::map<std::string, SquidProtocol> dataNodeEndpointMap;
