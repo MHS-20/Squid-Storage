@@ -49,6 +49,9 @@ std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::
     case CLOSE:
         keywordValue = "CLOSE";
         break;
+    case CONNECT:
+        keywordValue = "CONNECT";
+        break;
     default:
         break;
     }
@@ -93,6 +96,8 @@ ProtocolKeyWord valueOf(const std::string &keyword)
         return RESPONSE;
     if (keyword == "CLOSE")
         return CLOSE;
+    if (keyword == "CONNECT")
+        return CONNECT;
 
     throw std::invalid_argument("Invalid keyword: " + keyword);
 }
@@ -100,6 +105,11 @@ ProtocolKeyWord valueOf(const std::string &keyword)
 std::string SquidProtocolFormatter::closeFormat()
 {
     return this->createMessage(CLOSE, {});
+}
+
+std::string SquidProtocolFormatter::connectServerFormat()
+{
+    return this->createMessage(CONNECT, {});
 }
 
 std::string SquidProtocolFormatter::createFileFormat(std::string filePath)
@@ -150,6 +160,11 @@ std::string SquidProtocolFormatter::syncStatusFormat()
 std::string SquidProtocolFormatter::identifyFormat()
 {
     return this->createMessage(IDENTIFY, {});
+}
+
+std::string SquidProtocolFormatter::responseFormat(int port)
+{
+    return this->createMessage(RESPONSE, {"port:" + port});
 }
 
 std::string SquidProtocolFormatter::responseFormat(std::string ack)

@@ -18,6 +18,7 @@
 #define BUFFER_SIZE 1024
 #define DEFAULT_PATH "./test_txt/test_server"
 #define DEFAULT_REPLICATION_FACTOR 3
+using namespace std;
 
 class Server
 {
@@ -28,16 +29,17 @@ public:
     ~Server();
 
     void run();
-    // int getSocket();
-
     void buildFileLockMap();
-    bool releaseLock(std::string path);
-    bool acquireLock(std::string path);
-    bool identify(SquidProtocol clientProtocol);
-    void createFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol);
-    void updateFileOnDataNodes(std::string filePath, SquidProtocol clientProtocol);
-    void getFileFromDataNode(std::string filePath, SquidProtocol clientProtocol);
-    void deleteFileFromDataNodes(std::string filePath, SquidProtocol clientProtocol);
+    bool releaseLock(string path);
+    bool acquireLock(string path);
+
+    void handleConnection(SquidProtocol clientProtocol);
+    void handleAccept(int new_socket, sockaddr_in peer_addr);
+    
+    void propagateCreateFile(string filePath, SquidProtocol clientProtocol);
+    void propagateUpdateFile(string filePath, SquidProtocol clientProtocol);
+    void getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
+    void propagateDeleteFile(string filePath, SquidProtocol clientProtocol);
 
 private:
     int port;
@@ -46,28 +48,29 @@ private:
 
     int replicationFactor;
     int server_fd, new_socket;
-    struct sockaddr_in address;
+    struct sockaddr_in address, peer_addr;
     socklen_t addrlen = sizeof(address);
-
     FileTransfer fileTransfer;
-    std::map<std::string, FileLock> fileLockMap;
-    std::map<std::string, long long> fileTimeMap;
+    
+    mutex mapMutex;
+    map<string, FileLock> fileLockMap;
+    map<string, long long> fileTimeMap;
 
-    std::mutex mapMutex;
-    // std::map<std::string, FileLock> fileMap;
-    std::map<std::string, SquidProtocol> clientEndpointMap;
-    std::map<std::string, SquidProtocol> dataNodeEndpointMap;
+    map<string, SquidProtocol> dataNodeEndpointMap;
+    map<string, pair<SquidProtocol, SquidProtocol>> clientEndpointMap;
+    
+    map<int, SquidProtocol> primarySocketMap;
+    //map<int, SquidProtocol> secondarySocketMap;
 
     // maps filename to datanode holding that file (datanode, socket)
-    std::map<std::string, std::map<std::string, SquidProtocol>> dataNodeReplicationMap;
+    map<string, map<string, SquidProtocol>> dataNodeReplicationMap;
 
     // iterators for round robin redundancy
-    std::map<std::string, SquidProtocol>::iterator endpointIterator;
-    std::map<std::string, SquidProtocol>::iterator readsLoadBalancingIterator;
+    map<string, SquidProtocol>::iterator endpointIterator;
 
-    void handleConnection(int client_socket);
-    void printMap(std::map<std::string, SquidProtocol> &map, std::string name);
-    void printMap(std::map<std::string, FileLock> &map, std::string name);
-    void printMap(std::map<std::string, std::map<std::string, SquidProtocol>> &map, std::string name);
-    void printMap(std::map<std::string, long long> &map, std::string name);
+    void printMap(map<string, long long> &map, string name);
+    void printMap(map<string, SquidProtocol> &map, string name);
+    void printMap(map<string, FileLock> &map, string name);
+    void printMap(map<string, map<string, SquidProtocol>> &map, string name);
+    void printMap(map<string, pair<SquidProtocol, SquidProtocol>> &map, string name);
 };

@@ -123,6 +123,15 @@ Message SquidProtocol::listFiles()
     return response;
 }
 
+Message SquidProtocol::connectServer()
+{
+    std::cout << nodeType + ": sending connect server request" << std::endl;
+    this->sendMessage(this->formatter.connectServerFormat());
+    Message response = receiveAndParseMessage();
+    std::cout << nodeType + ": received connect server response" << std::endl;
+    return response;
+}
+
 // executed by client
 Message SquidProtocol::syncStatus()
 {
@@ -184,7 +193,6 @@ Message SquidProtocol::syncStatus()
 Message SquidProtocol::receiveAndParseMessage()
 {
     std::string receivedMessage = receiveMessageWithLength();
-    std::cout << nodeType + ": Received message: " + receivedMessage << std::endl;
     return this->formatter.parseMessage(receivedMessage);
 }
 
@@ -263,9 +271,7 @@ void SquidProtocol::response(bool lock)
 
 void SquidProtocol::sendMessage(std::string message)
 {
-    // std::cout << "[DEBUG " + processName + "]: socket_fd = " << socket_fd << " in " << __FUNCTION__ << std::endl;
     sendMessageWithLength(message);
-    // send(this->socket_fd, message.c_str(), message.length(), 0);
 }
 
 void SquidProtocol::sendMessageWithLength(std::string &message)
@@ -291,7 +297,6 @@ void SquidProtocol::sendMessageWithLength(std::string &message)
         return;
     }
 
-    //std::cout << std::this_thread::get_id();
     std::cout << nodeType + ": Sent message with length: " << message.size() << std::endl;
 }
 

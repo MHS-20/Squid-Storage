@@ -94,7 +94,9 @@
     "print": "cpp",
     "queue": "cpp",
     "stack": "cpp",
-    "*.inc": "cpp"
+    "*.inc": "cpp",
+    "shared_mutex": "cpp",
+    "cfenv": "cpp"
   },
   "C_Cpp_Runner.cCompilerPath": "clang",
   "C_Cpp_Runner.cppCompilerPath": "clang++",
