@@ -45,7 +45,7 @@ std::map<std::string, fs::file_time_type> FileManager::getFilesLastWrite(std::st
     std::map<std::string, fs::file_time_type> filesLastWrite;
     for (auto file : files)
     {
-        if (file == ".DS_Store" || file == "SquidStorage" || file == "SquidStorageServer" || file == "imgui.ini")
+        if (file == ".DS_Store" || file == "SquidStorage" || file == "SquidStorageServer" || file == "imgui.ini" || file == "DataNode")
             continue;
         filesLastWrite[file] = fs::last_write_time(file);
     }
