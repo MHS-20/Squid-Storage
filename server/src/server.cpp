@@ -104,7 +104,7 @@ void Server::handleConnection(int new_socket)
         try
         {
             mex = clientProtocol.receiveAndParseMessage();
-            std::cout << std::this_thread::get_id();
+            //std::cout << std::this_thread::get_id();
             std::cout << "[SERVER]: Received message: " + mex.keyword << std::endl;
         }
         catch (std::exception &e)
@@ -169,14 +169,14 @@ bool Server::identify(SquidProtocol clientProtocol)
     {
         clientEndpointMap[mex.args["processName"]] = clientProtocol;
         printMap(clientEndpointMap, "Client Endpoint Map");
-        std::cout << std::this_thread::get_id();
+        //std::cout << std::this_thread::get_id();
         std::cout << " attached to client ";
     }
     else if (mex.args["nodeType"] == "DATANODE")
     {
         dataNodeEndpointMap[mex.args["processName"]] = clientProtocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
-        std::cout << std::this_thread::get_id();
+        //std::cout << std::this_thread::get_id();
         std::cout << " attached to datanode";
 
         std::cout << "[SERVER]: Building file map..." << std::endl;
@@ -297,7 +297,7 @@ void Server::getFileFromDataNode(std::string filePath, SquidProtocol clientProto
     if (mex.args["ACK"] != "ACK")
         std::cerr << "Error while retriving file from datanode";
     else
-        std::cout << "Retrived file from datanode holder";
+        std::cout << "Retrived file from datanode holder" << std::endl;
 
     // if (readsLoadBalancingIterator == fileHoldersMap.end())
     //     readsLoadBalancingIterator = fileHoldersMap.begin();
