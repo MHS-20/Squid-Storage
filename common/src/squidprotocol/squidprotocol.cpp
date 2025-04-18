@@ -83,11 +83,8 @@ Message SquidProtocol::readFile(std::string filePath)
     std::cout << nodeType + ": sending read file request" << std::endl;
     this->sendMessage(this->formatter.readFileFormat(filePath));
     Message response = receiveAndParseMessage();
-    std::cout << "received response 1" << std::endl;
     if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
-    
-    std::cout << "checking response 2" << std::endl;
     return receiveAndParseMessage();
 }
 
@@ -146,6 +143,7 @@ Message SquidProtocol::syncStatus()
                 if (localFile.second.time_since_epoch().count() > std::stoll(response.args[localFile.first]))
                 {
                     // in this case server needs to update the file
+                    std::cout << nodeType + ": server needs to update the file: " + localFile.first << std::endl;
                     this->updateFile(localFile.first);
                     // this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
                 }
@@ -153,6 +151,7 @@ Message SquidProtocol::syncStatus()
                 {
                     // in this case client needs to update the file
                     // this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
+                    std::cout << nodeType + ": client needs to update the file: " + localFile.first << std::endl;
                     this->readFile(localFile.first);
                 }
                 response.args.erase(localFile.first);
@@ -176,7 +175,7 @@ Message SquidProtocol::syncStatus()
         }
     }
     // return "ACK";
-    return formatter.parseMessage(formatter.responseFormat("ACK"));
+    return formatter.parseMessage(formatter.responseFormat(std::string("ACK")));
 }
 
 // ---------------------------
@@ -185,7 +184,7 @@ Message SquidProtocol::syncStatus()
 Message SquidProtocol::receiveAndParseMessage()
 {
     std::string receivedMessage = receiveMessageWithLength();
-    //std::cout << nodeType + ": Received message: " << receivedMessage << std::endl;
+    std::cout << nodeType + ": Received message: " + receivedMessage << std::endl;
     return this->formatter.parseMessage(receivedMessage);
 }
 
@@ -198,8 +197,8 @@ void checkBytesRead(ssize_t bytesRead, std::string nodeType)
     }
     else if (bytesRead < 0)
     {
-        //std::cerr << std::string(nodeType) + ": Failed to receive message";
-        throw std::runtime_error("Failed to receive message");
+        std::cerr << std::string(nodeType) + ": Failed to receive message";
+        //throw std::runtime_error("Failed to receive message");
     }
 }
 
@@ -292,7 +291,7 @@ void SquidProtocol::sendMessageWithLength(std::string &message)
         return;
     }
 
-    std::cout << std::this_thread::get_id();
+    //std::cout << std::this_thread::get_id();
     std::cout << nodeType + ": Sent message with length: " << message.size() << std::endl;
 }
 
@@ -357,6 +356,7 @@ void SquidProtocol::requestDispatcher(Message message)
         std::cout << nodeType + ": Connection closed" << std::endl;
         break;
     default:
+        std::cerr << nodeType + ": Unknown request: " + message.toString() << std::endl;
         break;
     }
 }
@@ -403,7 +403,7 @@ void SquidProtocol::responseDispatcher(Message response)
             std::cout << nodeType + ": Deleted file successfully on server" << std::endl;
         break;
     case ACQUIRE_LOCK:
-        if (response.args["LOCK"] != "true")
+        if (response.args["LOCK"] != "1")
             std::cerr << nodeType + ": Lock refused for file: " + response.args["filePath"] << std::endl;
         else
             std::cout << nodeType + ": Acquired lock successfully on server" << std::endl;
