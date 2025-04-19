@@ -339,13 +339,13 @@ void Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
 
 void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
 {
-    /*
+
     for (auto &client : clientEndpointMap)
     {
         if (client.second.first.getSocket() != clientProtocol.getSocket())
             client.second.second.updateFile(filePath);
     }
-    */
+
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.updateFile(filePath);
 
@@ -354,13 +354,13 @@ void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
 
 void Server::propagateDeleteFile(string filePath, SquidProtocol clientProtocol)
 {
-    /*
+
     for (auto &client : clientEndpointMap)
     {
         if (client.second.first.getSocket() != clientProtocol.getSocket())
             client.second.second.deleteFile(filePath);
     }
-    */
+
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.deleteFile(filePath);
 
@@ -396,13 +396,12 @@ void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
 
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.createFile(filePath);
-    /*
+
     for (auto &client : clientEndpointMap)
     {
         if (client.second.first.getSocket() != clientProtocol.getSocket())
             client.second.second.createFile(filePath);
     }
-    */
 }
 
 // -----------------------

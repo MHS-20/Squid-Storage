@@ -30,7 +30,7 @@ namespace SquidStorage
     {
         if (currentFrame == UPDATE_EVERY)
         {
-            client.syncStatus();
+            // client.syncStatus();
             currentFrame = 0;
             client.checkSecondarySocket();
         }
