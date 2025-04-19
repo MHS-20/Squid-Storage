@@ -36,6 +36,53 @@ void Client::run()
     }
 }
 
+void Client::checkSecondarySocket()
+{
+    if (secondarySquidProtocol.getSocket() < 0)
+    {
+        cerr << "[CLIENT]: Secondary socket is not initialized or closed" << endl;
+        return;
+    }
+
+    // Inizializza il set di file descriptor
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(secondarySquidProtocol.getSocket(), &readfds);
+
+    // Imposta un timeout di 0 secondi per rendere la chiamata non bloccante
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+
+    // Usa select per verificare se ci sono dati sulla socket
+    int activity = select(secondarySquidProtocol.getSocket() + 1, &readfds, NULL, NULL, &timeout);
+    if (activity < 0)
+    {
+        perror("[CLIENT]: Select error");
+        return;
+    }
+
+    // Se ci sono dati sulla socket secondaria
+    if (FD_ISSET(secondarySquidProtocol.getSocket(), &readfds))
+    {
+        try
+        {
+            // Ricevi e gestisci il messaggio
+            Message mex = secondarySquidProtocol.receiveAndParseMessage();
+            cout << "[CLIENT]: Received message on secondary socket: " + mex.keyword << endl;
+            secondarySquidProtocol.requestDispatcher(mex);
+        }
+        catch (exception &e)
+        {
+            cerr << "[CLIENT]: Error receiving message on secondary socket: " << e.what() << endl;
+        }
+    }
+    else
+    {
+        // Nessun messaggio disponibile
+        cout << "[CLIENT]: No messages on secondary socket" << endl;
+    }
+}
 void Client::initiateConnection()
 {
     this->connectToServer();
@@ -56,9 +103,10 @@ void Client::initiateConnection()
     int secondary_fd = socket(AF_INET, SOCK_STREAM, 0);
     sockaddr_in secondary_addr{};
     secondary_addr.sin_family = AF_INET;
-    secondary_addr.sin_port = htons(CLIENT_PORT);
+    // secondary_addr.sin_port = htons(CLIENT_PORT);
+    secondary_addr.sin_port = 0;
     secondary_addr.sin_addr.s_addr = INADDR_ANY;
-    if (bind(secondary_fd, (struct sockaddr *)&secondary_addr, sizeof(secondary_addr)) < 0)
+    if (::bind(secondary_fd, (struct sockaddr *)&secondary_addr, sizeof(secondary_addr)) < 0)
     {
         cerr << "[CLIENT]: Bind failed" << endl;
         return;
@@ -68,14 +116,23 @@ void Client::initiateConnection()
         cerr << "[CLIENT]: Listen failed" << endl;
         return;
     }
-    cout << "[CLIENT]: Listening on port: " << CLIENT_PORT << endl;
+
+    socklen_t addrlen = sizeof(secondary_addr);
+    if (getsockname(secondary_fd, (struct sockaddr *)&secondary_addr, &addrlen) == -1)
+    {
+        perror("[CLIENT]: getsockname failed");
+        return;
+    }
+
+    int assignedPort = ntohs(secondary_addr.sin_port);
+    cout << "[CLIENT]: Listening on port: " << assignedPort << endl;
 
     mex = squidProtocol.receiveAndParseMessage();
     cout << mex.keyword << endl;
-    squidProtocol.response(CLIENT_PORT);
+    squidProtocol.response(assignedPort);
 
     // accept connection
-    socklen_t addrlen = sizeof(server_addr);
+    addrlen = sizeof(server_addr);
     int new_socket = accept(secondary_fd, (struct sockaddr *)&server_addr, (socklen_t *)&addrlen);
     if (new_socket < 0)
     {

@@ -32,7 +32,9 @@ namespace SquidStorage
         {
             client.syncStatus();
             currentFrame = 0;
+            client.checkSecondarySocket();
         }
+
         currentFrame++;
         static bool opt_fullscreen = true;
         static bool opt_padding = false;

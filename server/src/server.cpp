@@ -54,7 +54,7 @@ Server::~Server()
 void Server::run()
 {
     cout << "[SERVER]: Server Starting..." << endl;
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
+    if (::bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         perror("bind failed");
         return;
@@ -142,7 +142,19 @@ void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
     cout << "[SERVER]: Ack sent to client" << endl;
 
     cout << "[SERVER]: Connecting to client..." << endl;
-    int secondaryPort = stoi(primaryProtocol.connectServer().args["port"]);
+    Message connectResponse = primaryProtocol.connectServer();
+    if (connectResponse.args.find("port") == connectResponse.args.end())
+    {
+        cerr << "[SERVER]: Port not found in connect response" << endl;
+        return;
+    }
+    std::string portStr = connectResponse.args["port"];
+    if (portStr.empty() || !std::all_of(portStr.begin(), portStr.end(), ::isdigit))
+    {
+        cerr << "[SERVER]: Error: Invalid port value received: " << portStr << endl;
+        return;
+    }
+    int secondaryPort = stoi(portStr);
     cout << "[SERVER]: Client port: " << secondaryPort << endl;
 
     // Create second connection
@@ -160,7 +172,7 @@ void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
     SquidProtocol secondaryProtocol = SquidProtocol(second_fd, "[SERVER_SECONDARY]", "SERVER_SECONDARY");
     clientEndpointMap[mex.args["processName"]] = pair(primaryProtocol, secondaryProtocol);
     primarySocketMap[new_socket] = primaryProtocol;
-    //secondarySocketMap[second_fd] = secondaryProtocol;
+    // secondarySocketMap[second_fd] = secondaryProtocol;
 }
 
 void Server::handleConnection(SquidProtocol clientProtocol)
