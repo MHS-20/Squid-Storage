@@ -6,33 +6,30 @@ Client::Client(const char *server_ip, int port) : Peer(server_ip, port, "CLIENT"
 Client::Client(string nodeType, string processName) : Peer(nodeType, processName) {}
 Client::Client(const char *server_ip, int port, string nodeType, string processName) : Peer(server_ip, port, nodeType, processName) {}
 
-// for testing
 void Client::run()
 {
     Message mex;
-    this->connectToServer();
-    this_thread::sleep_for(chrono::seconds(1));
-
+    cout << "[CLIENT]: Secondary socket thread started" << endl;
     while (true)
     {
-        cout << "[CLIENT]: Waiting for messages..." << endl;
-        if (squidProtocol.getSocket() < 0) // connection closed
+        cout << "[CLIENT]: Secondary socket waiting for messages..." << endl;
+        if (secondarySquidProtocol.getSocket() < 0) // connection closed
         {
-            cout << "[CLIENT]: Closing & Terminating" << endl;
+            cout << "[CLIENT]: Secondary socket Closing & Terminating" << endl;
             break;
         }
 
         try
         {
-            mex = squidProtocol.receiveAndParseMessage();
-            cout << "[CLIENT]: Received message: " + mex.keyword << endl;
+            mex = secondarySquidProtocol.receiveAndParseMessage();
+            cout << "[CLIENT]: Secondary socket Received message: " + mex.keyword << endl;
+            secondarySquidProtocol.requestDispatcher(mex);
         }
         catch (exception &e)
         {
-            cerr << "[CLIENT]: Error receiving message: " << e.what() << endl;
+            cerr << "[CLIENT]: Secondary socket Error receiving message: " << e.what() << endl;
             break;
         }
-        squidProtocol.requestDispatcher(mex);
     }
 }
 

@@ -23,6 +23,18 @@ namespace SquidStorage
     void runClient()
     {
         client.initiateConnection();
+
+        std::thread secondarySocketThread([]()
+                                          {
+                                            try
+                                            {
+                                                client.run();
+                                            }
+                                            catch (const std::exception &e)
+                                            {
+                                                std::cerr << "[CLIENT]: Error in secondary socket thread: " << e.what() << std::endl;
+                                            } });
+        secondarySocketThread.detach();
         client.syncStatus();
     }
 
@@ -32,7 +44,7 @@ namespace SquidStorage
         {
             // client.syncStatus();
             currentFrame = 0;
-            client.checkSecondarySocket();
+            // client.checkSecondarySocket();
         }
 
         currentFrame++;

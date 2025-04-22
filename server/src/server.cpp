@@ -193,6 +193,7 @@ void Server::handleConnection(SquidProtocol clientProtocol)
     catch (exception &e)
     {
         cerr << "[SERVER]: Error receiving message: " << e.what() << endl;
+        // return;
     }
 
     switch (mex.keyword)

@@ -207,7 +207,7 @@ void checkBytesRead(ssize_t bytesRead, string nodeType)
     else if (bytesRead < 0)
     {
         cerr << string(nodeType) + ": Failed to receive message";
-        //throw runtime_error("Failed to receive message");
+        // throw runtime_error("Failed to receive message");
     }
 }
 
@@ -219,7 +219,7 @@ string SquidProtocol::receiveMessageWithLength()
     checkBytesRead(bytesRead, nodeType);
 
     messageLength = ntohl(messageLength);
-    //cout << nodeType + ": Expecting message of length: " << messageLength << endl;
+    // cout << nodeType + ": Expecting message of length: " << messageLength << endl;
 
     // Read the actual message
     char *buffer = new char[messageLength + 1];
@@ -259,7 +259,8 @@ void SquidProtocol::response(map<string, fs::file_time_type> filesLastWrite)
     this->sendMessage(this->formatter.responseFormat(filesLastWrite));
 }
 
-void SquidProtocol::response(map<string, long long> fileTimeMap){
+void SquidProtocol::response(map<string, long long> fileTimeMap)
+{
     this->sendMessage(this->formatter.responseFormat(fileTimeMap));
 }
 
@@ -286,7 +287,7 @@ void SquidProtocol::sendMessageWithLength(string &message)
         cerr << nodeType + "[ERROR]: Invalid socket_fd" << endl;
         return;
     }
-    
+
     // Send the length of the message
     if (send(socket_fd, &messageLength, sizeof(messageLength), 0) < 0)
     {
@@ -301,7 +302,7 @@ void SquidProtocol::sendMessageWithLength(string &message)
         return;
     }
 
-    //cout << nodeType + ": Sent message with length: " << message.size() << endl;
+    // cout << nodeType + ": Sent message with length: " << message.size() << endl;
 }
 
 // -------------------------------
