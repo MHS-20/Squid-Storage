@@ -219,8 +219,7 @@ string SquidProtocol::receiveMessageWithLength()
     checkBytesRead(bytesRead, nodeType);
 
     messageLength = ntohl(messageLength);
-    // cout << this_thread::get_id();
-    cout << nodeType + ": Expecting message of length: " << messageLength << endl;
+    //cout << nodeType + ": Expecting message of length: " << messageLength << endl;
 
     // Read the actual message
     char *buffer = new char[messageLength + 1];
@@ -231,7 +230,6 @@ string SquidProtocol::receiveMessageWithLength()
     string message(buffer);
     delete[] buffer;
 
-   // cout << this_thread::get_id();
     cout << "[INFO]: Received message: " << message << endl;
     return message;
 }
@@ -303,7 +301,7 @@ void SquidProtocol::sendMessageWithLength(string &message)
         return;
     }
 
-    cout << nodeType + ": Sent message with length: " << message.size() << endl;
+    //cout << nodeType + ": Sent message with length: " << message.size() << endl;
 }
 
 // -------------------------------

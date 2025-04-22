@@ -66,7 +66,7 @@ std::string SquidProtocolFormatter::createMessage(ProtocolKeyWord keyword, std::
         message.pop_back();
     message += ">";
 
-    std::cout <<  "FORMATTER: " + message << std::endl;
+    // std::cout <<  "FORMATTER: " + message << std::endl;
     return message;
 }
 

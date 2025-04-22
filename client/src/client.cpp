@@ -91,7 +91,7 @@ void Client::initiateConnection()
     // indetifying to server
     Message mex = squidProtocol.receiveAndParseMessage();
     cout << "[CLIENT]: Identify request received from server: " + mex.keyword << endl;
-    squidProtocol.response(string("CLIENT"), string("CLIENT"));
+    squidProtocol.response(string("CLIENT"), string(processName));
     mex = squidProtocol.receiveAndParseMessage();
     if (mex.args["ACK"] == "ACK")
         cout << "[CLIENT]: ACK received" << endl;

@@ -16,7 +16,7 @@ namespace SquidStorage
     bool newFileButtonPressed = false;
     bool deleteButtonPressed = false;
     char newFileName[128];
-    Client client("127.0.0.1", 12345);
+    Client client("127.0.0.1", 12345, "CLIENT", currentPath);
     FileLock fileLock;
     int currentFrame = 0;
 

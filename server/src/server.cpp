@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include <algorithm>
 using namespace std;
 
 Server::Server() : Server(DEFAULT_PORT, DEFAULT_REPLICATION_FACTOR) {}
@@ -234,9 +235,10 @@ void Server::handleConnection(SquidProtocol clientProtocol)
     }
 
     cout << "[SERVER]: Request dispatched" << endl;
-    // printMap(fileLockMap, "File Lock Map");
-    // printMap(fileTimeMap, "File Time Map");
-    // printMap(dataNodeReplicationMap, "DataNode Replication Map");
+    printMap(fileLockMap, "File Lock Map");
+    printMap(fileTimeMap, "File Time Map");
+    printMap(dataNodeReplicationMap, "DataNode Replication Map");
+    printMap(clientEndpointMap, "Client Endpoint Map");
 };
 
 // -----------------------
@@ -343,7 +345,7 @@ void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
     for (auto &client : clientEndpointMap)
     {
         if (client.second.first.getSocket() != clientProtocol.getSocket())
-            client.second.second.updateFile(filePath);
+            client.second.second.updateFile(filePath); // second channel
     }
 
     for (auto &datanode : dataNodeReplicationMap[filePath])
@@ -354,11 +356,10 @@ void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
 
 void Server::propagateDeleteFile(string filePath, SquidProtocol clientProtocol)
 {
-
     for (auto &client : clientEndpointMap)
     {
         if (client.second.first.getSocket() != clientProtocol.getSocket())
-            client.second.second.deleteFile(filePath);
+            client.second.second.deleteFile(filePath); // second channel
     }
 
     for (auto &datanode : dataNodeReplicationMap[filePath])
@@ -380,9 +381,7 @@ void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
     for (int i = 0; i < replicationFactor; i++)
     {
         if (endpointIterator == dataNodeEndpointMap.end())
-        {
             endpointIterator = dataNodeEndpointMap.begin();
-        }
 
         fileHoldersMap.insert({endpointIterator->first, endpointIterator->second});
         endpointIterator++;
@@ -391,16 +390,17 @@ void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
     cout << "iterated" << endl;
     dataNodeReplicationMap.insert({filePath, fileHoldersMap});
 
-    fileLockMap.insert({filePath, FileLock(filePath)});
-    fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
-
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.createFile(filePath);
+
+    fileLockMap.insert({filePath, FileLock(filePath)});
+    fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
+    printMap(fileLockMap, "File Lock Map");
 
     for (auto &client : clientEndpointMap)
     {
         if (client.second.first.getSocket() != clientProtocol.getSocket())
-            client.second.second.createFile(filePath);
+            client.second.second.createFile(filePath); // second channel
     }
 }
 
