@@ -6,7 +6,9 @@ Server::Server() : Server(DEFAULT_PORT, DEFAULT_REPLICATION_FACTOR) {}
 
 Server::Server(int port) : Server(port, DEFAULT_REPLICATION_FACTOR) {}
 
-Server::Server(int port, int replicationFactor)
+Server::Server(int port, int replicationFactor) : Server(port, replicationFactor, DEFAULT_TIMEOUT) {}
+
+Server::Server(int port, int replicationFactor, int timeoutSeconds)
 {
     this->port = port;
     this->replicationFactor = replicationFactor;
@@ -31,6 +33,21 @@ Server::Server(int port, int replicationFactor)
         exit(EXIT_FAILURE);
     }
 #endif
+
+    struct timeval timeout;
+    timeout.tv_sec = timeoutSeconds; 
+    timeout.tv_usec = 0;
+
+    if (setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
+    {
+        perror("[SERVER]: setsockopt failed (SO_RCVTIMEO)");
+        exit(EXIT_FAILURE);
+    }
+    if (setsockopt(server_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
+    {
+        perror("[SERVER]: setsockopt failed (SO_SNDTIMEO)");
+        exit(EXIT_FAILURE);
+    }
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
@@ -111,6 +128,20 @@ void Server::run()
                 }
             }
         }
+
+        // send hearbeat to all datanodes
+        for (auto &datanode : dataNodeEndpointMap)
+        {
+            Message heartbeat = datanode.second.heartbeat();
+            if (heartbeat.args["ACK"] != "ACK")
+            {
+                cout << "[SERVER]: Heartbeat failed for datanode: " + datanode.first << endl;
+                datanode.second.setIsAlive(false);
+                //dataNodeEndpointMap.erase(datanode.first);
+                //cout << "[SERVER]: Datanode removed from map: " + datanode.first << endl;
+            }
+        }
+        cout << "[SERVER]: Heartbeat sent to all datanodes" << endl;
     }
 }
 
@@ -332,7 +363,23 @@ void Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
     cout << "file found on datanode" << endl;
     auto &fileHoldersMap = dataNodeReplicationMap[filePath];
 
-    SquidProtocol dataNodeHolderProtocol = fileHoldersMap.begin()->second;
+    bool check = false;
+    SquidProtocol dataNodeHolderProtocol;
+
+    for(auto &datanode : fileHoldersMap)
+    {
+        if(datanode.second.isAlive()){
+            dataNodeHolderProtocol = datanode.second;
+            check = true;
+            break;
+        }
+    }
+
+    if(!check){
+        cerr << "No datanode is alive for: " + filePath;
+        return;
+    }
+    
     Message mex = dataNodeHolderProtocol.readFile(filePath);
     if (mex.args["ACK"] != "ACK")
         cerr << "Error while retriving file from datanode";

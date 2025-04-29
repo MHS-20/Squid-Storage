@@ -14,6 +14,7 @@
 #include "filetransfer.hpp"
 #include "squidProtocolServer.cpp"
 
+#define DEFAULT_TIMEOUT 60
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
 #define DEFAULT_PATH "./test_txt/test_server"
@@ -25,6 +26,7 @@ class Server
 public:
     Server(int port);
     Server(int port, int replicationFactor);
+    Server(int port, int replicationFactor, int timeoutSeconds);
     Server();
     ~Server();
 

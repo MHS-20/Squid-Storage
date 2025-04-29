@@ -17,6 +17,7 @@ public:
     SquidProtocol(int socket_fd, string nodeType, string processName);
 
     virtual bool isAlive();
+    virtual void setIsAlive(bool isAlive);
     virtual int getSocket();
     virtual string toString() const;
 

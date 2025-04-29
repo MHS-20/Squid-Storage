@@ -21,6 +21,11 @@ bool SquidProtocol::isAlive()
     return alive;
 }
 
+void SquidProtocol::setIsAlive(bool isAlive){
+    this->alive = isAlive;
+}
+
+
 int SquidProtocol::getSocket()
 {
     return socket_fd;
@@ -197,18 +202,21 @@ Message SquidProtocol::receiveAndParseMessage()
     return this->formatter.parseMessage(receivedMessage);
 }
 
-void checkBytesRead(ssize_t bytesRead, string nodeType)
+bool checkBytesRead(ssize_t bytesRead, string nodeType)
 {
     if (bytesRead == 0)
     {
         cerr << nodeType + ": Connection closed by peer" << endl;
-        throw runtime_error("Connection closed by peer");
+        //throw runtime_error("Connection closed by peer");
+        return false;
     }
     else if (bytesRead < 0)
     {
         cerr << string(nodeType) + ": Failed to receive message";
         // throw runtime_error("Failed to receive message");
+        return false;
     }
+    return true;
 }
 
 string SquidProtocol::receiveMessageWithLength()
@@ -224,7 +232,11 @@ string SquidProtocol::receiveMessageWithLength()
     // Read the actual message
     char *buffer = new char[messageLength + 1];
     bytesRead = recv(socket_fd, buffer, messageLength, 0);
-    checkBytesRead(bytesRead, nodeType);
+    if(!checkBytesRead(bytesRead, nodeType))
+    {
+        delete[] buffer;
+        return "ACK:NACK";
+    }
 
     buffer[messageLength] = '\0';
     string message(buffer);
