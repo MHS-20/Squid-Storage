@@ -8,6 +8,8 @@
 #include <map>
 #include <thread>
 #include <mutex>
+#include <fcntl.h>
+#include <cerrno>
 
 #include "filelock.hpp"
 #include "filemanager.hpp"
@@ -37,7 +39,11 @@ public:
 
     void handleConnection(SquidProtocol clientProtocol);
     void handleAccept(int new_socket, sockaddr_in peer_addr);
-    
+
+    void sendHearbeats();
+    void eraseFromReplicationMap(string datanodeName);
+    void checkCloseConnetions(fd_set &master_set, int max_sd);
+
     void propagateCreateFile(string filePath, SquidProtocol clientProtocol);
     void propagateUpdateFile(string filePath, SquidProtocol clientProtocol);
     void getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
@@ -53,16 +59,16 @@ private:
     struct sockaddr_in address, peer_addr;
     socklen_t addrlen = sizeof(address);
     FileTransfer fileTransfer;
-    
+
     mutex mapMutex;
     map<string, FileLock> fileLockMap;
     map<string, long long> fileTimeMap;
 
     map<string, SquidProtocol> dataNodeEndpointMap;
     map<string, pair<SquidProtocol, SquidProtocol>> clientEndpointMap;
-    
+
     map<int, SquidProtocol> primarySocketMap;
-    //map<int, SquidProtocol> secondarySocketMap;
+    // map<int, SquidProtocol> secondarySocketMap;
 
     // maps filename to datanode holding that file (datanode, socket)
     map<string, map<string, SquidProtocol>> dataNodeReplicationMap;

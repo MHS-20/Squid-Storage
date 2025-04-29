@@ -18,11 +18,18 @@ public:
 
     virtual bool isAlive();
     virtual void setIsAlive(bool isAlive);
+
     virtual int getSocket();
+    virtual void setSocket(int socket_fd);
+
+    virtual string getProcessName() const { return processName; }
+    virtual string getNodeType() const { return nodeType; }
+
     virtual string toString() const;
 
     virtual Message receiveAndParseMessage();
     virtual string receiveMessageWithLength();
+    bool handleErrors(ssize_t bytesRead);
 
     virtual void requestDispatcher(Message request);
     virtual void responseDispatcher(Message response);

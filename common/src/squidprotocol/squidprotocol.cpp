@@ -21,14 +21,19 @@ bool SquidProtocol::isAlive()
     return alive;
 }
 
-void SquidProtocol::setIsAlive(bool isAlive){
+void SquidProtocol::setIsAlive(bool isAlive)
+{
     this->alive = isAlive;
 }
-
 
 int SquidProtocol::getSocket()
 {
     return socket_fd;
+}
+
+void SquidProtocol::setSocket(int socket_fd)
+{
+    this->socket_fd = socket_fd;
 }
 
 string SquidProtocol::toString() const
@@ -54,10 +59,8 @@ Message SquidProtocol::identify()
 
 Message SquidProtocol::createFile(string filePath)
 {
-    cout << nodeType + ": sending create file request" << endl;
     cout << "file name: " + filePath << endl;
     this->sendMessage(this->formatter.createFileFormat(filePath));
-    // cout << nodeType + ": sent create file request" << endl;
     Message response = receiveAndParseMessage();
     cout << nodeType + ": received create file response" << endl;
     transferFile(filePath, response);
@@ -119,6 +122,15 @@ Message SquidProtocol::heartbeat()
     return receiveAndParseMessage();
 }
 
+Message SquidProtocol::connectServer()
+{
+    cout << nodeType + ": sending connect server request" << endl;
+    this->sendMessage(this->formatter.connectServerFormat());
+    Message response = receiveAndParseMessage();
+    cout << nodeType + ": received connect server response" << endl;
+    return response;
+}
+
 // executed by server
 Message SquidProtocol::listFiles()
 {
@@ -126,15 +138,6 @@ Message SquidProtocol::listFiles()
     this->sendMessage(this->formatter.syncStatusFormat());
     Message response = receiveAndParseMessage();
     cout << nodeType + ": received list files response" << endl;
-    return response;
-}
-
-Message SquidProtocol::connectServer()
-{
-    cout << nodeType + ": sending connect server request" << endl;
-    this->sendMessage(this->formatter.connectServerFormat());
-    Message response = receiveAndParseMessage();
-    cout << nodeType + ": received connect server response" << endl;
     return response;
 }
 
@@ -189,7 +192,6 @@ Message SquidProtocol::syncStatus()
             }
         }
     }
-    // return "ACK";
     return formatter.parseMessage(formatter.responseFormat(string("ACK")));
 }
 
@@ -202,29 +204,15 @@ Message SquidProtocol::receiveAndParseMessage()
     return this->formatter.parseMessage(receivedMessage);
 }
 
-bool checkBytesRead(ssize_t bytesRead, string nodeType)
-{
-    if (bytesRead == 0)
-    {
-        cerr << nodeType + ": Connection closed by peer" << endl;
-        //throw runtime_error("Connection closed by peer");
-        return false;
-    }
-    else if (bytesRead < 0)
-    {
-        cerr << string(nodeType) + ": Failed to receive message";
-        // throw runtime_error("Failed to receive message");
-        return false;
-    }
-    return true;
-}
-
 string SquidProtocol::receiveMessageWithLength()
 {
     // Read the length of the message
     uint32_t messageLength;
     ssize_t bytesRead = recv(socket_fd, &messageLength, sizeof(messageLength), 0);
-    checkBytesRead(bytesRead, nodeType);
+    if (!handleErrors(bytesRead))
+    {
+        return formatter.responseFormat(string("NACK"));
+    }
 
     messageLength = ntohl(messageLength);
     // cout << nodeType + ": Expecting message of length: " << messageLength << endl;
@@ -232,10 +220,9 @@ string SquidProtocol::receiveMessageWithLength()
     // Read the actual message
     char *buffer = new char[messageLength + 1];
     bytesRead = recv(socket_fd, buffer, messageLength, 0);
-    if(!checkBytesRead(bytesRead, nodeType))
+    if (!handleErrors(bytesRead))
     {
-        delete[] buffer;
-        return "ACK:NACK";
+        return formatter.responseFormat(string("NACK"));
     }
 
     buffer[messageLength] = '\0';
@@ -244,6 +231,31 @@ string SquidProtocol::receiveMessageWithLength()
 
     cout << "[INFO]: Received message: " << message << endl;
     return message;
+}
+
+bool SquidProtocol::handleErrors(ssize_t bytesRead)
+{
+    if (bytesRead == 0)
+    {
+        cerr << nodeType + ": Connection closed by peer" << endl;
+        close(socket_fd);
+        alive = false;
+        // socket_fd = -1;
+        return false;
+    }
+    else if (bytesRead < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            cerr << nodeType + "Socket timeout" << endl;
+            close(socket_fd);
+            alive = false;
+            // socket_fd = -1;
+        }
+        return false;
+    }
+
+    return true;
 }
 
 // -----------------------------
@@ -293,27 +305,16 @@ void SquidProtocol::sendMessage(string message)
 
 void SquidProtocol::sendMessageWithLength(string &message)
 {
-    uint32_t messageLength = htonl(message.size());
-    if (socket_fd < 0)
-    {
-        cerr << nodeType + "[ERROR]: Invalid socket_fd" << endl;
-        return;
-    }
-
     // Send the length of the message
-    if (send(socket_fd, &messageLength, sizeof(messageLength), 0) < 0)
-    {
-        cerr << nodeType + "[ERROR]: Failed to send message length" << endl;
+    uint32_t messageLength = htonl(message.size());
+    ssize_t bytesRead = send(socket_fd, &messageLength, sizeof(messageLength), 0);
+    if (!handleErrors(bytesRead))
         return;
-    }
 
     // Send the actual message
-    if (send(socket_fd, message.c_str(), message.size(), 0) < 0)
-    {
-        cerr << nodeType + "[ERROR]: Failed to send message" << endl;
+    bytesRead = send(socket_fd, message.c_str(), message.size(), 0);
+    if (!handleErrors(bytesRead))
         return;
-    }
-
     // cout << nodeType + ": Sent message with length: " << message.size() << endl;
 }
 
@@ -371,10 +372,17 @@ void SquidProtocol::requestDispatcher(Message message)
     case IDENTIFY:
         this->response(this->nodeType, this->processName);
         break;
+    case RESPONSE:
+        cerr << "Connection lost, aborting" << endl;
+        close(this->socket_fd);
+        // socket_fd = -1;
+        alive = false;
+        break;
     case CLOSE:
         this->response(string("ACK"));
         close(this->socket_fd);
-        socket_fd = -1;
+        // socket_fd = -1;
+        alive = false;
         cout << nodeType + ": Connection closed" << endl;
         break;
     default:
@@ -466,7 +474,8 @@ void SquidProtocol::responseDispatcher(Message response)
         else
         {
             close(this->socket_fd);
-            socket_fd = -1;
+            // socket_fd = -1;
+            alive = false;
             cout << nodeType + ": Connection closed successfully" << endl;
         }
         break;

@@ -15,4 +15,4 @@ rm -rf ../test_txt/test_client1/SquidStorage
 rm -rf ../test_txt/test_client2/SquidStorage
 rm -rf ../test_txt/test_server/SquidStorageServer
 rm -rf ../test_txt/test_datanode/DataNode
-make clean
+#make clean

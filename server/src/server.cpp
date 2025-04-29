@@ -35,7 +35,7 @@ Server::Server(int port, int replicationFactor, int timeoutSeconds)
 #endif
 
     struct timeval timeout;
-    timeout.tv_sec = timeoutSeconds; 
+    timeout.tv_sec = timeoutSeconds;
     timeout.tv_usec = 0;
 
     if (setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
@@ -104,44 +104,92 @@ void Server::run()
         if (select(max_sd + 1, &readfds, NULL, NULL, NULL) < 0)
         {
             cerr << "[SERVER]: Select failed" << endl;
-            continue;
+            checkCloseConnetions(master_set, max_sd);
         }
-
-        for (int i = 0; i <= max_sd; i++)
-        {
-            if (FD_ISSET(i, &readfds))
+        else
+            for (int i = 0; i <= max_sd; i++)
             {
-                if (i == server_fd)
+                if (FD_ISSET(i, &readfds))
                 {
-                    // new connection
-                    new_socket = accept(server_fd, (struct sockaddr *)&peer_addr, &addrlen);
-                    cout << "Accepted connection: " << new_socket << "...\n";
-                    max_sd = max(max_sd, new_socket);
-                    handleAccept(new_socket, peer_addr);
-                }
-                else
-                {
-                    // handle the connection
-                    auto client = primarySocketMap.find(i);
-                    if (client != primarySocketMap.end())
-                        handleConnection(client->second);
+                    if (i == server_fd)
+                    {
+                        // new connection
+                        new_socket = accept(server_fd, (struct sockaddr *)&peer_addr, &addrlen);
+                        cout << "Accepted connection: " << new_socket << "...\n";
+                        max_sd = max(max_sd, new_socket);
+                        handleAccept(new_socket, peer_addr);
+                    }
+                    else
+                    {
+                        // handle the connection
+                        auto client = primarySocketMap.find(i);
+                        if (client != primarySocketMap.end())
+                            handleConnection(client->second);
+                    }
                 }
             }
-        }
 
         // send hearbeat to all datanodes
-        for (auto &datanode : dataNodeEndpointMap)
+        sendHearbeats();
+        cout << "size:" + primarySocketMap.size() << endl;
+    }
+}
+
+void Server::checkCloseConnetions(fd_set &master_set, int max_sd)
+{
+    std::cout << "[DEBUG]: Checking file descriptors in fd_set..." << std::endl;
+    for (int fd = 0; fd <= max_sd; ++fd)
+    {
+        if (FD_ISSET(fd, &master_set))
         {
-            Message heartbeat = datanode.second.heartbeat();
-            if (heartbeat.args["ACK"] != "ACK")
+            // Check if the file descriptor is valid
+            if (fcntl(fd, F_GETFD) == -1)
             {
-                cout << "[SERVER]: Heartbeat failed for datanode: " + datanode.first << endl;
-                datanode.second.setIsAlive(false);
-                //dataNodeEndpointMap.erase(datanode.first);
-                //cout << "[SERVER]: Datanode removed from map: " + datanode.first << endl;
+                // cerr << "[ERROR]: Invalid file descriptor: " << fd
+                //           << " (errno: " << errno << " - " << strerror(errno) << ")" << std::endl;
+                FD_CLR(fd, &master_set);
+                primarySocketMap[fd].setIsAlive(false);
+                clientEndpointMap.erase(primarySocketMap[fd].getProcessName());
+                primarySocketMap.erase(fd);
+            }
+            else
+            {
+                cout << "[INFO]: Valid file descriptor: " << fd << std::endl;
             }
         }
-        cout << "[SERVER]: Heartbeat sent to all datanodes" << endl;
+    }
+}
+
+void Server::sendHearbeats()
+{
+    for (auto &datanode : dataNodeEndpointMap)
+    {
+        Message heartbeat = datanode.second.heartbeat();
+        if (heartbeat.args["ACK"] != "ACK")
+        {
+            cout << "[SERVER]: Heartbeat failed for datanode: " + datanode.first << endl;
+            datanode.second.setIsAlive(false);
+            datanode.second.closeConn();
+            dataNodeEndpointMap.erase(datanode.first);
+            datanode.second.setSocket(-1);
+            eraseFromReplicationMap(datanode.second.getProcessName());
+            cout << "[SERVER]: Datanode removed from map: " + datanode.first << endl;
+        }
+    }
+    cout << "[SERVER]: Heartbeat sent to all datanodes" << endl;
+}
+
+void Server::eraseFromReplicationMap(string datanodeName)
+{
+    for (auto it = dataNodeReplicationMap.begin(); it != dataNodeReplicationMap.end();)
+    {
+        auto datanode = it->second.find(datanodeName);
+        if (datanode != it->second.end())
+        {
+            it->second.erase(datanode); // erase from internal map
+            cout << "[SERVER]: Datanode removed from replication map of file: " + it->first << endl;
+        }
+        ++it;
     }
 }
 
@@ -366,20 +414,22 @@ void Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
     bool check = false;
     SquidProtocol dataNodeHolderProtocol;
 
-    for(auto &datanode : fileHoldersMap)
+    for (auto &datanode : fileHoldersMap)
     {
-        if(datanode.second.isAlive()){
+        if (datanode.second.isAlive())
+        {
             dataNodeHolderProtocol = datanode.second;
             check = true;
             break;
         }
     }
 
-    if(!check){
+    if (!check)
+    {
         cerr << "No datanode is alive for: " + filePath;
         return;
     }
-    
+
     Message mex = dataNodeHolderProtocol.readFile(filePath);
     if (mex.args["ACK"] != "ACK")
         cerr << "Error while retriving file from datanode";
