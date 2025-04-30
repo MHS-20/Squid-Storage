@@ -41,9 +41,7 @@ namespace SquidStorage
     {
         if (currentFrame == UPDATE_EVERY)
         {
-            // client.syncStatus();
             currentFrame = 0;
-            cout << "[CLIENT]: checking secondary socket" << endl;
             client.checkSecondarySocket();
         }
 

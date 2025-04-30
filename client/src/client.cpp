@@ -15,8 +15,9 @@ void Client::run()
         while (!secondarySquidProtocol.isAlive()) // connection lost
         {
             cout << "[CLIENT]: Secondary socket: Connection lost" << endl;
-            this_thread::sleep_for(chrono::seconds(3));
-            //this->initiateConnection();
+            this_thread::sleep_for(chrono::seconds(5));
+            this->initiateConnection();
+            if(secondarySquidProtocol.isAlive()) this->syncStatus();
         }
     
         cout << "[CLIENT]: Secondary socket: waiting for messages..." << endl;
@@ -38,8 +39,10 @@ void Client::checkSecondarySocket()
 {
     while (!secondarySquidProtocol.isAlive())
     {
-        cout << "[CLIENT]: Secondary socket is not alive, closing and reconnecting" << endl;
-        this->initiateConnection();
+        cout << "[CLIENT]: Lost connection, reconnecting..." << endl;
+        this_thread::sleep_for(chrono::seconds(5));
+        // this->initiateConnection();
+        // if(secondarySquidProtocol.isAlive()) this->syncStatus();
     }
 
     // select mask

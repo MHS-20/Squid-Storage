@@ -11,8 +11,8 @@ gnome-terminal --tab --title="DataNode" -- bash -c "cd ../test_txt/test_datanode
 gnome-terminal --tab --title="Client" -- bash -c "cd ../test_txt/test_client1 && ./SquidStorage; exec bash"
 gnome-terminal --tab --title="Client" -- bash -c "cd ../test_txt/test_client2 && ./SquidStorage; exec bash"
 
-rm -rf ../test_txt/test_client1/SquidStorage
-rm -rf ../test_txt/test_client2/SquidStorage
-rm -rf ../test_txt/test_server/SquidStorageServer
-rm -rf ../test_txt/test_datanode/DataNode
-#make clean
+# rm -rf ../test_txt/test_client1/SquidStorage
+# rm -rf ../test_txt/test_client2/SquidStorage
+# rm -rf ../test_txt/test_server/SquidStorageServer
+# rm -rf ../test_txt/test_datanode/DataNode
+# make clean
