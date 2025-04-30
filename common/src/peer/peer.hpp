@@ -23,6 +23,8 @@ public:
     ~Peer();
 
     virtual void connectToServer();
+    virtual void reconnect();
+
     virtual int getSocket();
 
     virtual void run() = 0;
@@ -30,6 +32,8 @@ public:
 
 protected:
     int socket_fd = -1;
+    const char *server_ip;
+    int port;
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE] = {0};
 

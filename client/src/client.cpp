@@ -9,25 +9,26 @@ Client::Client(const char *server_ip, int port, string nodeType, string processN
 void Client::run()
 {
     Message mex;
-    cout << "[CLIENT]: Secondary socket thread started" << endl;
+    cout << "[CLIENT]: Secondary socket: thread started" << endl;
     while (true)
     {
-        cout << "[CLIENT]: Secondary socket waiting for messages..." << endl;
-        if (secondarySquidProtocol.getSocket() < 0) // connection closed
+        while (!secondarySquidProtocol.isAlive()) // connection lost
         {
-            cout << "[CLIENT]: Secondary socket Closing & Terminating" << endl;
-            break;
+            cout << "[CLIENT]: Secondary socket: Connection lost" << endl;
+            this_thread::sleep_for(chrono::seconds(3));
+            //this->initiateConnection();
         }
-
+    
+        cout << "[CLIENT]: Secondary socket: waiting for messages..." << endl;
         try
         {
             mex = secondarySquidProtocol.receiveAndParseMessage();
-            cout << "[CLIENT]: Secondary socket Received message: " + mex.keyword << endl;
+            cout << "[CLIENT]: Secondary socket: Received message: " + mex.keyword << endl;
             secondarySquidProtocol.requestDispatcher(mex);
         }
         catch (exception &e)
         {
-            cerr << "[CLIENT]: Secondary socket Error receiving message: " << e.what() << endl;
+            cerr << "[CLIENT]: Secondary socket: Error receiving message: " << e.what() << endl;
             break;
         }
     }
@@ -35,23 +36,22 @@ void Client::run()
 
 void Client::checkSecondarySocket()
 {
-    if (secondarySquidProtocol.getSocket() < 0)
+    while (!secondarySquidProtocol.isAlive())
     {
-        cerr << "[CLIENT]: Secondary socket is not initialized or closed" << endl;
-        return;
+        cout << "[CLIENT]: Secondary socket is not alive, closing and reconnecting" << endl;
+        this->initiateConnection();
     }
 
-    // Inizializza il set di file descriptor
+    // select mask
     fd_set readfds;
     FD_ZERO(&readfds);
     FD_SET(secondarySquidProtocol.getSocket(), &readfds);
 
-    // Imposta un timeout di 0 secondi per rendere la chiamata non bloccante
+    // timeout of 0 seconds to make the call non-blocking
     struct timeval timeout;
     timeout.tv_sec = 0;
     timeout.tv_usec = 0;
 
-    // Usa select per verificare se ci sono dati sulla socket
     int activity = select(secondarySquidProtocol.getSocket() + 1, &readfds, NULL, NULL, &timeout);
     if (activity < 0)
     {
@@ -83,7 +83,6 @@ void Client::checkSecondarySocket()
 void Client::initiateConnection()
 {
     this->connectToServer();
-    this_thread::sleep_for(chrono::seconds(1));
 
     // indetifying to server
     Message mex = squidProtocol.receiveAndParseMessage();
@@ -138,6 +137,7 @@ void Client::initiateConnection()
     }
     cout << "[CLIENT]: Accepted connection from server" << endl;
     secondarySquidProtocol = SquidProtocol(new_socket, "CLIENT_SECONDARY", "CLIENT_SECONDARY");
+    secondarySquidProtocol.setIsAlive(true);
 }
 
 void Client::createFile(string filePath)

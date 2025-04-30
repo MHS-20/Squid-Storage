@@ -24,7 +24,6 @@ public:
 
     virtual string getProcessName() const { return processName; }
     virtual string getNodeType() const { return nodeType; }
-
     virtual string toString() const;
 
     virtual Message receiveAndParseMessage();

@@ -44,9 +44,9 @@ public:
     void eraseFromReplicationMap(string datanodeName);
     void checkCloseConnetions(fd_set &master_set, int max_sd);
 
+    void getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
     void propagateCreateFile(string filePath, SquidProtocol clientProtocol);
     void propagateUpdateFile(string filePath, SquidProtocol clientProtocol);
-    void getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
     void propagateDeleteFile(string filePath, SquidProtocol clientProtocol);
 
 private:

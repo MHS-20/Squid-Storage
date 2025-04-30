@@ -23,7 +23,6 @@ namespace SquidStorage
     void runClient()
     {
         client.initiateConnection();
-
         std::thread secondarySocketThread([]()
                                           {
                                             try
@@ -44,7 +43,8 @@ namespace SquidStorage
         {
             // client.syncStatus();
             currentFrame = 0;
-            // client.checkSecondarySocket();
+            cout << "[CLIENT]: checking secondary socket" << endl;
+            client.checkSecondarySocket();
         }
 
         currentFrame++;

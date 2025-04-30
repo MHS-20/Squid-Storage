@@ -373,8 +373,8 @@ void SquidProtocol::requestDispatcher(Message message)
         this->response(this->nodeType, this->processName);
         break;
     case RESPONSE:
-        cerr << "Connection lost, aborting" << endl;
-        close(this->socket_fd);
+        cerr << "Connection lost, aborting operation" << endl;
+        // close(this->socket_fd);
         // socket_fd = -1;
         alive = false;
         break;
