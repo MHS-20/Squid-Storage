@@ -209,7 +209,6 @@ void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
 
         cout << "[SERVER]: Building file map..." << endl;
         buildFileLockMap();
-        // primaryProtocol.response(string("ACK"));
         return;
     }
     else if (mex.args["nodeType"] != "CLIENT")
@@ -384,15 +383,24 @@ void Server::buildFileLockMap()
         for (auto &file : files.args)
         {
             if (fileLockMap.find(file.first) == fileLockMap.end())
-            {
+            { // new file
                 fileLockMap[file.first] = FileLock(file.first);
+                fileTimeMap[file.first] = stoll(file.second);
+                dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
+            }
+            else if (fileTimeMap.find(file.first)->second > stoll(file.second))
+            { // if file on server is neewer, update datanode
+                datanodeEndpoint.second.updateFile(file.first);
+            }
+            else if (fileTimeMap.find(file.first)->second < stoll(file.second))
+            { // if file on server is older, update file time map
                 fileTimeMap[file.first] = stoll(file.second);
             }
 
-            if (dataNodeReplicationMap.find(file.first) == dataNodeReplicationMap.end())
-            {
-                dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
-            }
+            // if (dataNodeReplicationMap.find(file.first) == dataNodeReplicationMap.end())
+            // {
+            //     dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
+            // }
             cout << "[SERVER]: File: " + file.first + " added to datanode: " + datanodeEndpoint.first << endl;
         }
     }

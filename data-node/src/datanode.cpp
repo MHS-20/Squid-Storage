@@ -12,7 +12,6 @@ void DataNode::run()
 {
     Message mex;
     this->connectToServer();
-    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     while (true)
     {
@@ -21,6 +20,7 @@ void DataNode::run()
             std::cout << "[DATANODE]: Connection closed. Retrying..." << std::endl;
             std::this_thread::sleep_for(std::chrono::seconds(3));
             this->connectToServer();
+
             continue;
         }
 
