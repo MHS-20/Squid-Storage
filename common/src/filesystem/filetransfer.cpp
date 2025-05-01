@@ -9,7 +9,7 @@ void FileTransfer::sendFile(int socket, string rolename, string filepath)
     ifstream file(filepath, ios::binary | ios::ate);
     if (!file)
     {
-        cerr << string(rolename) + " Error opening file: "; 
+        cerr << rolename + " Error opening file: " + filepath << endl; 
         return;
     }
 

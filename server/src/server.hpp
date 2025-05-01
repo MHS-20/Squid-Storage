@@ -16,10 +16,12 @@
 #include "filetransfer.hpp"
 #include "squidProtocolServer.cpp"
 
-#define DEFAULT_TIMEOUT 60
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
 #define DEFAULT_PATH "./test_txt/test_server"
+
+#define DEFAULT_TIMEOUT 60 // seconds
+#define DEFAULT_LOCK_INTERVAL 5 // minutes
 #define DEFAULT_REPLICATION_FACTOR 2
 using namespace std;
 
@@ -41,6 +43,7 @@ public:
     void handleAccept(int new_socket, sockaddr_in peer_addr);
 
     void sendHearbeats();
+    void checkFileLockExpiration();
     void eraseFromReplicationMap(string datanodeName);
     void checkCloseConnetions(fd_set &master_set, int max_sd);
     void rebalanceFileReplication(string filePath, map<string, SquidProtocol> fileHoldersMap);

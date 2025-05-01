@@ -130,8 +130,28 @@ void Server::run()
                 }
             }
 
-        sendHearbeats(); // send hearbeat to all datanodes
-        saveMapToFile(); // save file time map to file
+        sendHearbeats(); // datanodes only
+        saveMapToFile(); // save file time map
+        checkFileLockExpiration();
+    }
+}
+
+void Server::checkFileLockExpiration(){
+    auto now = chrono::system_clock::now();
+    for (auto it = fileLockMap.begin(); it != fileLockMap.end();)
+    {
+        if (it->second.isLocked() && it->second.getExpiration() < now)
+        {
+            cout << "[SERVER]: Lock expired for file: " + it->first << endl;
+
+            string clientHolder = it->second.getClientHolder();
+            clientEndpointMap.find(clientHolder)->second.second.releaseLock(it->first);
+            it->second.setIsLocked(false);
+        }
+        else
+        {
+            ++it;
+        }
     }
 }
 
@@ -405,6 +425,7 @@ bool Server::acquireLock(string path)
     if (!fileLockMap[path].isLocked())
     {
         fileLockMap[path].setIsLocked(true);
+        fileLockMap[path].setExpiration(chrono::system_clock::now() + chrono::minutes(DEFAULT_LOCK_INTERVAL));
         return true;
     }
     else

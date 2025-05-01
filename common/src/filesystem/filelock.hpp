@@ -1,16 +1,28 @@
 #pragma once
 #include <string>
+#include <chrono>
+using namespace std;
 
 class FileLock
 {
 public:
     FileLock();
-    FileLock(std::string filePath);
+    FileLock(string filePath);
+
     bool isLocked();
-    std::string getFilePath();
     void setIsLocked(bool locked);
+
+    string getFilePath();
+
+    void setExpiration(chrono::system_clock::time_point exp);
+    chrono::system_clock::time_point getExpiration();
+
+    string getClientHolder();
+    void setClientHolder(string clientHolder);
 
 private:
     bool locked;
-    std::string filePath;
+    string clientHolder;
+    string filePath;
+    chrono::system_clock::time_point expirationTime;
 };

@@ -357,10 +357,10 @@ void SquidProtocol::requestDispatcher(Message message)
     //     cout << nodeType + ": received acquire lock request for " << message.args["filePath"] << endl;
     //     this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
     //     break;
-    // case RELEASE_LOCK:
-    //     FileManager::getInstance().releaseLock(message.args["filePath"]);
-    //     this->response(string("ACK"));
-    //     break;
+    case RELEASE_LOCK:
+        //FileManager::getInstance().releaseLock(message.args["filePath"]);
+        this->response(string("ACK"));
+        break;
     case HEARTBEAT:
         this->response(string("ACK"));
         break;
