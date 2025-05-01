@@ -5,6 +5,7 @@ DataNode::DataNode() : DataNode(SERVER_IP, SERVER_PORT) {}
 DataNode::DataNode(int port) : Peer(SERVER_IP, port, "DATANODE", "DATANODE") {}
 DataNode::DataNode(const char *server_ip, int port) : Peer(server_ip, port, "DATANODE", "DATANODE") {}
 DataNode::DataNode(std::string nodeType, std::string processName) : Peer(nodeType, processName) {}
+DataNode::DataNode(int port, std::string nodeType, std::string processName) : Peer(port, nodeType, processName) {}
 DataNode::DataNode(const char *server_ip, int port, std::string nodeType, std::string processName) : Peer(server_ip, port, nodeType, processName) {}
 
 // passive deamon
@@ -48,7 +49,7 @@ void DataNode::testing()
     Message mex = squidProtocol.receiveAndParseMessage();
     std::cout << "[DATANODE]: Identify  request received from server: " + mex.keyword << std::endl;
 
-    squidProtocol.response(std::string("DATANODE"), std::string("DATANODE"));
+    squidProtocol.response(std::string("DATANODE2"), std::string("DATANODE2"));
     mex = squidProtocol.receiveAndParseMessage();
 
     if (mex.args["ACK"] == "ACK")

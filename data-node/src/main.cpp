@@ -10,6 +10,7 @@ int main(int argc, char **argv)
         port = atoi(argv[1]);
     }
     std::cout << "Starting datanode" << std::endl;
-    DataNode datanode = DataNode(port);
+    std::string currentPath = fs::current_path().string(); // current directory
+    DataNode datanode = DataNode(port, std::string("DATANODE"), currentPath);
     datanode.run();
 }

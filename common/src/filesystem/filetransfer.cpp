@@ -1,26 +1,20 @@
 #include "filetransfer.hpp"
+using namespace std;
 
-FileTransfer::FileTransfer()
-{
-}
-
-FileTransfer::~FileTransfer()
-{
-}
+FileTransfer::FileTransfer(){}
+FileTransfer::~FileTransfer() {}
 
 void FileTransfer::sendFile(int socket, const char *rolename, const char *filepath)
 {
-    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+    ifstream file(filepath, ios::binary | ios::ate);
     if (!file)
     {
-        std::string msg = std::string(rolename) + " Error opening file: ";
-        perror(msg.c_str());
+        cerr << string(rolename) + " Error opening file: "; 
         return;
     }
 
-    std::streamsize filesize = file.tellg();
-    file.seekg(0, std::ios::beg);
-
+    streamsize filesize = file.tellg();
+    file.seekg(0, ios::beg);
     send(socket, &filesize, sizeof(filesize), 0);
 
     char buffer[BUFFER_SIZE];
@@ -28,25 +22,20 @@ void FileTransfer::sendFile(int socket, const char *rolename, const char *filepa
     {
         send(socket, buffer, file.gcount(), 0);
     }
-
-    std::string msg = std::string(rolename) + " File sent \n";
-    std::cout << msg.c_str();
+    cout << string(rolename) + " File sent \n";
     file.close();
 }
 
 void FileTransfer::receiveFile(int socket, const char *rolename, const char *outputpath)
 {
-    // const char *testOutputpath = "./test_txt/test.txt";
-    // std::ofstream outfile(testOutputpath, std::ios::binary);
-    std::ofstream outfile(outputpath, std::ios::binary);
+    ofstream outfile(outputpath, ios::binary);
     if (!outfile)
     {
-        std::string msg = std::string(rolename) + " Error creating file: ";
-        perror(msg.c_str());
+        cerr << string(rolename) + " Error creating file: " <<endl;
         return;
     }
 
-    std::streamsize filesize;
+    streamsize filesize;
     read(socket, &filesize, sizeof(filesize));
 
     char buffer[BUFFER_SIZE];
@@ -61,7 +50,29 @@ void FileTransfer::receiveFile(int socket, const char *rolename, const char *out
         filesize -= received;
     }
 
-    std::string msg = std::string(rolename) + " File " + std::string(outputpath) + " received \n";
-    std::cout << msg.c_str();
+    string msg = string(rolename) + " File " + string(outputpath) + " received \n";
+    cout << msg.c_str();
     outfile.close();
+}
+
+bool handleErrors(ssize_t bytesRead)
+{
+    if (bytesRead == 0)
+    {
+        cerr << "FileTransfer: Connection closed by peer" << endl;
+        // close(socket_fd);
+        return false;
+    }
+    else if (bytesRead < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            cerr << "FileTransfer: Socket timeout" << endl;
+            // close(socket_fd);
+            // alive = false;
+        }
+        return false;
+    }
+
+    return true;
 }

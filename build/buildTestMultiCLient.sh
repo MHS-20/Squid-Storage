@@ -9,6 +9,7 @@ cp ./SquidStorage ../test_txt/test_client2/SquidStorage
 cp ./SquidStorageServer ../test_txt/test_server/SquidStorageServer
 cp ./DataNode ../test_txt/test_datanode1/DataNode
 cp ./DataNode ../test_txt/test_datanode2/DataNode
+cp ./DataNode ../test_txt/test_datanode3/DataNode
 
 # Start a new tmux session
 SESSION_NAME="SquidStorage"
@@ -24,6 +25,9 @@ tmux send-keys "cd ../test_txt/test_datanode1 && ./DataNode" C-m
 
 tmux split-window -h
 tmux send-keys "cd ../test_txt/test_datanode2 && ./DataNode" C-m
+
+tmux split-window -h
+tmux send-keys "cd ../test_txt/test_datanode3 && ./DataNode" C-m
 
 # Split the window vertically and run SquidStorage in the third pane
 tmux split-window -v
@@ -42,4 +46,5 @@ rm -rf ../test_txt/test_client2/SquidStorage
 rm -rf ../test_txt/test_server/SquidStorageServer
 rm -rf ../test_txt/test_datanode1/DataNode
 rm -rf ../test_txt/test_datanode2/DataNode
+rm -rf ../test_txt/test_datanode3/DataNode
 make clean

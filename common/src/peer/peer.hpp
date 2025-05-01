@@ -19,6 +19,7 @@ class Peer
 public:
     Peer();
     Peer(std::string nodeType, std::string processName);
+    Peer(int port, std::string nodeType, std::string processName);
     Peer(const char *server_ip, int port, std::string nodeType, std::string processName);
     ~Peer();
 

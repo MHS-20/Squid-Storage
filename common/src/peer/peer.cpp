@@ -3,6 +3,7 @@
 Peer::Peer() {};
 
 Peer::Peer(std::string nodeType, std::string processName) : Peer(SERVER_IP, SERVER_PORT, nodeType, processName) {}
+Peer::Peer(int port, std::string nodeType, std::string processName) : Peer(SERVER_IP, port, nodeType, processName) {}
 
 Peer::Peer(const char *server_ip, int port, std::string nodeType, std::string processName)
 {
