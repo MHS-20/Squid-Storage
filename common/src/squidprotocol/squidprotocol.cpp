@@ -234,16 +234,16 @@ string SquidProtocol::receiveMessageWithLength()
     return message;
 }
 
-bool SquidProtocol::handleErrors(ssize_t bytesRead)
+bool SquidProtocol::handleErrors(ssize_t bytes)
 {
-    if (bytesRead == 0)
+    if (bytes == 0)
     {
         cout << nodeType + ": Connection closed by peer" << endl;
         // close(socket_fd);
         alive = false;
         return false;
     }
-    else if (bytesRead < 0)
+    else if (bytes< 0)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {
@@ -306,13 +306,13 @@ void SquidProtocol::sendMessageWithLength(string &message)
 {
     // Send the length of the message
     uint32_t messageLength = htonl(message.size());
-    ssize_t bytesRead = send(socket_fd, &messageLength, sizeof(messageLength), 0);
-    if (!handleErrors(bytesRead))
+    ssize_t bytesSent = send(socket_fd, &messageLength, sizeof(messageLength), 0);
+    if (!handleErrors(bytesSent))
         return;
 
     // Send the actual message
-    bytesRead = send(socket_fd, message.c_str(), message.size(), 0);
-    if (!handleErrors(bytesRead))
+    bytesSent = send(socket_fd, message.c_str(), message.size(), 0);
+    if (!handleErrors(bytesSent))
         return;
     // cout << nodeType + ": Sent message with length: " << message.size() << endl;
 }
@@ -373,8 +373,6 @@ void SquidProtocol::requestDispatcher(Message message)
         break;
     case RESPONSE:
         cerr << "Connection lost, aborting operation" << endl;
-        // close(this->socket_fd);
-        // socket_fd = -1;
         alive = false;
         break;
     case CLOSE:
@@ -396,7 +394,7 @@ void SquidProtocol::responseDispatcher(Message response)
     {
     case RESPONSE:
         if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error from server " + response.toString() << endl;
+            cerr << nodeType + ": Error in response " + response.toString() << endl;
         else
             cout << nodeType + ": Operation performed" << endl;
         break;
@@ -473,7 +471,6 @@ void SquidProtocol::responseDispatcher(Message response)
         else
         {
             close(this->socket_fd);
-            // socket_fd = -1;
             alive = false;
             cout << nodeType + ": Connection closed successfully" << endl;
         }

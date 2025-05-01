@@ -36,6 +36,21 @@ void Peer::connectToServer()
         exit(EXIT_FAILURE);
     }
 
+    struct timeval timeout;
+    timeout.tv_sec = timeoutSeconds;
+    timeout.tv_usec = 0;
+
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
+    {
+        perror("[SERVER]: setsockopt failed (SO_RCVTIMEO)");
+        exit(EXIT_FAILURE);
+    }
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
+    {
+        perror("[SERVER]: setsockopt failed (SO_SNDTIMEO)");
+        exit(EXIT_FAILURE);
+    }
+
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
 

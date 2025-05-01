@@ -4,7 +4,7 @@ using namespace std;
 FileTransfer::FileTransfer(){}
 FileTransfer::~FileTransfer() {}
 
-void FileTransfer::sendFile(int socket, const char *rolename, const char *filepath)
+void FileTransfer::sendFile(int socket, string rolename, string filepath)
 {
     ifstream file(filepath, ios::binary | ios::ate);
     if (!file)
@@ -15,61 +15,79 @@ void FileTransfer::sendFile(int socket, const char *rolename, const char *filepa
 
     streamsize filesize = file.tellg();
     file.seekg(0, ios::beg);
-    send(socket, &filesize, sizeof(filesize), 0);
+    ssize_t bytes = send(socket, &filesize, sizeof(filesize), 0);
+    if(!handleErrors(bytes))
+    {
+        return;
+    }
 
     char buffer[BUFFER_SIZE];
     while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0)
     {
-        send(socket, buffer, file.gcount(), 0);
+        bytes = send(socket, buffer, file.gcount(), 0);
+        if(!handleErrors(bytes))
+        {
+            return;
+        }
     }
     cout << string(rolename) + " File sent \n";
     file.close();
 }
 
-void FileTransfer::receiveFile(int socket, const char *rolename, const char *outputpath)
+void FileTransfer::receiveFile(int socket, string rolename, string outputpath)
 {
     ofstream outfile(outputpath, ios::binary);
     if (!outfile)
     {
-        cerr << string(rolename) + " Error creating file: " <<endl;
+        cerr << rolename + " Error creating file: " <<endl;
         return;
     }
 
     streamsize filesize;
-    read(socket, &filesize, sizeof(filesize));
+    ssize_t bytes = read(socket, &filesize, sizeof(filesize));
+    if (!handleErrors(bytes))
+    {
+        // delete file 
+        outfile.close();
+        remove(outputpath.c_str());
+        cerr << rolename + " Error receiving file size: " << endl;
+        return;
+    }
 
     char buffer[BUFFER_SIZE];
     while (filesize > 0)
     {
         int bytes_to_read = (filesize > BUFFER_SIZE) ? BUFFER_SIZE : filesize;
         int received = read(socket, buffer, bytes_to_read);
-        if (received <= 0)
-            break;
+        if (!handleErrors(received))
+        {
+            // delete file
+            outfile.close();
+            remove(outputpath.c_str());
+            cerr << rolename + " Error receiving file: " << endl;
+            return;
+        }
 
         outfile.write(buffer, received);
         filesize -= received;
     }
 
-    string msg = string(rolename) + " File " + string(outputpath) + " received \n";
-    cout << msg.c_str();
+    cout << rolename + " File " + outputpath + " received \n";
     outfile.close();
 }
 
-bool handleErrors(ssize_t bytesRead)
+bool FileTransfer::handleErrors(ssize_t bytes)
 {
-    if (bytesRead == 0)
+    if (bytes == 0)
     {
         cerr << "FileTransfer: Connection closed by peer" << endl;
-        // close(socket_fd);
         return false;
     }
-    else if (bytesRead < 0)
+    else if (bytes < 0)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {
             cerr << "FileTransfer: Socket timeout" << endl;
-            // close(socket_fd);
-            // alive = false;
         }
         return false;
     }

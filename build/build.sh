@@ -29,7 +29,7 @@ tmux select-pane -t 0
 tmux attach-session -t $SESSION_NAME
 
 # Clean up executables after execution
-rm -rf ../test_txt/test_client/SquidStorage
-rm -rf ../test_txt/test_server/SquidStorageServer
-rm -rf ../test_txt/test_datanode/DataNode
+rm -f ../test_txt/test_client/SquidStorage
+rm -f ../test_txt/test_server/SquidStorageServer
+rm -f ../test_txt/test_datanode/DataNode
 # make clean

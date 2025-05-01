@@ -42,7 +42,7 @@ namespace SquidStorage
         if (currentFrame == UPDATE_EVERY)
         {
             currentFrame = 0;
-            client.checkSecondarySocket();
+            //client.checkSecondarySocket(); // this blocks the gui if connection is lost
         }
 
         currentFrame++;
