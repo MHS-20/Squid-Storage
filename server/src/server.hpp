@@ -43,6 +43,7 @@ public:
     void sendHearbeats();
     void eraseFromReplicationMap(string datanodeName);
     void checkCloseConnetions(fd_set &master_set, int max_sd);
+    void rebalanceFileReplication(string filePath, map<string, SquidProtocol> fileHoldersMap);
 
     void getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
     void propagateCreateFile(string filePath, SquidProtocol clientProtocol);

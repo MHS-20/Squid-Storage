@@ -129,9 +129,7 @@ void Server::run()
                 }
             }
 
-        // send hearbeat to all datanodes
-        sendHearbeats();
-        cout << "size:" + primarySocketMap.size() << endl;
+        sendHearbeats(); // send hearbeat to all datanodes
     }
 }
 
@@ -145,8 +143,6 @@ void Server::checkCloseConnetions(fd_set &master_set, int max_sd)
             // Check if the file descriptor is valid
             if (fcntl(fd, F_GETFD) == -1)
             {
-                // cerr << "[ERROR]: Invalid file descriptor: " << fd
-                //           << " (errno: " << errno << " - " << strerror(errno) << ")" << std::endl;
                 FD_CLR(fd, &master_set);
                 primarySocketMap[fd].setIsAlive(false);
                 clientEndpointMap.erase(primarySocketMap[fd].getProcessName());
@@ -183,13 +179,70 @@ void Server::eraseFromReplicationMap(string datanodeName)
 {
     for (auto it = dataNodeReplicationMap.begin(); it != dataNodeReplicationMap.end();)
     {
-        auto datanode = it->second.find(datanodeName);
-        if (datanode != it->second.end())
+        // for each file check if the datanode endpoint holds the file
+        auto datanodeEndpoint = it->second.find(datanodeName);
+        if (datanodeEndpoint != it->second.end())
         {
-            it->second.erase(datanode); // erase from internal map
+            it->second.erase(datanodeEndpoint->first); // erase from internal map
             cout << "[SERVER]: Datanode removed from replication map of file: " + it->first << endl;
+
+            // check that internal map is not empty
+            if (it->second.size() < (replicationFactor / 2) + 1)
+            {
+                cout << "[SERVER]: Datanodes hodling the file: " + it->first + "is below threshold" << endl;
+                rebalanceFileReplication(it->first, it->second);
+            }
         }
         ++it;
+    }
+}
+
+void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol> fileHoldersMap)
+{
+    cout << "[SERVER]: Rebalancing datanodes for file: " << filePath << endl;
+
+    // Assign new datanodes until the replication factor is met
+    for (int i = 0; i < dataNodeEndpointMap.size(); i++)
+    {
+        if (endpointIterator == dataNodeEndpointMap.end())
+            endpointIterator = dataNodeEndpointMap.begin();
+
+        const string &datanodeName = endpointIterator->first;
+
+        // Skip datanodes that are already holding the file
+        if (fileHoldersMap.find(datanodeName) != fileHoldersMap.end()){
+            endpointIterator++;
+            continue;
+        }
+
+        // Assign the datanode to the file
+        fileHoldersMap[datanodeName] = endpointIterator->second;
+        endpointIterator++;
+
+        // Send the file to the newly assigned datanode
+        cout << "[SERVER]: Sending file " << filePath << " to datanode: " << datanodeName << endl;
+        Message response = endpointIterator->second.createFile(filePath);
+
+        // Check if the file transfer was successful
+        if (response.args["ACK"] != "ACK")
+        {
+            cerr << "[SERVER]: Failed to send file " << filePath << " to datanode: " << datanodeName << endl;
+            fileHoldersMap.erase(datanodeName); // Remove the datanode from the map if the transfer failed
+        }
+        else
+        {
+            cout << "[SERVER]: File " << filePath << " successfully sent to datanode: " << datanodeName << endl;
+        }
+    }
+
+    // Final check to ensure the replication factor is met
+    if (fileHoldersMap.size() < replicationFactor)
+    {
+        cerr << "[SERVER]: Unable to meet replication factor for file: " << filePath << endl;
+    }
+    else
+    {
+        cout << "[SERVER]: Replication factor met for file: " << filePath << endl;
     }
 }
 
