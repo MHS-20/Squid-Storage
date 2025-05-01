@@ -158,20 +158,28 @@ void Server::checkCloseConnetions(fd_set &master_set, int max_sd)
 
 void Server::sendHearbeats()
 {
+    vector<string> erasable = vector<string>();
     for (auto &datanode : dataNodeEndpointMap)
     {
+        cout << "sending hearbeat to:" + datanode.first << endl;
         Message heartbeat = datanode.second.heartbeat();
         if (heartbeat.args["ACK"] != "ACK")
         {
             cout << "[SERVER]: Heartbeat failed for datanode: " + datanode.first << endl;
             datanode.second.setIsAlive(false);
             datanode.second.closeConn();
-            dataNodeEndpointMap.erase(datanode.first);
-            datanode.second.setSocket(-1);
+            erasable.push_back(datanode.first);
             eraseFromReplicationMap(datanode.second.getProcessName());
             cout << "[SERVER]: Datanode removed from map: " + datanode.first << endl;
         }
     }
+
+    for (auto &datanode : erasable)
+    {
+        dataNodeEndpointMap.erase(datanode);
+        cout << "[SERVER]: Datanode removed from map: " + datanode << endl;
+    }
+
     cout << "[SERVER]: Heartbeat sent to all datanodes" << endl;
 }
 

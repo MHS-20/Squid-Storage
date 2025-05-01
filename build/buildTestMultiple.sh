@@ -14,6 +14,7 @@ cp ./DataNode ../test_txt/test_datanode3/DataNode
 # Start a new tmux session
 SESSION_NAME="SquidStorage"
 tmux new-session -d -s $SESSION_NAME
+tmux set -g mouse on
 
 # Run SquidStorageServer in the first pane
 tmux rename-window -t $SESSION_NAME "Server"

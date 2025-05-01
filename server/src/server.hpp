@@ -20,7 +20,7 @@
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
 #define DEFAULT_PATH "./test_txt/test_server"
-#define DEFAULT_REPLICATION_FACTOR 3
+#define DEFAULT_REPLICATION_FACTOR 2
 using namespace std;
 
 class Server

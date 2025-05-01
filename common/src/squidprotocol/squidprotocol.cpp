@@ -237,21 +237,19 @@ bool SquidProtocol::handleErrors(ssize_t bytesRead)
 {
     if (bytesRead == 0)
     {
-        cerr << nodeType + ": Connection closed by peer" << endl;
-        close(socket_fd);
+        cout << nodeType + ": Connection closed by peer" << endl;
+        //close(socket_fd);
         alive = false;
-        // socket_fd = -1;
         return false;
     }
     else if (bytesRead < 0)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {
-            cerr << nodeType + "Socket timeout" << endl;
-            close(socket_fd);
-            alive = false;
-            // socket_fd = -1;
+            cout << nodeType + "Socket timeout" << endl;
         }
+        //close(socket_fd);
+        alive = false;
         return false;
     }
 
@@ -306,13 +304,16 @@ void SquidProtocol::sendMessage(string message)
 void SquidProtocol::sendMessageWithLength(string &message)
 {
     // Send the length of the message
+    signal(SIGPIPE, SIG_IGN);
     uint32_t messageLength = htonl(message.size());
     ssize_t bytesRead = send(socket_fd, &messageLength, sizeof(messageLength), 0);
+    cout << "checking for communication errors1: " << endl;
     if (!handleErrors(bytesRead))
         return;
 
     // Send the actual message
     bytesRead = send(socket_fd, message.c_str(), message.size(), 0);
+    cout << "checking for communication errors2: " << endl;
     if (!handleErrors(bytesRead))
         return;
     // cout << nodeType + ": Sent message with length: " << message.size() << endl;

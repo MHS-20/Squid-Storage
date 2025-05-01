@@ -1,5 +1,6 @@
 #pragma once
 #include <sys/socket.h>
+#include <signal.h>
 #include <thread>
 #include "filetransfer.hpp"
 #include "filemanager.hpp"
