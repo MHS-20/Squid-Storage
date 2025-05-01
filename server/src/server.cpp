@@ -56,6 +56,7 @@ Server::Server(int port, int replicationFactor, int timeoutSeconds)
     fileTransfer = FileTransfer();
     fileLockMap = map<string, FileLock>();
     fileTimeMap = map<string, long long>();
+    loadMapFromFile();
 
     primarySocketMap = map<int, SquidProtocol>();
     clientEndpointMap = map<string, pair<SquidProtocol, SquidProtocol>>();
@@ -130,6 +131,7 @@ void Server::run()
             }
 
         sendHearbeats(); // send hearbeat to all datanodes
+        saveMapToFile(); // save file time map to file
     }
 }
 
@@ -218,7 +220,8 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
         const string &datanodeName = endpointIterator->first;
 
         // Skip datanodes that are already holding the file
-        if (fileHoldersMap.find(datanodeName) != fileHoldersMap.end()){
+        if (fileHoldersMap.find(datanodeName) != fileHoldersMap.end())
+        {
             endpointIterator++;
             continue;
         }
@@ -569,6 +572,39 @@ void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
         if (client.second.first.getSocket() != clientProtocol.getSocket())
             client.second.second.createFile(filePath); // second channel
     }
+}
+
+// -----------------------
+// ------ PERSISTANCE ----
+// -----------------------
+
+void Server::saveMapToFile()
+{
+    ofstream outFile(filename);
+    for (const auto [key, value] : fileTimeMap)
+    {
+        outFile << key << ' ' << value << '\n';
+    }
+    cout << "[SERVER]: File time map saved to file" << endl;
+}
+
+void Server::loadMapFromFile()
+{
+    if (!fs::exists(filename))
+    {
+        return;
+    }
+
+    string key;
+    long long value;
+    ifstream inFile(filename);
+
+    while (inFile >> key >> value)
+    {
+        fileTimeMap[key] = value;
+    }
+    inFile.close();
+    cout << "[SERVER]: File time map loaded from file" << endl;
 }
 
 // -----------------------

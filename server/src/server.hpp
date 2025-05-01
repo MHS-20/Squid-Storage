@@ -59,6 +59,8 @@ private:
     int server_fd, new_socket;
     struct sockaddr_in address, peer_addr;
     socklen_t addrlen = sizeof(address);
+    
+    string filename = "fileTimeMap";
     FileTransfer fileTransfer;
 
     mutex mapMutex;
@@ -76,6 +78,9 @@ private:
 
     // iterators for round robin redundancy
     map<string, SquidProtocol>::iterator endpointIterator;
+
+    void saveMapToFile();
+    void loadMapFromFile();
 
     void printMap(map<string, long long> &map, string name);
     void printMap(map<string, SquidProtocol> &map, string name);
