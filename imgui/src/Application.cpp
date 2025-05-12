@@ -12,10 +12,12 @@ namespace SquidStorage
     bool showFileSavedMessage = false;
     bool showFileSaveButton = false;
     bool showFileDeleteButton = false;
+    bool showLoadingPopup = false;
     bool showFileEditor = false;
     bool newFileButtonPressed = false;
     bool deleteButtonPressed = false;
     char newFileName[128];
+
     Client client("127.0.0.1", 12345, "CLIENT", currentPath);
     FileLock fileLock;
     int currentFrame = 0;
@@ -34,15 +36,49 @@ namespace SquidStorage
                                                 std::cerr << "[CLIENT]: Error in secondary socket thread: " << e.what() << std::endl;
                                             } });
         secondarySocketThread.detach();
-        client.syncStatus();
+
+        std::thread syncThread([]()
+                               {
+                               try
+                               {
+                                    showLoadingPopup = true;
+                                    client.syncStatus();
+                                    showLoadingPopup = false;
+                                    std::cout << "[GUI]: Closing loading popup" << std::endl;
+                               }
+                               catch (const std::exception &e)
+                               {
+                                    std::cerr << "[CLIENT]: Error in sync thread: " << e.what() << std::endl;
+                                } });
+        syncThread.detach();
+        // showLoadingPopup = true;
+        // client.syncStatus();
+        // showLoadingPopup = false;
     }
 
     void RenderUI()
     {
         if (currentFrame == UPDATE_EVERY)
         {
+
             currentFrame = 0;
-            //client.checkSecondarySocket(); // this blocks the gui if connection is lost
+            // client.checkSecondarySocket(); // this blocks the gui if connection is lost
+        }
+        if (showLoadingPopup)
+        {
+            ImGui::OpenPopup("Loading...");
+        }
+        if (ImGui::BeginPopupModal("Loading...", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
+        {
+            ImGui::Text("Please wait...");
+            ImGui::Text("Synchronizing with the server...");
+            ImGui::Separator();
+            ImGui::Text("This may take a few seconds.");
+            if (!showLoadingPopup)
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
         }
 
         currentFrame++;

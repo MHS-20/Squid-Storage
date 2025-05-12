@@ -17,7 +17,7 @@ tmux set -g mouse on
 # Run SquidStorageServer in the first pane
 tmux rename-window -t $SESSION_NAME "Server"
 tmux send-keys -t $SESSION_NAME "cd ../test_txt/test_server && ./SquidStorageServer" C-m
-
+sleep 2
 # Split the window and run DataNode in the second pane
 tmux split-window -h
 tmux send-keys "cd ../test_txt/test_datanode1 && ./DataNode" C-m
