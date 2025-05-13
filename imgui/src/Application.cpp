@@ -211,10 +211,15 @@ namespace SquidStorage
             {
                 if (ImGui::Selectable(("- " + name).c_str(), selectedFile == name))
                 {
-                    selectedFile = entry.path().filename().string();
-                    fileContent = FileManager::getInstance().readFile(selectedFile);
-                    showFileDeleteButton = true;
-                    showFileEditor = true;
+                    std::thread readThread([entry]()
+                                           {
+                        showLoadingPopup = true;
+                        selectedFile = entry.path().filename().string();
+                        fileContent = FileManager::getInstance().readFile(selectedFile);
+                        showFileDeleteButton = true;
+                        showFileEditor = true;
+                        showLoadingPopup = false; });
+                    readThread.detach();
                 }
             }
         }
@@ -289,7 +294,7 @@ namespace SquidStorage
                                                  {
                             showLoadingPopup = true;
                             client.updateFile(selectedFile);
-                            std::this_thread::sleep_for(std::chrono::seconds(1));
+                            //std::this_thread::sleep_for(std::chrono::seconds(1));
                             showFileSavedMessage = true;
                             showLoadingPopup = false; });
                         updateThread.detach();
