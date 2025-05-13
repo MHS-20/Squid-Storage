@@ -5,7 +5,6 @@
 
 namespace SquidStorage
 {
-
     std::string currentPath = fs::current_path().string(); // current directory
     std::string selectedFile = "";                         // selected file
     std::string fileContent = "";                          // selected file content
@@ -51,19 +50,17 @@ namespace SquidStorage
                                     std::cerr << "[CLIENT]: Error in sync thread: " << e.what() << std::endl;
                                 } });
         syncThread.detach();
-        // showLoadingPopup = true;
-        // client.syncStatus();
-        // showLoadingPopup = false;
     }
 
     void RenderUI()
     {
         if (currentFrame == UPDATE_EVERY)
         {
-
             currentFrame = 0;
             // client.checkSecondarySocket(); // this blocks the gui if connection is lost
         }
+
+        // Popup for loading rendering
         if (showLoadingPopup)
         {
             ImGui::OpenPopup("Loading...");
@@ -288,8 +285,14 @@ namespace SquidStorage
                 {
                     if (FileManager::getInstance().updateFile(selectedFile, fileContent))
                     {
-                        client.updateFile(selectedFile);
-                        showFileSavedMessage = true;
+                        std::thread updateThread([]()
+                                                 {
+                            showLoadingPopup = true;
+                            client.updateFile(selectedFile);
+                            std::this_thread::sleep_for(std::chrono::seconds(1));
+                            showFileSavedMessage = true;
+                            showLoadingPopup = false; });
+                        updateThread.detach();
                     }
                     else
                     {
