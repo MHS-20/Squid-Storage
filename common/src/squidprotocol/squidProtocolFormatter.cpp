@@ -182,12 +182,23 @@ std::string SquidProtocolFormatter::responseFormat(bool lock)
     return this->createMessage(RESPONSE, {"isLocked:" + std::to_string(lock)});
 }
 
+// deprecated
 std::string SquidProtocolFormatter::responseFormat(std::map<std::string, fs::file_time_type> filesLastWrite)
 {
     std::vector<std::string> arguments;
     for (auto arg : filesLastWrite)
     {
         arguments.push_back(arg.first + ":" + std::to_string(static_cast<long long>(arg.second.time_since_epoch().count())));
+    }
+    return this->createMessage(RESPONSE, arguments);
+}
+
+std::string SquidProtocolFormatter::responseFormat(std::map<std::string, int> fileVersionMap)
+{
+    std::vector<std::string> arguments;
+    for (auto arg : fileVersionMap)
+    {
+        arguments.push_back(arg.first + ":" + std::to_string(arg.second));
     }
     return this->createMessage(RESPONSE, arguments);
 }

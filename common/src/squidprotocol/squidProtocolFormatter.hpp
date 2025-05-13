@@ -32,7 +32,8 @@ public:
     Message() {};
     Message(ProtocolKeyWord keyword, std::map<std::string, std::string> args) : keyword(keyword), args(args) {}
 
-    std::string toString(){
+    std::string toString()
+    {
         std::string result = "Message: \n";
         for (const auto &arg : args)
         {
@@ -70,8 +71,8 @@ public:
     std::string responseFormat(int port);
     std::string responseFormat(std::string nodeType, std::string processName);
     std::string responseFormat(std::map<std::string, long long> fileTimeMap);
+    std::string responseFormat(std::map<std::string, int> fileVersionMap);
     std::string responseFormat(std::map<std::string, fs::file_time_type> filesLastWrite);
-
 
 private:
     std::string nodeType;
