@@ -58,6 +58,8 @@ public:
     virtual void response(int port);
     virtual void response(string ack);
     virtual void response(string nodeType, string processName);
+    virtual void response(map<string, int> fileVersionMap);
+    // deprecated
     virtual void response(map<string, fs::file_time_type> filesLastWrite);
     virtual void response(map<string, long long> fileTimeMap);
 

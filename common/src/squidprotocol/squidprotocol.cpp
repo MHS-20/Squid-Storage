@@ -243,7 +243,7 @@ bool SquidProtocol::handleErrors(ssize_t bytes)
         alive = false;
         return false;
     }
-    else if (bytes< 0)
+    else if (bytes < 0)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {
@@ -277,9 +277,15 @@ void SquidProtocol::response(string nodeType, string processName)
     this->sendMessage(this->formatter.responseFormat(nodeType, processName));
 }
 
+// deprecated
 void SquidProtocol::response(map<string, fs::file_time_type> filesLastWrite)
 {
     this->sendMessage(this->formatter.responseFormat(filesLastWrite));
+}
+
+void SquidProtocol::response(map<string, int> fileVersionMap)
+{
+    this->sendMessage(this->formatter.responseFormat(fileVersionMap));
 }
 
 void SquidProtocol::response(map<string, long long> fileTimeMap)
@@ -358,7 +364,7 @@ void SquidProtocol::requestDispatcher(Message message)
     //     this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
     //     break;
     case RELEASE_LOCK:
-        //FileManager::getInstance().releaseLock(message.args["filePath"]);
+        // FileManager::getInstance().releaseLock(message.args["filePath"]);
         this->response(string("ACK"));
         break;
     case HEARTBEAT:
