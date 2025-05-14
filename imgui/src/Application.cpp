@@ -288,7 +288,7 @@ namespace SquidStorage
             {
                 if (ImGui::Button("Save"))
                 {
-                    if (FileManager::getInstance().updateFile(selectedFile, fileContent))
+                    if (FileManager::getInstance().updateFileAndVersion(selectedFile, fileContent))
                     {
                         std::thread updateThread([]()
                                                  {
