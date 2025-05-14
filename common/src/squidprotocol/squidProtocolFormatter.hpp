@@ -55,9 +55,12 @@ public:
     std::string connectServerFormat();
 
     std::string createFileFormat(std::string filePath);
+    std::string createFileFormat(std::string filePath, int version);
+    
     std::string transferFileFormat(std::string fileContent);
     std::string readFileFormat(std::string filePath);
     std::string updateFileFormat(std::string filePath);
+    std::string updateFileFormat(std::string filePath, int version);
     std::string deleteFileFormat(std::string filePath);
 
     std::string acquireLockFormat(std::string filePath);

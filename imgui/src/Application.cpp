@@ -254,7 +254,7 @@ namespace SquidStorage
 
         if (deleteButtonPressed)
         {
-            if (FileManager::getInstance().deleteFile(selectedFile))
+            if (FileManager::getInstance().deleteFileAndVersion(selectedFile))
             {
                 client.deleteFile(selectedFile);
                 selectedFile = "";

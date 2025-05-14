@@ -35,6 +35,7 @@ public:
     bool createFile(std::string path);
     bool createFile(std::string path, int version);
     bool deleteFile(std::string path);
+    bool deleteFileAndVersion(std::string path);
     bool updateFile(std::string path, std::string content);
     bool updateFile(std::string path, std::string content, int version);
     bool updateFileAndVersion(std::string path, std::string content);

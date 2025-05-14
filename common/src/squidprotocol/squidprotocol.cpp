@@ -356,7 +356,7 @@ void SquidProtocol::requestDispatcher(Message message)
         break;
     case DELETE_FILE:
         cout << nodeType + ": received delete file request\n";
-        FileManager::getInstance().deleteFile(message.args["filePath"]);
+        FileManager::getInstance().deleteFileAndVersion(message.args["filePath"]);
         this->response(string("ACK"));
         break;
     // case ACQUIRE_LOCK:

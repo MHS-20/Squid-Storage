@@ -117,6 +117,11 @@ std::string SquidProtocolFormatter::createFileFormat(std::string filePath)
     return this->createMessage(CREATE_FILE, {"filePath:" + filePath});
 }
 
+std::string SquidProtocolFormatter::createFileFormat(std::string filePath, int version)
+{
+    return this->createMessage(CREATE_FILE, {"filePath:" + filePath, "fileVersion:" + std::to_string(version)});
+}
+
 std::string SquidProtocolFormatter::transferFileFormat(std::string filePath)
 {
     return this->createMessage(TRANSFER_FILE, {"filePath:" + filePath});
@@ -130,6 +135,11 @@ std::string SquidProtocolFormatter::readFileFormat(std::string filePath)
 std::string SquidProtocolFormatter::updateFileFormat(std::string filePath)
 {
     return this->createMessage(UPDATE_FILE, {"filePath:" + filePath});
+}
+
+std::string SquidProtocolFormatter::updateFileFormat(std::string filePath, int version)
+{
+    return this->createMessage(UPDATE_FILE, {"filePath:" + filePath, "fileVersion:" + std::to_string(version)});
 }
 
 std::string SquidProtocolFormatter::deleteFileFormat(std::string filePath)

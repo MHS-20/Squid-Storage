@@ -127,6 +127,38 @@ bool FileManager::deleteFile(std::string path)
     return fs::remove(path);
 }
 
+bool FileManager::deleteFileAndVersion(std::string path)
+{
+    if (deleteFile(path))
+    {
+        std::ifstream versionFile(FILE_VERSION_PATH);
+        std::string line;
+        std::vector<std::string> lines;
+        while (std::getline(versionFile, line))
+        {
+            std::istringstream iss(line);
+            std::string filePath;
+            int version;
+            if (iss >> filePath >> version)
+            {
+                if (filePath != path)
+                {
+                    lines.push_back(line);
+                }
+            }
+        }
+        versionFile.close();
+        std::ofstream newVersionFile(FILE_VERSION_PATH);
+        for (auto line : lines)
+        {
+            newVersionFile << line << std::endl;
+        }
+        newVersionFile.close();
+        return true;
+    }
+    return false;
+}
+
 bool FileManager::updateFile(std::string path, std::string content)
 {
     std::ofstream file(path, std::ios::trunc);
