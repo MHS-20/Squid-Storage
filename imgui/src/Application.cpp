@@ -239,7 +239,7 @@ namespace SquidStorage
             ImGui::InputText("File name", newFileName, 128);
             if (ImGui::Button("Create"))
             {
-                if (FileManager::getInstance().createFile(newFileName))
+                if (FileManager::getInstance().createFile(newFileName, 0))
                 {
                     client.createFile(newFileName);
                     fileContent = "";

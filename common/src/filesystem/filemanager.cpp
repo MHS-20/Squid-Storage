@@ -238,7 +238,19 @@ bool FileManager::setFileVersion(std::string path, int version)
             }
         }
     }
-    return false;
+    versionFile.close();
+    if (!found)
+    {
+        lines.push_back(path + " " + std::to_string(version));
+    }
+    std::ofstream newVersionFile(FILE_VERSION_PATH);
+    for (auto line : lines)
+    {
+        newVersionFile << line << std::endl;
+    }
+    newVersionFile.close();
+    
+    return true;
 }
 
 void FileManager::updateFileMap()
