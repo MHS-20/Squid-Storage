@@ -293,7 +293,7 @@ namespace SquidStorage
                         std::thread updateThread([]()
                                                  {
                             showLoadingPopup = true;
-                            client.updateFile(selectedFile);
+                            client.updateFile(selectedFile, FileManager::getInstance().getFileVersion(selectedFile));
                             //std::this_thread::sleep_for(std::chrono::seconds(1));
                             showFileSavedMessage = true;
                             showLoadingPopup = false; });

@@ -29,6 +29,7 @@ public:
     virtual void createFile(std::string filePath);
     virtual void deleteFile(std::string filePath);
     virtual void updateFile(std::string filePath);
+    virtual void updateFile(std::string filePath, int version);
     virtual void syncStatus();
     virtual bool acquireLock(std::string filePath);
     virtual void releaseLock(std::string filePath);

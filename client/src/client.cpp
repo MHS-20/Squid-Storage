@@ -158,6 +158,11 @@ void Client::updateFile(string filePath)
     handleRequest(squidProtocol.updateFile(filePath));
 }
 
+void Client::updateFile(std::string filePath, int version)
+{
+    handleRequest(squidProtocol.updateFile(filePath, version));
+}
+
 void Client::syncStatus()
 {
     handleRequest(squidProtocol.syncStatus());

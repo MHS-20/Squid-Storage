@@ -252,7 +252,7 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
 
         // Send the file to the newly assigned datanode
         cout << "[SERVER]: Sending file " << filePath << " to datanode: " << datanodeName << endl;
-        Message response = endpointIterator->second.createFile(filePath);
+        Message response = endpointIterator->second.createFile(filePath, FileManager::getInstance().getFileVersion(filePath));
 
         // Check if the file transfer was successful
         if (response.args["ACK"] != "ACK")
@@ -362,7 +362,7 @@ void Server::handleConnection(SquidProtocol clientProtocol)
     {
     case CREATE_FILE:
         clientProtocol.requestDispatcher(mex);
-        propagateCreateFile(mex.args["filePath"], clientProtocol);
+        propagateCreateFile(mex.args["filePath"], stoi(mex.args["fileVersion"]), clientProtocol);
         FileManager::getInstance().deleteFile(mex.args["filePath"]);
         break;
     case READ_FILE:
@@ -372,7 +372,7 @@ void Server::handleConnection(SquidProtocol clientProtocol)
         break;
     case UPDATE_FILE:
         clientProtocol.requestDispatcher(mex);
-        propagateUpdateFile(mex.args["filePath"], clientProtocol);
+        propagateUpdateFile(mex.args["filePath"], stoi(mex.args["fileVersion"]), clientProtocol);
         FileManager::getInstance().deleteFile(mex.args["filePath"]);
         break;
     case DELETE_FILE:
@@ -529,7 +529,7 @@ void Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
     else
         cout << "Retrived file from datanode holder" << endl;
 }
-
+// deprecated
 void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
 {
 
@@ -541,6 +541,21 @@ void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
 
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.updateFile(filePath);
+
+    fileTimeMap[filePath] = chrono::system_clock::now().time_since_epoch().count();
+}
+
+void Server::propagateUpdateFile(string filePath, int version, SquidProtocol clientProtocol)
+{
+
+    for (auto &client : clientEndpointMap)
+    {
+        if (client.second.first.getSocket() != clientProtocol.getSocket())
+            client.second.second.updateFile(filePath, version); // second channel
+    }
+
+    for (auto &datanode : dataNodeReplicationMap[filePath])
+        datanode.second.updateFile(filePath, version);
 
     fileTimeMap[filePath] = chrono::system_clock::now().time_since_epoch().count();
 }
@@ -561,6 +576,7 @@ void Server::propagateDeleteFile(string filePath, SquidProtocol clientProtocol)
     dataNodeReplicationMap.erase(filePath);
 }
 
+// deprecated
 void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
 { // round robin replication
     lock_guard<mutex> lock(mapMutex);
@@ -595,6 +611,39 @@ void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
     }
 }
 
+void Server::propagateCreateFile(string filePath, int version, SquidProtocol clientProtocol)
+{ // round robin replication
+    lock_guard<mutex> lock(mapMutex);
+    auto fileHoldersMap = map<string, SquidProtocol>();
+
+    if (dataNodeEndpointMap.empty())
+        return;
+
+    for (int i = 0; i < replicationFactor; i++)
+    {
+        if (endpointIterator == dataNodeEndpointMap.end())
+            endpointIterator = dataNodeEndpointMap.begin();
+
+        fileHoldersMap.insert({endpointIterator->first, endpointIterator->second});
+        endpointIterator++;
+    }
+
+    cout << "iterated" << endl;
+    dataNodeReplicationMap.insert({filePath, fileHoldersMap});
+
+    for (auto &datanode : dataNodeReplicationMap[filePath])
+        datanode.second.createFile(filePath, version);
+
+    fileLockMap.insert({filePath, FileLock(filePath)});
+    fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
+    printMap(fileLockMap, "File Lock Map");
+
+    for (auto &client : clientEndpointMap)
+    {
+        if (client.second.first.getSocket() != clientProtocol.getSocket())
+            client.second.second.createFile(filePath, version); // second channel
+    }
+}
 // -----------------------
 // ------ PERSISTANCE ----
 // -----------------------

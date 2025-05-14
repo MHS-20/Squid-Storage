@@ -29,7 +29,7 @@ public:
     std::vector<std::string> getFiles(std::string path);
     std::vector<fs::directory_entry> getFileEntries(std::string path);
     std::map<std::string, fs::file_time_type> getFilesLastWrite(std::string path);
-    std::map<std::string, int> getFilesVersion(std::string path);
+    std::map<std::string, int> getFileVersionMap(std::string path);
 
     char *stringToChar(std::string str);
     bool createFile(std::string path);

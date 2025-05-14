@@ -50,7 +50,9 @@ public:
 
     void getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
     void propagateCreateFile(string filePath, SquidProtocol clientProtocol);
+    void propagateCreateFile(string filePath, int version, SquidProtocol clientProtocol);
     void propagateUpdateFile(string filePath, SquidProtocol clientProtocol);
+    void propagateUpdateFile(string filePath, int version, SquidProtocol clientProtocol);
     void propagateDeleteFile(string filePath, SquidProtocol clientProtocol);
 
 private:

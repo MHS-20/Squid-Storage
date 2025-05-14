@@ -55,7 +55,7 @@ std::map<std::string, fs::file_time_type> FileManager::getFilesLastWrite(std::st
     return filesLastWrite;
 }
 
-std::map<std::string, int> FileManager::getFilesVersion(std::string path)
+std::map<std::string, int> FileManager::getFileVersionMap(std::string path)
 {
     std::map<std::string, int> savedFilesVersion;
     std::ifstream versionFile(FILE_VERSION_PATH);
