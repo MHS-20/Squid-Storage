@@ -67,10 +67,29 @@ Message SquidProtocol::createFile(string filePath)
     transferFile(filePath, response);
     return receiveAndParseMessage();
 }
+Message SquidProtocol::createFile(string filePath, int version)
+{
+    cout << "file name: " + filePath << endl;
+    this->sendMessage(this->formatter.createFileFormat(filePath, version));
+    Message response = receiveAndParseMessage();
+    cout << nodeType + ": received create file response" << endl;
+    transferFile(filePath, response);
+    return receiveAndParseMessage();
+}
+
+
 
 Message SquidProtocol::updateFile(string filePath)
 {
     this->sendMessage(this->formatter.updateFileFormat(filePath));
+    Message response = receiveAndParseMessage();
+    transferFile(filePath, response);
+    return receiveAndParseMessage();
+}
+
+Message SquidProtocol::updateFile(string filePath, int version)
+{
+    this->sendMessage(this->formatter.updateFileFormat(filePath, version));
     Message response = receiveAndParseMessage();
     transferFile(filePath, response);
     return receiveAndParseMessage();
@@ -335,6 +354,7 @@ void SquidProtocol::requestDispatcher(Message message)
         this->response(string("ACK"));
         cout << nodeType + ": Receiving file" << endl;
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+        FileManager::getInstance().setFileVersion(message.args["filePath"], stoi(message.args["version"]));
         this->response(string("ACK"));
         break;
     case TRANSFER_FILE:
@@ -352,6 +372,7 @@ void SquidProtocol::requestDispatcher(Message message)
         cout << nodeType + ": received update file request\n";
         this->response(string("ACK"));
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+        FileManager::getInstance().setFileVersion(message.args["filePath"], stoi(message.args["version"]));
         this->response(string("ACK"));
         break;
     case DELETE_FILE:

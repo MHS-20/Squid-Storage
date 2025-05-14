@@ -40,8 +40,10 @@ public:
     virtual Message listFiles();
 
     virtual Message createFile(string filePath);
+    virtual Message createFile(string filePath, int version);
     virtual Message readFile(string filePath);
     virtual Message updateFile(string filePath);
+    virtual Message updateFile(string filePath, int version);
     virtual Message deleteFile(string filePath);
 
     virtual Message acquireLock(string filePath);
