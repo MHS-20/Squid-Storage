@@ -241,7 +241,7 @@ namespace SquidStorage
             {
                 if (FileManager::getInstance().createFile(newFileName, 0))
                 {
-                    client.createFile(newFileName);
+                    client.createFile(newFileName, 0);
                     fileContent = "";
                     newFileButtonPressed = false;
                 }

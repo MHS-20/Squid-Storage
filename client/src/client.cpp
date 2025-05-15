@@ -147,6 +147,10 @@ void Client::createFile(string filePath)
 {
     handleRequest(squidProtocol.createFile(filePath));
 }
+void Client::createFile(string filePath, int version)
+{
+    handleRequest(squidProtocol.createFile(filePath, version));
+}
 
 void Client::deleteFile(string filePath)
 {

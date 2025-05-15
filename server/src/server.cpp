@@ -379,7 +379,7 @@ void Server::handleConnection(SquidProtocol clientProtocol)
         clientProtocol.requestDispatcher(mex);
         propagateDeleteFile(mex.args["filePath"], clientProtocol);
         dataNodeReplicationMap.erase(mex.args["filePath"]);
-        FileManager::getInstance().deleteFile(mex.args["filePath"]);
+        FileManager::getInstance().deleteFileAndVersion(mex.args["filePath"]);
         break;
     case SYNC_STATUS:
         cout << "SERVER: received sync status request\n";

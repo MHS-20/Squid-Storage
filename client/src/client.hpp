@@ -27,6 +27,7 @@ public:
     virtual void initiateConnection();
     virtual void checkSecondarySocket();
     virtual void createFile(std::string filePath);
+    virtual void createFile(std::string filePath, int version);
     virtual void deleteFile(std::string filePath);
     virtual void updateFile(std::string filePath);
     virtual void updateFile(std::string filePath, int version);
