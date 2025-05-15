@@ -55,8 +55,8 @@ Server::Server(int port, int replicationFactor, int timeoutSeconds)
 
     fileTransfer = FileTransfer();
     fileLockMap = map<string, FileLock>();
-    fileTimeMap = map<string, long long>();
-    loadMapFromFile();
+    // fileTimeMap = map<string, long long>();
+    // loadMapFromFile();
 
     primarySocketMap = map<int, SquidProtocol>();
     clientEndpointMap = map<string, pair<SquidProtocol, SquidProtocol>>();
@@ -131,7 +131,7 @@ void Server::run()
             }
 
         sendHearbeats(); // datanodes only
-        saveMapToFile(); // save file time map
+        // saveMapToFile(); // save file time map
         checkFileLockExpiration();
     }
 }
@@ -383,7 +383,7 @@ void Server::handleConnection(SquidProtocol clientProtocol)
         break;
     case SYNC_STATUS:
         cout << "SERVER: received sync status request\n";
-        clientProtocol.response(fileTimeMap);
+        clientProtocol.response(FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH));
         break;
     case ACQUIRE_LOCK:
         cout << "[SERVER]: received acquire lock request for " << mex.args["filePath"] << endl;
@@ -399,7 +399,7 @@ void Server::handleConnection(SquidProtocol clientProtocol)
 
     cout << "[SERVER]: Request dispatched" << endl;
     printMap(fileLockMap, "File Lock Map");
-    printMap(fileTimeMap, "File Time Map");
+    // printMap(fileTimeMap, "File Time Map");
     printMap(dataNodeReplicationMap, "DataNode Replication Map");
     printMap(clientEndpointMap, "Client Endpoint Map");
 };
@@ -464,22 +464,28 @@ void Server::buildFileLockMap()
     for (auto &datanodeEndpoint : dataNodeEndpointMap)
     {
         cout << "[SERVER]: Building file map from datanode: " + datanodeEndpoint.first << endl;
-        Message files = datanodeEndpoint.second.listFiles(); // <filename; last write time>
+        Message files = datanodeEndpoint.second.listFiles(); // <filename; version>
+        
+        
         for (auto &file : files.args)
         {
             if (fileLockMap.find(file.first) == fileLockMap.end())
             { // new file
                 fileLockMap[file.first] = FileLock(file.first);
-                fileTimeMap[file.first] = stoll(file.second);
+                // fileTimeMap[file.first] = stoll(file.second);
+                FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
                 dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
             }
-            else if (fileTimeMap.find(file.first)->second > stoll(file.second))
+            //else if (fileTimeMap.find(file.first)->second > stoll(file.second))
+            else if (FileManager::getInstance().getFileVersion(file.first) > stoi(file.second))
             { // if file on server is neewer, update datanode
-                datanodeEndpoint.second.updateFile(file.first);
+                datanodeEndpoint.second.updateFile(file.first, FileManager::getInstance().getFileVersion(file.first));
             }
-            else if (fileTimeMap.find(file.first)->second < stoll(file.second))
+            // else if (fileTimeMap.find(file.first)->second < stoll(file.second))
+            else if (FileManager::getInstance().getFileVersion(file.first) < stoi(file.second))
             { // if file on server is older, update file time map
-                fileTimeMap[file.first] = stoll(file.second);
+                // fileTimeMap[file.first] = stoll(file.second);
+                FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
             }
 
             // if (dataNodeReplicationMap.find(file.first) == dataNodeReplicationMap.end())
@@ -542,7 +548,7 @@ void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.updateFile(filePath);
 
-    fileTimeMap[filePath] = chrono::system_clock::now().time_since_epoch().count();
+    // fileTimeMap[filePath] = chrono::system_clock::now().time_since_epoch().count();
 }
 
 void Server::propagateUpdateFile(string filePath, int version, SquidProtocol clientProtocol)
@@ -556,8 +562,6 @@ void Server::propagateUpdateFile(string filePath, int version, SquidProtocol cli
 
     for (auto &datanode : dataNodeReplicationMap[filePath])
         datanode.second.updateFile(filePath, version);
-
-    fileTimeMap[filePath] = chrono::system_clock::now().time_since_epoch().count();
 }
 
 void Server::propagateDeleteFile(string filePath, SquidProtocol clientProtocol)
@@ -572,7 +576,7 @@ void Server::propagateDeleteFile(string filePath, SquidProtocol clientProtocol)
         datanode.second.deleteFile(filePath);
 
     fileLockMap.erase(filePath);
-    fileTimeMap.erase(filePath);
+    // fileTimeMap.erase(filePath);
     dataNodeReplicationMap.erase(filePath);
 }
 
@@ -601,7 +605,8 @@ void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
         datanode.second.createFile(filePath);
 
     fileLockMap.insert({filePath, FileLock(filePath)});
-    fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
+    //fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
+
     printMap(fileLockMap, "File Lock Map");
 
     for (auto &client : clientEndpointMap)
@@ -647,7 +652,7 @@ void Server::propagateCreateFile(string filePath, int version, SquidProtocol cli
 // -----------------------
 // ------ PERSISTANCE ----
 // -----------------------
-
+/*
 void Server::saveMapToFile()
 {
     ofstream outFile(filename);
@@ -676,7 +681,7 @@ void Server::loadMapFromFile()
     inFile.close();
     cout << "[SERVER]: File time map loaded from file" << endl;
 }
-
+*/
 // -----------------------
 // ------ PRINT MAPS -----
 // -----------------------
