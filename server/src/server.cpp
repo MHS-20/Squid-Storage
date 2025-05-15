@@ -465,11 +465,18 @@ void Server::buildFileLockMap()
     {
         cout << "[SERVER]: Building file map from datanode: " + datanodeEndpoint.first << endl;
         Message files = datanodeEndpoint.second.listFiles(); // <filename; version>
-        
+        // sometimes explode because message is "ACK:NACK" instead of "filename:version"
         for (auto &file : files.args)
         {
+            if (file.second == "NACK")
+            {
+                cout << "[SERVER]: NACK received from datanode: " + datanodeEndpoint.first << endl;
+                cout << "[SERVER]: File map not built" << endl;
+                return;
+            }
             if (fileLockMap.find(file.first) == fileLockMap.end())
             { // new file
+                cout << "raw version -> " << file.second << "\n";
                 fileLockMap[file.first] = FileLock(file.first);
                 FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
                 dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
