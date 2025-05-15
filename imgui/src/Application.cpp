@@ -23,11 +23,11 @@ namespace SquidStorage
 
     void runClient()
     {
-        client.initiateConnection();
         std::thread secondarySocketThread([]()
                                           {
                                             try
                                             {
+                                                client.initiateConnection();
                                                 client.run();
                                             }
                                             catch (const std::exception &e)
