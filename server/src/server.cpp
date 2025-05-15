@@ -466,32 +466,22 @@ void Server::buildFileLockMap()
         cout << "[SERVER]: Building file map from datanode: " + datanodeEndpoint.first << endl;
         Message files = datanodeEndpoint.second.listFiles(); // <filename; version>
         
-        
         for (auto &file : files.args)
         {
             if (fileLockMap.find(file.first) == fileLockMap.end())
             { // new file
                 fileLockMap[file.first] = FileLock(file.first);
-                // fileTimeMap[file.first] = stoll(file.second);
                 FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
                 dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
             }
-            //else if (fileTimeMap.find(file.first)->second > stoll(file.second))
             else if (FileManager::getInstance().getFileVersion(file.first) > stoi(file.second))
             { // if file on server is neewer, update datanode
                 datanodeEndpoint.second.updateFile(file.first, FileManager::getInstance().getFileVersion(file.first));
             }
-            // else if (fileTimeMap.find(file.first)->second < stoll(file.second))
             else if (FileManager::getInstance().getFileVersion(file.first) < stoi(file.second))
             { // if file on server is older, update file time map
-                // fileTimeMap[file.first] = stoll(file.second);
                 FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
             }
-
-            // if (dataNodeReplicationMap.find(file.first) == dataNodeReplicationMap.end())
-            // {
-            //     dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
-            // }
             cout << "[SERVER]: File: " + file.first + " added to datanode: " + datanodeEndpoint.first << endl;
         }
     }
