@@ -169,6 +169,11 @@ Message SquidProtocol::syncStatus()
     Message response = receiveAndParseMessage();
     if (response.keyword == RESPONSE)
     {
+        if (response.args["ACK"] == "NACK")
+        {
+            cout << nodeType + ": received NACK from server" << endl;
+            return response;
+        }
         cout << nodeType + ": received sync status response" << endl;
         map<string, int> fileVersionMap;
         fileVersionMap = FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH);
