@@ -102,7 +102,11 @@ void Server::run()
         }
 
         readfds = master_set;
-        if (select(max_sd + 1, &readfds, NULL, NULL, NULL) < 0)
+
+        struct timeval timeout;
+        timeout.tv_sec = 1; // 1 second timeout
+        timeout.tv_usec = 0;
+        if (select(max_sd + 1, &readfds, NULL, NULL, &timeout) < 0)
         {
             cerr << "[SERVER]: Select failed" << endl;
             checkCloseConnetions(master_set, max_sd);
