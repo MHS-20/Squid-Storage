@@ -215,6 +215,7 @@ Message SquidProtocol::syncStatus()
                 // this->fileManager.deleteFile(remoteFile.first);
                 cout << nodeType + ": client needs to create the file: " + remoteFile.first << endl;
                 this->readFile(remoteFile.first);
+                FileManager::getInstance().setFileVersion(remoteFile.first, stoi(remoteFile.second));
             }
         }
     }

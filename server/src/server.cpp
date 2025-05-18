@@ -367,17 +367,17 @@ void Server::handleConnection(SquidProtocol clientProtocol)
     case CREATE_FILE:
         clientProtocol.requestDispatcher(mex);
         propagateCreateFile(mex.args["filePath"], stoi(mex.args["fileVersion"]), clientProtocol);
-        FileManager::getInstance().deleteFile(mex.args["filePath"]);
+        FileManager::getInstance().deleteFileAndVersion(mex.args["filePath"]);
         break;
     case READ_FILE:
         getFileFromDataNode(mex.args["filePath"], clientProtocol);
         clientProtocol.requestDispatcher(mex);
-        FileManager::getInstance().deleteFile(mex.args["filePath"]);
+        FileManager::getInstance().deleteFileAndVersion(mex.args["filePath"]);
         break;
     case UPDATE_FILE:
         clientProtocol.requestDispatcher(mex);
         propagateUpdateFile(mex.args["filePath"], stoi(mex.args["fileVersion"]), clientProtocol);
-        FileManager::getInstance().deleteFile(mex.args["filePath"]);
+        FileManager::getInstance().deleteFileAndVersion(mex.args["filePath"]);
         break;
     case DELETE_FILE:
         clientProtocol.requestDispatcher(mex);
