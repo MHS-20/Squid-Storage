@@ -387,7 +387,7 @@ void Server::handleConnection(SquidProtocol clientProtocol)
         break;
     case SYNC_STATUS:
         cout << "SERVER: received sync status request\n";
-        clientProtocol.response(FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH));
+        clientProtocol.response(getFileVersionMap());
         break;
     case ACQUIRE_LOCK:
         cout << "[SERVER]: received acquire lock request for " << mex.args["filePath"] << endl;
@@ -536,6 +536,34 @@ void Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
     else
         cout << "Retrived file from datanode holder" << endl;
 }
+
+map<string, int> Server::getFileVersionMap()
+{
+    map<string, int> fileVersionMap;
+    for (auto &datanode : dataNodeEndpointMap)
+    {
+        Message mex = datanode.second.syncStatus();
+        if (mex.args["ACK"] != "ACK")
+            cerr << "Error while retriving file version map from datanode";
+        else
+        {
+            for (auto &file : mex.args)
+            {
+                if (fileVersionMap.find(file.first) == fileVersionMap.end())
+                {
+                    fileVersionMap[file.first] = stoi(file.second);
+                }
+                else
+                {
+                    fileVersionMap[file.first] = max(fileVersionMap[file.first], stoi(file.second));
+                }
+            }
+        }
+    }
+        
+    
+}
+
 // deprecated
 void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
 {

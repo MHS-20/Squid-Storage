@@ -84,9 +84,8 @@ private:
     // iterators for round robin redundancy
     map<string, SquidProtocol>::iterator endpointIterator;
 
-    void saveMapToFile();
-    void loadMapFromFile();
 
+    map<string, int> getFileVersionMap();
     void printMap(map<string, long long> &map, string name);
     void printMap(map<string, SquidProtocol> &map, string name);
     void printMap(map<string, FileLock> &map, string name);
