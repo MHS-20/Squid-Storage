@@ -161,6 +161,7 @@ Message SquidProtocol::listFiles()
     return response;
 }
 
+
 // executed by client
 Message SquidProtocol::syncStatus()
 {
@@ -169,7 +170,8 @@ Message SquidProtocol::syncStatus()
     Message response = receiveAndParseMessage();
     if (response.keyword == RESPONSE)
     {
-        if (response.args["ACK"] == "NACK")
+        cout << nodeType + "response.args.size()" << response.args.size() << endl;
+        if (response.args.find("ACK") != response.args.end())
         {
             cout << nodeType + ": received NACK from server" << endl;
             return response;
@@ -207,6 +209,7 @@ Message SquidProtocol::syncStatus()
                 this->createFile(localFile.first, localFile.second);
             }
         }
+        cout << nodeType + "response.args.size()" << response.args.size() << endl;
         if (response.args.size() > 0)
         {
             for (auto remoteFile : response.args)
@@ -402,6 +405,7 @@ void SquidProtocol::requestDispatcher(Message message)
         break;
     case SYNC_STATUS:
         cout << nodeType + ": received sync status request\n";
+        cout << "getting file version map" << endl;
         this->response(FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH));
         break;
     case IDENTIFY:

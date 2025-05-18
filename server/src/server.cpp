@@ -134,7 +134,7 @@ void Server::run()
                 }
             }
 
-        sendHearbeats(); // datanodes only
+        // sendHearbeats(); // datanodes only
         // saveMapToFile(); // save file time map
         checkFileLockExpiration();
     }
@@ -542,25 +542,23 @@ map<string, int> Server::getFileVersionMap()
     map<string, int> fileVersionMap;
     for (auto &datanode : dataNodeEndpointMap)
     {
-        Message mex = datanode.second.syncStatus();
-        if (mex.args["ACK"] != "ACK")
-            cerr << "Error while retriving file version map from datanode";
-        else
+        
+        Message mex = datanode.second.listFiles();
+        
+        for (auto &file : mex.args)
         {
-            for (auto &file : mex.args)
+            if (fileVersionMap.find(file.first) == fileVersionMap.end())
             {
-                if (fileVersionMap.find(file.first) == fileVersionMap.end())
-                {
-                    fileVersionMap[file.first] = stoi(file.second);
-                }
-                else
-                {
-                    fileVersionMap[file.first] = max(fileVersionMap[file.first], stoi(file.second));
-                }
+                fileVersionMap[file.first] = stoi(file.second);
+            }
+            else
+            {
+                fileVersionMap[file.first] = max(fileVersionMap[file.first], stoi(file.second));
             }
         }
-    }
         
+    }
+    return fileVersionMap;   
     
 }
 

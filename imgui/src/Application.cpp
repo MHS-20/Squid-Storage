@@ -28,14 +28,18 @@ namespace SquidStorage
                                             try
                                             {
                                                 client.initiateConnection();
-                                                client.run();
+                                                // client.run();
+                                                showLoadingPopup = true;
+                                                client.syncStatus();
+                                                showLoadingPopup = false;
+                                                std::cout << "[GUI]: Closing loading popup" << std::endl;
                                             }
                                             catch (const std::exception &e)
                                             {
                                                 std::cerr << "[CLIENT]: Error in secondary socket thread: " << e.what() << std::endl;
                                             } });
         secondarySocketThread.detach();
-
+        /*                     
         std::thread syncThread([]()
                                {
                                try
@@ -50,10 +54,12 @@ namespace SquidStorage
                                     std::cerr << "[CLIENT]: Error in sync thread: " << e.what() << std::endl;
                                 } });
         syncThread.detach();
+        */       
     }
 
     void RenderUI()
     {
+        client.checkSecondarySocket();
         if (currentFrame == UPDATE_EVERY)
         {
             currentFrame = 0;

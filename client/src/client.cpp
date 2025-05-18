@@ -80,9 +80,11 @@ void Client::checkSecondarySocket()
     else
     {
         // Nessun messaggio disponibile
-        cout << "[CLIENT]: No messages on secondary socket" << endl;
+        return;
+        // cout << "[CLIENT]: No message available on secondary socket" << endl;
     }
 }
+
 void Client::initiateConnection()
 {
     this->connectToServer();
