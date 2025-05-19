@@ -11,7 +11,8 @@ namespace SquidStorage
     bool showFileSavedMessage = false;
     bool showFileSaveButton = false;
     bool showFileDeleteButton = false;
-    bool showLoadingPopup = false;
+    std::atomic<bool> showLoadingPopup = false;
+    std::atomic<bool> isConnected = false;
     bool showFileEditor = false;
     bool showErrorMessage = false;
     bool showRefreshMessage = false;
@@ -31,6 +32,7 @@ namespace SquidStorage
                                             try
                                             {
                                                 client.initiateConnection();
+                                                isConnected = true;
                                                 // client.run();
                                                 showLoadingPopup = true;
                                                 client.syncStatus();
@@ -42,6 +44,7 @@ namespace SquidStorage
                                                 std::cerr << "[CLIENT]: Error in secondary socket thread: " << e.what() << std::endl;
                                             } });
         secondarySocketThread.detach();
+        std::cout << "[GUI]: Socket thread started" << std::endl;
         /*                     
         std::thread syncThread([]()
                                {
@@ -62,7 +65,9 @@ namespace SquidStorage
 
     void RenderUI()
     {
-        client.checkSecondarySocket();
+        if (isConnected)
+            client.checkSecondarySocket();
+        
         if (currentFrame == UPDATE_EVERY)
         {
             currentFrame = 0;

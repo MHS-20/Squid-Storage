@@ -2,6 +2,7 @@
 #include <string>
 #include "../../common/src/filesystem/filemanager.hpp"
 #include "client.hpp"
+#include <atomic>
 namespace SquidStorage
 {
     void runClient();
