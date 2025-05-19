@@ -42,7 +42,7 @@ public:
     void handleConnection(SquidProtocol clientProtocol);
     void handleAccept(int new_socket, sockaddr_in peer_addr);
 
-    void sendHearbeats();
+    void sendHeartbeats();
     void checkFileLockExpiration();
     void eraseFromReplicationMap(string datanodeName);
     void checkCloseConnetions(fd_set &master_set, int max_sd);

@@ -133,7 +133,7 @@ void Server::run()
                     }
                 }
             }
-        sendHearbeats(); // datanodes only
+        sendHeartbeats(); // datanodes only
         // saveMapToFile(); // save file time map
         checkFileLockExpiration();
     }
@@ -181,7 +181,7 @@ void Server::checkCloseConnetions(fd_set &master_set, int max_sd)
     }
 }
 
-void Server::sendHearbeats()
+void Server::sendHeartbeats()
 {
     vector<string> erasable = vector<string>();
     for (auto &datanode : dataNodeEndpointMap)
