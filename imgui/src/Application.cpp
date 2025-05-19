@@ -341,19 +341,20 @@ namespace SquidStorage
     {
         if (selectedFile.empty())
             return false;
-        if (fileLock.getFilePath() == selectedFile)
+        if (FileManager::getInstance().getFileLock().getFilePath() == selectedFile)
         {
-            if (fileLock.isLocked())
+            if (FileManager::getInstance().getFileLock().isLocked())
             {
-                fileLock.setIsLocked(!client.acquireLock(selectedFile));
+                FileManager::getInstance().getFileLock().setIsLocked(!client.acquireLock(selectedFile));
             }
-            return !fileLock.isLocked();
+            return !FileManager::getInstance().getFileLock().isLocked();
         }
         else
         {
-            fileLock = FileLock(selectedFile);
-            fileLock.setIsLocked(!client.acquireLock(selectedFile));
-            return !fileLock.isLocked();
+            auto newFileLock = FileLock(selectedFile);
+            newFileLock.setIsLocked(!client.acquireLock(selectedFile));
+            FileManager::getInstance().setFileLock(newFileLock);
+            return !FileManager::getInstance().getFileLock().isLocked();
         }
         return false;
     }
