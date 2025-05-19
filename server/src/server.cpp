@@ -133,8 +133,7 @@ void Server::run()
                     }
                 }
             }
-
-        // sendHearbeats(); // datanodes only
+        sendHearbeats(); // datanodes only
         // saveMapToFile(); // save file time map
         checkFileLockExpiration();
     }
