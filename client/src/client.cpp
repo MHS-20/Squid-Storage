@@ -70,7 +70,16 @@ void Client::checkSecondarySocket()
             // Ricevi e gestisci il messaggio
             Message mex = secondarySquidProtocol.receiveAndParseMessage();
             cout << "[CLIENT]: Received message on secondary socket: " + mex.keyword << endl;
-            secondarySquidProtocol.requestDispatcher(mex);
+            if (mex.keyword == RELEASE_LOCK)
+            {
+                cout << "[CLIENT]: Received request for FileLock release" << endl;
+                FileManager::getInstance().getFileLock().setIsLocked(true);
+            }
+            else 
+            {
+                secondarySquidProtocol.requestDispatcher(mex);
+            }
+            
         }
         catch (exception &e)
         {
