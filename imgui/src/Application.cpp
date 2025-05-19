@@ -14,9 +14,11 @@ namespace SquidStorage
     bool showLoadingPopup = false;
     bool showFileEditor = false;
     bool showErrorMessage = false;
+    bool showRefreshMessage = false;
     bool newFileButtonPressed = false;
     bool deleteButtonPressed = false;
     char newFileName[128];
+    int openedFileVersion = -1;
 
     Client client("127.0.0.1", 12345, "CLIENT", currentPath);
     FileLock fileLock;
@@ -223,8 +225,12 @@ namespace SquidStorage
                         showLoadingPopup = true;
                         selectedFile = entry.path().filename().string();
                         fileContent = FileManager::getInstance().readFile(selectedFile);
+                        openedFileVersion = FileManager::getInstance().getFileVersion(selectedFile);
                         showFileDeleteButton = true;
                         showFileEditor = true;
+                        showFileSavedMessage = false;
+                        showErrorMessage = false;
+                        showRefreshMessage = false;
                         showLoadingPopup = false; });
                     readThread.detach();
                 }
@@ -249,6 +255,7 @@ namespace SquidStorage
                 if (FileManager::getInstance().createFile(newFileName, 0))
                 {
                     client.createFile(newFileName, 0);
+                    openedFileVersion = 0;
                     fileContent = "";
                     newFileButtonPressed = false;
                 }
@@ -303,6 +310,7 @@ namespace SquidStorage
                             showLoadingPopup = true;
                             client.updateFile(selectedFile, FileManager::getInstance().getFileVersion(selectedFile));
                             //std::this_thread::sleep_for(std::chrono::seconds(1));
+                            openedFileVersion = FileManager::getInstance().getFileVersion(selectedFile);
                             showFileSavedMessage = true;
                             showLoadingPopup = false; });
                         updateThread.detach();
@@ -325,11 +333,36 @@ namespace SquidStorage
                 showFileEditor = false;
                 showFileSavedMessage = false;
                 showFileSaveButton = false;
+                showErrorMessage = false;
+                showRefreshMessage = false;
+                openedFileVersion = 0;
+                
             }
             if (showErrorMessage)
             {
                 ImGui::Separator();
                 ImGui::TextColored(ImVec4(1,0,0,1), "You cannot save the file: either the connection is missing or the file is locked by another user.");
+            }
+            if (showRefreshMessage)
+            {
+                ImGui::TextColored(ImVec4(1,0,0,1), "A newer version of the file is available, please refresh or close the file.");
+                
+                ImGui::SameLine();
+                if (ImGui::Button("Refresh"))
+                {
+                    std::thread readThread([]()
+                                           {
+                        showLoadingPopup = true;
+                        fileContent = FileManager::getInstance().readFile(selectedFile);
+                        openedFileVersion = FileManager::getInstance().getFileVersion(selectedFile);
+                        showFileDeleteButton = true;
+                        showFileEditor = true;
+                        showFileSavedMessage = false;
+                        showErrorMessage = false;
+                        showRefreshMessage = false;
+                        showLoadingPopup = false; });
+                    readThread.detach();
+                }
             }
             if (showFileSavedMessage)
                 ImGui::Text("File saved!");
@@ -341,6 +374,12 @@ namespace SquidStorage
     {
         if (selectedFile.empty())
             return false;
+        if (openedFileVersion < FileManager::getInstance().getFileVersion(selectedFile))
+        {
+            showRefreshMessage = true;
+            return false;
+        }
+
         if (FileManager::getInstance().getFileLock().getFilePath() == selectedFile)
         {
             if (FileManager::getInstance().getFileLock().isLocked())
