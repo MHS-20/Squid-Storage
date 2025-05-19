@@ -193,6 +193,11 @@ void Client::releaseLock(string filePath)
     handleRequest(squidProtocol.releaseLock(filePath));
 }
 
+bool Client::isSecondarySocketAlive()
+{
+    return secondarySquidProtocol.isAlive();
+}
+
 void Client::testing()
 {
     this->initiateConnection();

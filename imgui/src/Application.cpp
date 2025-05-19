@@ -20,6 +20,8 @@ namespace SquidStorage
     bool deleteButtonPressed = false;
     char newFileName[128];
     int openedFileVersion = -1;
+    bool executed = false;
+    bool connectedOnce = false;
 
     Client client("127.0.0.1", 12345, "CLIENT", currentPath);
     FileLock fileLock;
@@ -32,8 +34,6 @@ namespace SquidStorage
                                             try
                                             {
                                                 client.initiateConnection();
-                                                isConnected = true;
-                                                // client.run();
                                                 showLoadingPopup = true;
                                                 client.syncStatus();
                                                 showLoadingPopup = false;
@@ -44,6 +44,8 @@ namespace SquidStorage
                                                 std::cerr << "[CLIENT]: Error in secondary socket thread: " << e.what() << std::endl;
                                             } });
         secondarySocketThread.detach();
+        executed = true;
+        connectedOnce = true;
         std::cout << "[GUI]: Socket thread started" << std::endl;
         /*                     
         std::thread syncThread([]()
@@ -65,9 +67,27 @@ namespace SquidStorage
 
     void RenderUI()
     {
-        if (isConnected)
-            client.checkSecondarySocket();
+        // cout << "[DEBUG]: isSecondarySocketConnected -> "<< client.isSecondarySocketAlive() << std::endl;
+        if (connectedOnce)
+        {
+            if (client.isSecondarySocketAlive())
+            {
+                client.checkSecondarySocket();
+                executed = false;
+            }
+            else 
+            {
+                if (!executed)
+                {
+                    cout << "[GUI]: Connection lost, restarting client..." << std::endl;
+                    cout << "[DEBUG]: Executing SquidStorage::runClient()" << std::endl;
+                    SquidStorage::runClient();
+                    executed = true;
+                }
+            }
+        }
         
+
         if (currentFrame == UPDATE_EVERY)
         {
             currentFrame = 0;
@@ -378,6 +398,8 @@ namespace SquidStorage
     bool fileCanBeSaved()
     {
         if (selectedFile.empty())
+            return false;
+        if (!client.isSecondarySocketAlive())
             return false;
         if (openedFileVersion < FileManager::getInstance().getFileVersion(selectedFile))
         {

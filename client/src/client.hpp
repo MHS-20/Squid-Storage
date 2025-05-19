@@ -34,6 +34,7 @@ public:
     virtual void syncStatus();
     virtual bool acquireLock(std::string filePath);
     virtual void releaseLock(std::string filePath);
+    virtual bool isSecondarySocketAlive();
 
 private:
     SquidProtocol secondarySquidProtocol;
