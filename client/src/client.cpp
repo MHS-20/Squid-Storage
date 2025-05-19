@@ -37,10 +37,10 @@ void Client::run()
 
 void Client::checkSecondarySocket()
 {
-    while (!secondarySquidProtocol.isAlive())
+    if (!secondarySquidProtocol.isAlive())
     {
         cout << "[CLIENT]: Lost connection, reconnecting..." << endl;
-        this_thread::sleep_for(chrono::seconds(5));
+        return;
         // this->initiateConnection();
         // if(secondarySquidProtocol.isAlive()) this->syncStatus();
     }
