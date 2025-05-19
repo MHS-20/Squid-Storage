@@ -285,6 +285,17 @@ bool FileManager::setFileVersion(std::string path, int version)
     return true;
 }
 
+// used by client 
+void FileManager::setFileLock(FileLock fileLock)
+{
+    this->fileLock = fileLock;
+}
+
+FileLock& FileManager::getFileLock()
+{
+    return this->fileLock;
+}
+
 void FileManager::updateFileMap()
 {
     std::vector<std::string> entries = getFiles(DEFAULT_PATH);

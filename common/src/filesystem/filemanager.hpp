@@ -44,6 +44,8 @@ public:
     int getFileVersion(std::string path);
     bool setFileVersion(std::string path, int version);
     
+    void setFileLock(FileLock fileLock);
+    FileLock& getFileLock();
 
     bool acquireLock(std::string path);
     bool releaseLock(std::string path);
@@ -59,4 +61,5 @@ private:
     std::map<std::string, FileLock> fileMap;
     std::map<std::string, int> filesVersion;
     void createFileVersionFile();
+    FileLock fileLock;
 };
