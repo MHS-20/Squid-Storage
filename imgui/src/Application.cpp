@@ -13,6 +13,7 @@ namespace SquidStorage
     bool showFileDeleteButton = false;
     bool showLoadingPopup = false;
     bool showFileEditor = false;
+    bool showErrorMessage = false;
     bool newFileButtonPressed = false;
     bool deleteButtonPressed = false;
     char newFileName[128];
@@ -288,6 +289,7 @@ namespace SquidStorage
                 fileContent = std::string(buffer);
                 showFileSavedMessage = false;
                 showFileSaveButton = fileCanBeSaved();
+                showErrorMessage = !showFileSaveButton;
             }
             ImGui::EndChild();
             if (showFileSaveButton)
@@ -324,7 +326,11 @@ namespace SquidStorage
                 showFileSavedMessage = false;
                 showFileSaveButton = false;
             }
-
+            if (showErrorMessage)
+            {
+                ImGui::Separator();
+                ImGui::TextColored(ImVec4(1,0,0,1), "You cannot save the file: either the connection is missing or the file is locked by another user.");
+            }
             if (showFileSavedMessage)
                 ImGui::Text("File saved!");
         }
