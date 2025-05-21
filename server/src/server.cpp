@@ -269,6 +269,8 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
         getFileFromDataNode(filePath, fileHoldersMap.begin()->second);
     }
 
+    auto endpointIterator = dataNodeEndpointMap.begin();
+
     // Assign new datanodes until the replication factor is met
     for (int i = 0; i < dataNodeEndpointMap.size(); i++)
     {
@@ -280,20 +282,6 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
         // Skip datanodes that are already holding the file
         if (fileHoldersMap.find(datanodeName) != fileHoldersMap.end())
         {
-            // // checking if the server already has the file
-            // ifstream file(filePath);
-            // if (file)
-            // {
-            //     file.close();
-            // }
-            // else
-            // {
-            //     // retrive file to replicate from current datanode that already holds the file
-            //     cout << "[SERVER]: File not found on server, retrieving from datanode: " << datanodeName << endl;
-            //     getFileFromDataNode(filePath, endpointIterator->second);
-            // }
-
-            // skip current datanode
             endpointIterator++;
             continue;
         }
@@ -316,11 +304,11 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
         else
         {
             cout << "[SERVER]: File " << filePath << " successfully sent to datanode: " << datanodeName << endl;
-            if(fileHoldersMap.size() >= replicationFactor)
+            if (fileHoldersMap.size() >= replicationFactor)
             {
                 cout << "[SERVER]: Replication factor met for file: " << filePath << endl;
                 break; // Stop if the replication factor is met
-            } 
+            }
         }
     }
 
@@ -542,6 +530,16 @@ void Server::buildFileLockMap()
             else if (FileManager::getInstance().getFileVersion(file.first) > stoi(file.second))
             { // if file on server is neewer, update datanode
                 cout << "updating datanode file version\n";
+                auto fileHoldersMap = dataNodeReplicationMap[file.first];
+                for (auto it = fileHoldersMap.begin(); it != fileHoldersMap.end(); ++it)
+                {
+                    if (it->first != datanodeEndpoint.first)
+                    {
+                        cout << "retriving file from datanode: " + it->first << endl;
+                        getFileFromDataNode(file.first, it->second);
+                        break;
+                    }
+                }
                 datanodeEndpoint.second.updateFile(file.first, FileManager::getInstance().getFileVersion(file.first));
             }
             else if (FileManager::getInstance().getFileVersion(file.first) < stoi(file.second))
