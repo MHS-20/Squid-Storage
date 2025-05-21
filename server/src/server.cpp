@@ -136,10 +136,14 @@ void Server::run()
         sendHeartbeats(); // datanodes only
         // saveMapToFile(); // save file time map
         checkFileLockExpiration();
+
+        // printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
+        // printMap(dataNodeReplicationMap, "DataNode Replication Map");
     }
 }
 
-void Server::checkFileLockExpiration(){
+void Server::checkFileLockExpiration()
+{
     auto now = chrono::system_clock::now();
     for (auto it = fileLockMap.begin(); it != fileLockMap.end();)
     {
@@ -194,37 +198,56 @@ void Server::sendHeartbeats()
             datanode.second.setIsAlive(false);
             datanode.second.closeConn();
             erasable.push_back(datanode.first);
-            eraseFromReplicationMap(datanode.second.getProcessName());
-            cout << "[SERVER]: Datanode removed from map: " + datanode.first << endl;
+            // dataNodeEndpointMap.erase(datanode.first);
+            // eraseFromReplicationMap(datanode.first);
+            cout << "[SERVER]: Datanode removed from replication map: " + datanode.first << endl;
         }
     }
 
     for (auto &datanode : erasable)
     {
         dataNodeEndpointMap.erase(datanode);
-        cout << "[SERVER]: Datanode removed from map: " + datanode << endl;
+        cout << "[SERVER]: Datanode removed from endpoint map: " + datanode << endl;
     }
 
-    cout << "[SERVER]: Heartbeat sent to all datanodes" << endl;
+    // erase all datanodes that are not alive
+    eraseFromReplicationMap(erasable);
+
+    // cout << "[SERVER]: Heartbeat sent to all datanodes" << endl;
+}
+
+void Server::eraseFromReplicationMap(vector<string> datanodeNames)
+{
+    for (auto &datanodeName : datanodeNames)
+    {
+        cout << "[SERVER]: Erasing datanode: " + datanodeName + " from replication map" << endl;
+        eraseFromReplicationMap(datanodeName);
+    }
 }
 
 void Server::eraseFromReplicationMap(string datanodeName)
 {
     for (auto it = dataNodeReplicationMap.begin(); it != dataNodeReplicationMap.end();)
     {
-        // for each file check if the datanode endpoint holds the file
+        cout << "[SERVER]: Checking file: " + it->first << endl;
+        // printMap(it->second, "Datanode holding the file");
+        //  for each file check if the datanode endpoint holds the file
         auto datanodeEndpoint = it->second.find(datanodeName);
         if (datanodeEndpoint != it->second.end())
         {
             it->second.erase(datanodeEndpoint->first); // erase from internal map
-            cout << "[SERVER]: Datanode removed from replication map of file: " + it->first << endl;
+            cout << "[SERVER]: Datanode " + datanodeName + " removed from replication map of file: " + it->first << endl;
 
-            // check that internal map is not empty
+            // check that internal map is not below threshold
             if (it->second.size() < (replicationFactor / 2) + 1)
             {
-                cout << "[SERVER]: Datanodes hodling the file: " + it->first + "is below threshold" << endl;
+                cout << "[SERVER]: Datanodes hodling the file: " + it->first + " are below threshold" << endl;
                 rebalanceFileReplication(it->first, it->second);
             }
+        }
+        else
+        {
+            cout << "[SERVER]: Datanode: " + datanodeName + " not found for file: " + it->first << endl;
         }
         ++it;
     }
@@ -233,6 +256,18 @@ void Server::eraseFromReplicationMap(string datanodeName)
 void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol> fileHoldersMap)
 {
     cout << "[SERVER]: Rebalancing datanodes for file: " << filePath << endl;
+
+    // retrive file from datanode that already holds the file
+    ifstream file(filePath);
+    if (file)
+    {
+        file.close();
+    }
+    else
+    {
+        cout << "[SERVER]: File not found on server, retrieving from datanode: " << fileHoldersMap.begin()->first << endl;
+        getFileFromDataNode(filePath, fileHoldersMap.begin()->second);
+    }
 
     // Assign new datanodes until the replication factor is met
     for (int i = 0; i < dataNodeEndpointMap.size(); i++)
@@ -245,17 +280,32 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
         // Skip datanodes that are already holding the file
         if (fileHoldersMap.find(datanodeName) != fileHoldersMap.end())
         {
+            // // checking if the server already has the file
+            // ifstream file(filePath);
+            // if (file)
+            // {
+            //     file.close();
+            // }
+            // else
+            // {
+            //     // retrive file to replicate from current datanode that already holds the file
+            //     cout << "[SERVER]: File not found on server, retrieving from datanode: " << datanodeName << endl;
+            //     getFileFromDataNode(filePath, endpointIterator->second);
+            // }
+
+            // skip current datanode
             endpointIterator++;
             continue;
         }
 
-        // Assign the datanode to the file
+        // Assign the file to a new datanode
         fileHoldersMap[datanodeName] = endpointIterator->second;
-        endpointIterator++;
 
         // Send the file to the newly assigned datanode
         cout << "[SERVER]: Sending file " << filePath << " to datanode: " << datanodeName << endl;
         Message response = endpointIterator->second.createFile(filePath, FileManager::getInstance().getFileVersion(filePath));
+        FileManager::getInstance().deleteFile(filePath);
+        endpointIterator++;
 
         // Check if the file transfer was successful
         if (response.args["ACK"] != "ACK")
@@ -266,6 +316,11 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
         else
         {
             cout << "[SERVER]: File " << filePath << " successfully sent to datanode: " << datanodeName << endl;
+            if(fileHoldersMap.size() >= replicationFactor)
+            {
+                cout << "[SERVER]: Replication factor met for file: " << filePath << endl;
+                break; // Stop if the replication factor is met
+            } 
         }
     }
 
@@ -401,10 +456,11 @@ void Server::handleConnection(SquidProtocol clientProtocol)
     }
 
     cout << "[SERVER]: Request dispatched" << endl;
-    printMap(fileLockMap, "File Lock Map");
-    // printMap(fileTimeMap, "File Time Map");
-    printMap(dataNodeReplicationMap, "DataNode Replication Map");
-    printMap(clientEndpointMap, "Client Endpoint Map");
+    // printMap(fileLockMap, "File Lock Map");
+    //  printMap(fileTimeMap, "File Time Map");
+    //  printMap(FileManager::getInstance().getFileVersionMap(), "File Version Map");
+    // printMap(dataNodeReplicationMap, "DataNode Replication Map");
+    // printMap(clientEndpointMap, "Client Endpoint Map");
 };
 
 // -----------------------
@@ -468,30 +524,33 @@ void Server::buildFileLockMap()
     {
         cout << "[SERVER]: Building file map from datanode: " + datanodeEndpoint.first << endl;
         Message files = datanodeEndpoint.second.listFiles(); // <filename; version>
-        // sometimes explode because message is "ACK:NACK" instead of "filename:version"
         for (auto &file : files.args)
         {
             if (file.second == "NACK")
             {
-                cout << "[SERVER]: NACK received from datanode: " + datanodeEndpoint.first << endl;
-                cout << "[SERVER]: File map not built" << endl;
-                return;
+                cout << "[SERVER]: NACK for: " + datanodeEndpoint.first << endl;
+                // cout << "[SERVER]: File map not built" << endl;
+                // return;
+                continue;
             }
             if (fileLockMap.find(file.first) == fileLockMap.end())
             { // new file
                 cout << "raw version -> " << file.second << "\n";
                 fileLockMap[file.first] = FileLock(file.first);
                 FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
-                dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
             }
             else if (FileManager::getInstance().getFileVersion(file.first) > stoi(file.second))
             { // if file on server is neewer, update datanode
+                cout << "updating datanode file version\n";
                 datanodeEndpoint.second.updateFile(file.first, FileManager::getInstance().getFileVersion(file.first));
             }
             else if (FileManager::getInstance().getFileVersion(file.first) < stoi(file.second))
             { // if file on server is older, update file time map
+                cout << "updating server file version\n";
                 FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
             }
+
+            dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
             cout << "[SERVER]: File: " + file.first + " added to datanode: " + datanodeEndpoint.first << endl;
         }
     }
@@ -541,9 +600,9 @@ map<string, int> Server::getFileVersionMap()
     map<string, int> fileVersionMap;
     for (auto &datanode : dataNodeEndpointMap)
     {
-        
+
         Message mex = datanode.second.listFiles();
-        
+
         for (auto &file : mex.args)
         {
             if (fileVersionMap.find(file.first) == fileVersionMap.end())
@@ -555,10 +614,8 @@ map<string, int> Server::getFileVersionMap()
                 fileVersionMap[file.first] = max(fileVersionMap[file.first], stoi(file.second));
             }
         }
-        
     }
-    return fileVersionMap;   
-    
+    return fileVersionMap;
 }
 
 // deprecated
@@ -631,7 +688,7 @@ void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
         datanode.second.createFile(filePath);
 
     fileLockMap.insert({filePath, FileLock(filePath)});
-    //fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
+    // fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
 
     printMap(fileLockMap, "File Lock Map");
 

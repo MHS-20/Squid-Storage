@@ -44,6 +44,7 @@ public:
 
     void sendHeartbeats();
     void checkFileLockExpiration();
+    void eraseFromReplicationMap(vector<string> datanodeNames);
     void eraseFromReplicationMap(string datanodeName);
     void checkCloseConnetions(fd_set &master_set, int max_sd);
     void rebalanceFileReplication(string filePath, map<string, SquidProtocol> fileHoldersMap);

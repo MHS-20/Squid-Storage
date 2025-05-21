@@ -71,6 +71,7 @@ Message SquidProtocol::createFile(string filePath, int version)
 {
     cout << "file name: " + filePath << endl;
     this->sendMessage(this->formatter.createFileFormat(filePath, version));
+    cout << nodeType + ": sent create file request" << endl;
     Message response = receiveAndParseMessage();
     cout << nodeType + ": received create file response" << endl;
     transferFile(filePath, response);
