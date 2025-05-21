@@ -16,7 +16,7 @@
 #include "filetransfer.hpp"
 #include "squidProtocolServer.cpp"
 
-#define DEFAULT_PORT 8080
+#define DEFAULT_PORT 12345
 #define BUFFER_SIZE 1024
 #define DEFAULT_PATH "./test_txt/test_server"
 
