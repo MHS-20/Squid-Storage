@@ -1,4 +1,9 @@
 # Squid Storage
+[![CMake Build (Ubuntu + macOS)](https://github.com/MHS-20/Squid-Storage/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/MHS-20/Squid-Storage/actions/workflows/cmake-multi-platform.yml)
+
+<div align="center">
+<img src="squidstorage_logo.png" alt="Storage Logo" width="250">
+</div>
 
 Squid Storage is a distributed storage system designed to manage file replication and consistency of a specific folder across multiple nodes. 
 <br/>
@@ -75,7 +80,3 @@ The full set of messages is displayed below:
 | Close         | -                         | ACK                          |
 +---------------+---------------------------+------------------------------+
 ```
-
-<div align="center">
-<img src="squidstorage_logo.png" alt="Storage Logo" width="250">
-</div>
