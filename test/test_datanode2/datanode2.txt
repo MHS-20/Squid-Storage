@@ -1,2 +1,0 @@
-I am datanode2
-ciao

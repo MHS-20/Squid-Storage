@@ -2,9 +2,9 @@ name: CMake Build (Ubuntu + macOS)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
@@ -15,18 +15,43 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Configure CMake
-      run: cmake -B build
+      - name: Install dependencies (SDL2 + GLEW)
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y libsdl2-dev libglew-dev
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew update
+            brew install sdl2 glew
+          fi
+        shell: bash
 
-    - name: Build
-      run: cmake --build build
+      - name: Configure CMake
+        run: cmake -B build
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: my-app-${{ matrix.os }}
-        path: |
-          build/my-executable  # <-- cambia questo con il tuo eseguibile
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SquidStorage-${{ matrix.os }}
+          path: |
+            build/SquidStorage
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SquidStorageServer-${{ matrix.os }}
+          path: |
+            build/SquidStorageServer
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DataNode-${{ matrix.os }}
+          path: |
+            build/DataNode
