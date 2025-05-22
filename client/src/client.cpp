@@ -37,10 +37,10 @@ void Client::run()
 
 void Client::checkSecondarySocket()
 {
-    while (!secondarySquidProtocol.isAlive())
+    if (!secondarySquidProtocol.isAlive())
     {
         cout << "[CLIENT]: Lost connection, reconnecting..." << endl;
-        this_thread::sleep_for(chrono::seconds(5));
+        return;
         // this->initiateConnection();
         // if(secondarySquidProtocol.isAlive()) this->syncStatus();
     }
@@ -62,15 +62,23 @@ void Client::checkSecondarySocket()
         return;
     }
 
-    // Se ci sono dati sulla socket secondaria
+    // if data on second socket
     if (FD_ISSET(secondarySquidProtocol.getSocket(), &readfds))
     {
         try
         {
-            // Ricevi e gestisci il messaggio
             Message mex = secondarySquidProtocol.receiveAndParseMessage();
             cout << "[CLIENT]: Received message on secondary socket: " + mex.keyword << endl;
-            secondarySquidProtocol.requestDispatcher(mex);
+            if (mex.keyword == RELEASE_LOCK)
+            {
+                cout << "[CLIENT]: Received request for FileLock release" << endl;
+                FileManager::getInstance().getFileLock().setIsLocked(true);
+            }
+            else 
+            {
+                secondarySquidProtocol.requestDispatcher(mex);
+            }
+            
         }
         catch (exception &e)
         {
@@ -79,10 +87,11 @@ void Client::checkSecondarySocket()
     }
     else
     {
-        // Nessun messaggio disponibile
-        cout << "[CLIENT]: No messages on secondary socket" << endl;
+        return;
+        // cout << "[CLIENT]: No message available on secondary socket" << endl;
     }
 }
+
 void Client::initiateConnection()
 {
     this->connectToServer();
@@ -147,6 +156,10 @@ void Client::createFile(string filePath)
 {
     handleRequest(squidProtocol.createFile(filePath));
 }
+void Client::createFile(string filePath, int version)
+{
+    handleRequest(squidProtocol.createFile(filePath, version));
+}
 
 void Client::deleteFile(string filePath)
 {
@@ -156,6 +169,11 @@ void Client::deleteFile(string filePath)
 void Client::updateFile(string filePath)
 {
     handleRequest(squidProtocol.updateFile(filePath));
+}
+
+void Client::updateFile(std::string filePath, int version)
+{
+    handleRequest(squidProtocol.updateFile(filePath, version));
 }
 
 void Client::syncStatus()
@@ -171,6 +189,11 @@ bool Client::acquireLock(string filePath)
 void Client::releaseLock(string filePath)
 {
     handleRequest(squidProtocol.releaseLock(filePath));
+}
+
+bool Client::isSecondarySocketAlive()
+{
+    return secondarySquidProtocol.isAlive();
 }
 
 void Client::testing()

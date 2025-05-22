@@ -5,44 +5,117 @@
 
 namespace SquidStorage
 {
-
     std::string currentPath = fs::current_path().string(); // current directory
     std::string selectedFile = "";                         // selected file
     std::string fileContent = "";                          // selected file content
     bool showFileSavedMessage = false;
     bool showFileSaveButton = false;
     bool showFileDeleteButton = false;
+    std::atomic<bool> showLoadingPopup = false;
+    std::atomic<bool> isConnected = false;
     bool showFileEditor = false;
+    bool showErrorMessage = false;
+    bool showRefreshMessage = false;
     bool newFileButtonPressed = false;
     bool deleteButtonPressed = false;
     char newFileName[128];
+    int openedFileVersion = -1;
+    bool executed = false;
+    bool connectedOnce = false;
+
     Client client("127.0.0.1", 12345, "CLIENT", currentPath);
     FileLock fileLock;
     int currentFrame = 0;
 
+    
+    void attachClient(Client client)
+    {
+        SquidStorage::client = client;
+    }
+
     void runClient()
     {
-        client.initiateConnection();
         std::thread secondarySocketThread([]()
                                           {
                                             try
                                             {
-                                                client.run();
+                                                client.initiateConnection();
+                                                showLoadingPopup = true;
+                                                client.syncStatus();
+                                                showLoadingPopup = false;
+                                                std::cout << "[GUI]: Closing loading popup" << std::endl;
                                             }
                                             catch (const std::exception &e)
                                             {
                                                 std::cerr << "[CLIENT]: Error in secondary socket thread: " << e.what() << std::endl;
                                             } });
         secondarySocketThread.detach();
-        client.syncStatus();
+        executed = true;
+        connectedOnce = true;
+        std::cout << "[GUI]: Socket thread started" << std::endl;
+        /*                     
+        std::thread syncThread([]()
+                               {
+                               try
+                               {
+                                    showLoadingPopup = true;
+                                    client.syncStatus();
+                                    showLoadingPopup = false;
+                                    std::cout << "[GUI]: Closing loading popup" << std::endl;
+                               }
+                               catch (const std::exception &e)
+                               {
+                                    std::cerr << "[CLIENT]: Error in sync thread: " << e.what() << std::endl;
+                                } });
+        syncThread.detach();
+        */       
     }
 
     void RenderUI()
     {
+        // cout << "[DEBUG]: isSecondarySocketConnected -> "<< client.isSecondarySocketAlive() << std::endl;
+        if (connectedOnce)
+        {
+            if (client.isSecondarySocketAlive())
+            {
+                client.checkSecondarySocket();
+                executed = false;
+            }
+            else 
+            {
+                if (!executed)
+                {
+                    cout << "[GUI]: Connection lost, restarting client..." << std::endl;
+                    cout << "[DEBUG]: Executing SquidStorage::runClient()" << std::endl;
+                    SquidStorage::runClient();
+                    executed = true;
+                }
+            }
+        }
+        
+
         if (currentFrame == UPDATE_EVERY)
         {
             currentFrame = 0;
-            //client.checkSecondarySocket(); // this blocks the gui if connection is lost
+            // client.checkSecondarySocket(); // this blocks the gui if connection is lost
+        }
+
+        // Popup for loading rendering
+        if (showLoadingPopup)
+        {
+            ImGui::OpenPopup("Loading...");
+        }
+        if (ImGui::BeginPopupModal("Loading...", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
+        {
+            ImGui::Text("Please wait...");
+            ImGui::Text("Synchronizing with the server...");
+            ImGui::Separator();
+            ImGui::Text("This may take a few seconds.");
+            if (!showLoadingPopup)
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
         }
 
         currentFrame++;
@@ -178,10 +251,19 @@ namespace SquidStorage
             {
                 if (ImGui::Selectable(("- " + name).c_str(), selectedFile == name))
                 {
-                    selectedFile = entry.path().filename().string();
-                    fileContent = FileManager::getInstance().readFile(selectedFile);
-                    showFileDeleteButton = true;
-                    showFileEditor = true;
+                    std::thread readThread([entry]()
+                                           {
+                        showLoadingPopup = true;
+                        selectedFile = entry.path().filename().string();
+                        fileContent = FileManager::getInstance().readFile(selectedFile);
+                        openedFileVersion = FileManager::getInstance().getFileVersion(selectedFile);
+                        showFileDeleteButton = true;
+                        showFileEditor = true;
+                        showFileSavedMessage = false;
+                        showErrorMessage = false;
+                        showRefreshMessage = false;
+                        showLoadingPopup = false; });
+                    readThread.detach();
                 }
             }
         }
@@ -201,9 +283,10 @@ namespace SquidStorage
             ImGui::InputText("File name", newFileName, 128);
             if (ImGui::Button("Create"))
             {
-                if (FileManager::getInstance().createFile(newFileName))
+                if (FileManager::getInstance().createFile(newFileName, 0))
                 {
-                    client.createFile(newFileName);
+                    client.createFile(newFileName, 0);
+                    openedFileVersion = 0;
                     fileContent = "";
                     newFileButtonPressed = false;
                 }
@@ -216,7 +299,7 @@ namespace SquidStorage
 
         if (deleteButtonPressed)
         {
-            if (FileManager::getInstance().deleteFile(selectedFile))
+            if (FileManager::getInstance().deleteFileAndVersion(selectedFile))
             {
                 client.deleteFile(selectedFile);
                 selectedFile = "";
@@ -244,16 +327,24 @@ namespace SquidStorage
                 fileContent = std::string(buffer);
                 showFileSavedMessage = false;
                 showFileSaveButton = fileCanBeSaved();
+                showErrorMessage = !showFileSaveButton;
             }
             ImGui::EndChild();
             if (showFileSaveButton)
             {
                 if (ImGui::Button("Save"))
                 {
-                    if (FileManager::getInstance().updateFile(selectedFile, fileContent))
+                    if (FileManager::getInstance().updateFileAndVersion(selectedFile, fileContent))
                     {
-                        client.updateFile(selectedFile);
-                        showFileSavedMessage = true;
+                        std::thread updateThread([]()
+                                                 {
+                            showLoadingPopup = true;
+                            client.updateFile(selectedFile, FileManager::getInstance().getFileVersion(selectedFile));
+                            //std::this_thread::sleep_for(std::chrono::seconds(1));
+                            openedFileVersion = FileManager::getInstance().getFileVersion(selectedFile);
+                            showFileSavedMessage = true;
+                            showLoadingPopup = false; });
+                        updateThread.detach();
                     }
                     else
                     {
@@ -273,8 +364,37 @@ namespace SquidStorage
                 showFileEditor = false;
                 showFileSavedMessage = false;
                 showFileSaveButton = false;
+                showErrorMessage = false;
+                showRefreshMessage = false;
+                openedFileVersion = 0;
+                
             }
-
+            if (showErrorMessage)
+            {
+                ImGui::Separator();
+                ImGui::TextColored(ImVec4(1,0,0,1), "You cannot save the file: either the connection is missing or the file is locked by another user.");
+            }
+            if (showRefreshMessage)
+            {
+                ImGui::TextColored(ImVec4(1,0,0,1), "A newer version of the file is available, please refresh or close the file.");
+                
+                ImGui::SameLine();
+                if (ImGui::Button("Refresh"))
+                {
+                    std::thread readThread([]()
+                                           {
+                        showLoadingPopup = true;
+                        fileContent = FileManager::getInstance().readFile(selectedFile);
+                        openedFileVersion = FileManager::getInstance().getFileVersion(selectedFile);
+                        showFileDeleteButton = true;
+                        showFileEditor = true;
+                        showFileSavedMessage = false;
+                        showErrorMessage = false;
+                        showRefreshMessage = false;
+                        showLoadingPopup = false; });
+                    readThread.detach();
+                }
+            }
             if (showFileSavedMessage)
                 ImGui::Text("File saved!");
         }
@@ -285,19 +405,28 @@ namespace SquidStorage
     {
         if (selectedFile.empty())
             return false;
-        if (fileLock.getFilePath() == selectedFile)
+        if (!client.isSecondarySocketAlive())
+            return false;
+        if (openedFileVersion < FileManager::getInstance().getFileVersion(selectedFile))
         {
-            if (fileLock.isLocked())
+            showRefreshMessage = true;
+            return false;
+        }
+
+        if (FileManager::getInstance().getFileLock().getFilePath() == selectedFile)
+        {
+            if (FileManager::getInstance().getFileLock().isLocked())
             {
-                fileLock.setIsLocked(!client.acquireLock(selectedFile));
+                FileManager::getInstance().getFileLock().setIsLocked(!client.acquireLock(selectedFile));
             }
-            return !fileLock.isLocked();
+            return !FileManager::getInstance().getFileLock().isLocked();
         }
         else
         {
-            fileLock = FileLock(selectedFile);
-            fileLock.setIsLocked(!client.acquireLock(selectedFile));
-            return !fileLock.isLocked();
+            auto newFileLock = FileLock(selectedFile);
+            newFileLock.setIsLocked(!client.acquireLock(selectedFile));
+            FileManager::getInstance().setFileLock(newFileLock);
+            return !FileManager::getInstance().getFileLock().isLocked();
         }
         return false;
     }

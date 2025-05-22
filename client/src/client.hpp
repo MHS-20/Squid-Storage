@@ -11,7 +11,7 @@
 #include "squidprotocol.hpp"
 
 #define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 8080
+#define SERVER_PORT 12345
 #define BUFFER_SIZE 1024
 
 class Client : public Peer
@@ -27,11 +27,14 @@ public:
     virtual void initiateConnection();
     virtual void checkSecondarySocket();
     virtual void createFile(std::string filePath);
+    virtual void createFile(std::string filePath, int version);
     virtual void deleteFile(std::string filePath);
     virtual void updateFile(std::string filePath);
+    virtual void updateFile(std::string filePath, int version);
     virtual void syncStatus();
     virtual bool acquireLock(std::string filePath);
     virtual void releaseLock(std::string filePath);
+    virtual bool isSecondarySocketAlive();
 
 private:
     SquidProtocol secondarySquidProtocol;

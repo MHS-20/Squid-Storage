@@ -40,8 +40,10 @@ public:
     virtual Message listFiles();
 
     virtual Message createFile(string filePath);
+    virtual Message createFile(string filePath, int version);
     virtual Message readFile(string filePath);
     virtual Message updateFile(string filePath);
+    virtual Message updateFile(string filePath, int version);
     virtual Message deleteFile(string filePath);
 
     virtual Message acquireLock(string filePath);
@@ -58,6 +60,8 @@ public:
     virtual void response(int port);
     virtual void response(string ack);
     virtual void response(string nodeType, string processName);
+    virtual void response(map<string, int> fileVersionMap);
+    // deprecated
     virtual void response(map<string, fs::file_time_type> filesLastWrite);
     virtual void response(map<string, long long> fileTimeMap);
 

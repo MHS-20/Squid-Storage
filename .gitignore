@@ -7,5 +7,5 @@ CMakeFiles/*
 !build/build.sh
 !build/buildGnome.sh
 !build/buildTestMultiClient.sh
-!build/buildTestMultiDataNodes.sh
+!build/buildTestMultiDataNode.sh
 !build/buildTestMultiple.sh

@@ -67,10 +67,30 @@ Message SquidProtocol::createFile(string filePath)
     transferFile(filePath, response);
     return receiveAndParseMessage();
 }
+Message SquidProtocol::createFile(string filePath, int version)
+{
+    cout << "file name: " + filePath << endl;
+    this->sendMessage(this->formatter.createFileFormat(filePath, version));
+    cout << nodeType + ": sent create file request" << endl;
+    Message response = receiveAndParseMessage();
+    cout << nodeType + ": received create file response" << endl;
+    transferFile(filePath, response);
+    return receiveAndParseMessage();
+}
+
+
 
 Message SquidProtocol::updateFile(string filePath)
 {
     this->sendMessage(this->formatter.updateFileFormat(filePath));
+    Message response = receiveAndParseMessage();
+    transferFile(filePath, response);
+    return receiveAndParseMessage();
+}
+
+Message SquidProtocol::updateFile(string filePath, int version)
+{
+    this->sendMessage(this->formatter.updateFileFormat(filePath, version));
     Message response = receiveAndParseMessage();
     transferFile(filePath, response);
     return receiveAndParseMessage();
@@ -142,6 +162,7 @@ Message SquidProtocol::listFiles()
     return response;
 }
 
+
 // executed by client
 Message SquidProtocol::syncStatus()
 {
@@ -150,28 +171,35 @@ Message SquidProtocol::syncStatus()
     Message response = receiveAndParseMessage();
     if (response.keyword == RESPONSE)
     {
+        cout << nodeType + "response.args.size()" << response.args.size() << endl;
+        if (response.args.find("ACK") != response.args.end())
+        {
+            cout << nodeType + ": received NACK from server" << endl;
+            return response;
+        }
         cout << nodeType + ": received sync status response" << endl;
-        map<string, fs::file_time_type> filesLastWrite;
-        filesLastWrite = FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH);
+        map<string, int> fileVersionMap;
+        fileVersionMap = FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH);
         cout << nodeType + ": checking files: " << endl;
-        for (auto localFile : filesLastWrite)
+        for (auto localFile : fileVersionMap)
         {
             if (response.args.find(localFile.first) != response.args.end())
             {
                 cout << nodeType + ": found file that already exists on server " << localFile.first << endl;
-                if (localFile.second.time_since_epoch().count() > stoll(response.args[localFile.first]))
+                if (localFile.second  > stoi(response.args[localFile.first]))
                 {
                     // in this case server needs to update the file
                     cout << nodeType + ": server needs to update the file: " + localFile.first << endl;
-                    this->updateFile(localFile.first);
+                    this->updateFile(localFile.first, localFile.second);
                     // this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
                 }
-                else if (localFile.second.time_since_epoch().count() < stoll(response.args[localFile.first]))
+                else if (localFile.second < stoi(response.args[localFile.first]))
                 {
                     // in this case client needs to update the file
                     // this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
                     cout << nodeType + ": client needs to update the file: " + localFile.first << endl;
                     this->readFile(localFile.first);
+                    FileManager::getInstance().setFileVersion(localFile.first, stoi(response.args[localFile.first]));
                 }
                 response.args.erase(localFile.first);
             }
@@ -179,9 +207,10 @@ Message SquidProtocol::syncStatus()
             {
                 // in this case server needs to create the file
                 cout << nodeType + ": server needs to create the file: " + localFile.first << endl;
-                this->createFile(localFile.first);
+                this->createFile(localFile.first, localFile.second);
             }
         }
+        cout << nodeType + "response.args.size()" << response.args.size() << endl;
         if (response.args.size() > 0)
         {
             for (auto remoteFile : response.args)
@@ -190,11 +219,14 @@ Message SquidProtocol::syncStatus()
                 // this->fileManager.deleteFile(remoteFile.first);
                 cout << nodeType + ": client needs to create the file: " + remoteFile.first << endl;
                 this->readFile(remoteFile.first);
+                FileManager::getInstance().setFileVersion(remoteFile.first, stoi(remoteFile.second));
             }
         }
     }
     return formatter.parseMessage(formatter.responseFormat(string("ACK")));
 }
+
+
 
 // ---------------------------
 // --------- PARSING ---------
@@ -243,7 +275,7 @@ bool SquidProtocol::handleErrors(ssize_t bytes)
         alive = false;
         return false;
     }
-    else if (bytes< 0)
+    else if (bytes < 0)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {
@@ -277,9 +309,15 @@ void SquidProtocol::response(string nodeType, string processName)
     this->sendMessage(this->formatter.responseFormat(nodeType, processName));
 }
 
+// deprecated
 void SquidProtocol::response(map<string, fs::file_time_type> filesLastWrite)
 {
     this->sendMessage(this->formatter.responseFormat(filesLastWrite));
+}
+
+void SquidProtocol::response(map<string, int> fileVersionMap)
+{
+    this->sendMessage(this->formatter.responseFormat(fileVersionMap));
 }
 
 void SquidProtocol::response(map<string, long long> fileTimeMap)
@@ -329,6 +367,7 @@ void SquidProtocol::requestDispatcher(Message message)
         this->response(string("ACK"));
         cout << nodeType + ": Receiving file" << endl;
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+        FileManager::getInstance().setFileVersion(message.args["filePath"], stoi(message.args["fileVersion"]));
         this->response(string("ACK"));
         break;
     case TRANSFER_FILE:
@@ -346,11 +385,12 @@ void SquidProtocol::requestDispatcher(Message message)
         cout << nodeType + ": received update file request\n";
         this->response(string("ACK"));
         this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
+        FileManager::getInstance().setFileVersion(message.args["filePath"], stoi(message.args["fileVersion"]));
         this->response(string("ACK"));
         break;
     case DELETE_FILE:
         cout << nodeType + ": received delete file request\n";
-        FileManager::getInstance().deleteFile(message.args["filePath"]);
+        FileManager::getInstance().deleteFileAndVersion(message.args["filePath"]);
         this->response(string("ACK"));
         break;
     // case ACQUIRE_LOCK:
@@ -358,7 +398,7 @@ void SquidProtocol::requestDispatcher(Message message)
     //     this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
     //     break;
     case RELEASE_LOCK:
-        //FileManager::getInstance().releaseLock(message.args["filePath"]);
+        // FileManager::getInstance().releaseLock(message.args["filePath"]);
         this->response(string("ACK"));
         break;
     case HEARTBEAT:
@@ -366,7 +406,8 @@ void SquidProtocol::requestDispatcher(Message message)
         break;
     case SYNC_STATUS:
         cout << nodeType + ": received sync status request\n";
-        this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
+        cout << "getting file version map" << endl;
+        this->response(FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH));
         break;
     case IDENTIFY:
         this->response(this->nodeType, this->processName);

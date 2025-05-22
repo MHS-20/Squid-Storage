@@ -16,7 +16,7 @@
 #include "filetransfer.hpp"
 #include "squidProtocolServer.cpp"
 
-#define DEFAULT_PORT 8080
+#define DEFAULT_PORT 12345
 #define BUFFER_SIZE 1024
 #define DEFAULT_PATH "./test_txt/test_server"
 
@@ -42,15 +42,18 @@ public:
     void handleConnection(SquidProtocol clientProtocol);
     void handleAccept(int new_socket, sockaddr_in peer_addr);
 
-    void sendHearbeats();
+    void sendHeartbeats();
     void checkFileLockExpiration();
+    void eraseFromReplicationMap(vector<string> datanodeNames);
     void eraseFromReplicationMap(string datanodeName);
     void checkCloseConnetions(fd_set &master_set, int max_sd);
     void rebalanceFileReplication(string filePath, map<string, SquidProtocol> fileHoldersMap);
 
     void getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
     void propagateCreateFile(string filePath, SquidProtocol clientProtocol);
+    void propagateCreateFile(string filePath, int version, SquidProtocol clientProtocol);
     void propagateUpdateFile(string filePath, SquidProtocol clientProtocol);
+    void propagateUpdateFile(string filePath, int version, SquidProtocol clientProtocol);
     void propagateDeleteFile(string filePath, SquidProtocol clientProtocol);
 
 private:
@@ -82,9 +85,8 @@ private:
     // iterators for round robin redundancy
     map<string, SquidProtocol>::iterator endpointIterator;
 
-    void saveMapToFile();
-    void loadMapFromFile();
 
+    map<string, int> getFileVersionMap();
     void printMap(map<string, long long> &map, string name);
     void printMap(map<string, SquidProtocol> &map, string name);
     void printMap(map<string, FileLock> &map, string name);

@@ -1,8 +1,4 @@
 #!/bin/bash
-# Build the project
-cmake ..
-make -j 8
-
 # Move executables to their respective directories
 cp ./SquidStorage ../test_txt/test_client1/SquidStorage
 cp ./SquidStorageServer ../test_txt/test_server/SquidStorageServer
@@ -38,4 +34,3 @@ rm -f ../test_txt/test_client1/SquidStorage
 rm -f ../test_txt/test_server/SquidStorageServer
 rm -f ../test_txt/test_datanode1/DataNode
 rm -f ../test_txt/test_datanode2/DataNode
-# make clean
