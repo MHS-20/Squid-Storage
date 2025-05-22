@@ -27,6 +27,12 @@ namespace SquidStorage
     FileLock fileLock;
     int currentFrame = 0;
 
+    
+    void attachClient(Client client)
+    {
+        SquidStorage::client = client;
+    }
+
     void runClient()
     {
         std::thread secondarySocketThread([]()

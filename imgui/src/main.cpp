@@ -19,9 +19,20 @@
 #include <SDL_opengl.h>
 #include "Application.hpp"
 
+std::string currentPath = fs::current_path().string();
+
 // Main code
-int main(int, char **)
+int main(int argc, char **argv)
 {
+    const char* server_ip = SERVER_IP;
+    int server_port = SERVER_PORT;
+    if (argc > 1)
+        server_ip = argv[1];
+    if (argc > 2)
+        server_port = atoi(argv[2]);
+
+    std::cout << "Starting Client. Server IP: " << server_ip << ", Server Port: " << server_port << std::endl;
+    SquidStorage::attachClient(Client(server_ip, server_port, "CLIENT", currentPath));
     // Setup SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {

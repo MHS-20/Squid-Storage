@@ -62,12 +62,11 @@ void Client::checkSecondarySocket()
         return;
     }
 
-    // Se ci sono dati sulla socket secondaria
+    // if data on second socket
     if (FD_ISSET(secondarySquidProtocol.getSocket(), &readfds))
     {
         try
         {
-            // Ricevi e gestisci il messaggio
             Message mex = secondarySquidProtocol.receiveAndParseMessage();
             cout << "[CLIENT]: Received message on secondary socket: " + mex.keyword << endl;
             if (mex.keyword == RELEASE_LOCK)
@@ -88,7 +87,6 @@ void Client::checkSecondarySocket()
     }
     else
     {
-        // Nessun messaggio disponibile
         return;
         // cout << "[CLIENT]: No message available on secondary socket" << endl;
     }

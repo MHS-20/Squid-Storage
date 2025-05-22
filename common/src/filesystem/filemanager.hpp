@@ -59,7 +59,6 @@ private:
     FileManager(const FileManager &) = delete;
     FileManager &operator=(const FileManager &) = delete;
     std::map<std::string, FileLock> fileMap;
-    std::map<std::string, int> filesVersion;
     void createFileVersionFile();
     FileLock fileLock;
 };
