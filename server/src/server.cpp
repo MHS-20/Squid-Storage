@@ -192,7 +192,7 @@ void Server::sendHeartbeats()
     {
         cout << "sending hearbeat to:" + datanode.first << endl;
         Message heartbeat = datanode.second.heartbeat();
-        if (heartbeat.args["ACK"] != "ACK")
+        if (!heartbeat.isAck())
         {
             cout << "[SERVER]: Heartbeat failed for datanode: " + datanode.first << endl;
             datanode.second.setIsAlive(false);
@@ -296,7 +296,7 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
         endpointIterator++;
 
         // Check if the file transfer was successful
-        if (response.args["ACK"] != "ACK")
+        if (!response.isAck())
         {
             cerr << "[SERVER]: Failed to send file " << filePath << " to datanode: " << datanodeName << endl;
             fileHoldersMap.erase(datanodeName); // Remove the datanode from the map if the transfer failed
@@ -330,40 +330,36 @@ void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
 {
     SquidProtocol primaryProtocol = SquidProtocol(new_socket, "[SERVER_PRIMARY]", "SERVER_PRIMARY");
     Message mex = primaryProtocol.identify();
-    cout << "[SERVER]: Identity received from peer: " + mex.args["processName"] << endl;
+    string peerProcessName = mex.getString(FieldID::PROCESS_NAME);
+    string peerNodeType    = mex.getString(FieldID::NODE_TYPE);
+    cout << "[SERVER]: Identity received from peer: " + peerProcessName << endl;
 
-    if (mex.args["nodeType"] == "DATANODE")
+    if (peerNodeType == "DATANODE")
     {
-        dataNodeEndpointMap[mex.args["processName"]] = primaryProtocol;
+        dataNodeEndpointMap[peerProcessName] = primaryProtocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
 
         cout << "[SERVER]: Building file map..." << endl;
         buildFileLockMap();
         return;
     }
-    else if (mex.args["nodeType"] != "CLIENT")
+    else if (peerNodeType != "CLIENT")
     {
         cout << "[SERVER]: Unknown node type\n";
         return;
     }
 
-    primaryProtocol.response(string("ACK"));
+    primaryProtocol.response(true);
     cout << "[SERVER]: Ack sent to client" << endl;
 
     cout << "[SERVER]: Connecting to client..." << endl;
     Message connectResponse = primaryProtocol.connectServer();
-    if (connectResponse.args.find("port") == connectResponse.args.end())
+    int secondaryPort = static_cast<int>(connectResponse.getUint32(FieldID::PORT, 0));
+    if (secondaryPort == 0)
     {
         cerr << "[SERVER]: Port not found in connect response" << endl;
         return;
     }
-    std::string portStr = connectResponse.args["port"];
-    if (portStr.empty() || !std::all_of(portStr.begin(), portStr.end(), ::isdigit))
-    {
-        cerr << "[SERVER]: Error: Invalid port value received: " << portStr << endl;
-        return;
-    }
-    int secondaryPort = stoi(portStr);
     cout << "[SERVER]: Client port: " << secondaryPort << endl;
 
     // Create second connection
@@ -379,9 +375,8 @@ void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
         cout << "[SERVER]: Connected to client..." << endl;
 
     SquidProtocol secondaryProtocol = SquidProtocol(second_fd, "[SERVER_SECONDARY]", "SERVER_SECONDARY");
-    clientEndpointMap[mex.args["processName"]] = pair(primaryProtocol, secondaryProtocol);
+    clientEndpointMap[peerProcessName] = pair(primaryProtocol, secondaryProtocol);
     primarySocketMap[new_socket] = primaryProtocol;
-    // secondarySocketMap[second_fd] = secondaryProtocol;
 }
 
 void Server::handleConnection(SquidProtocol clientProtocol)
@@ -395,49 +390,51 @@ void Server::handleConnection(SquidProtocol clientProtocol)
 
     try
     {
-        mex = clientProtocol.receiveAndParseMessage();
-        cout << "[SERVER]: Received message: " + mex.keyword << endl;
+        mex = clientProtocol.receiveAndParse();
+        cout << "[SERVER]: Received message: " + opcodeToString(mex.opcode) << endl;
     }
     catch (exception &e)
     {
         cerr << "[SERVER]: Error receiving message: " << e.what() << endl;
-        // return;
     }
 
-    switch (mex.keyword)
+    string filePath = mex.getString(FieldID::FILE_PATH);
+    int fileVersion = static_cast<int>(mex.getUint32(FieldID::FILE_VERSION, 0));
+
+    switch (mex.opcode)
     {
-    case CREATE_FILE:
+    case Opcode::CREATE_FILE:
         clientProtocol.requestDispatcher(mex);
-        propagateCreateFile(mex.args["filePath"], stoi(mex.args["fileVersion"]), clientProtocol);
-        FileManager::getInstance().deleteFileAndVersion(mex.args["filePath"]);
+        propagateCreateFile(filePath, fileVersion, clientProtocol);
+        FileManager::getInstance().deleteFileAndVersion(filePath);
         break;
-    case READ_FILE:
-        getFileFromDataNode(mex.args["filePath"], clientProtocol);
+    case Opcode::READ_FILE:
+        getFileFromDataNode(filePath, clientProtocol);
         clientProtocol.requestDispatcher(mex);
-        FileManager::getInstance().deleteFileAndVersion(mex.args["filePath"]);
+        FileManager::getInstance().deleteFileAndVersion(filePath);
         break;
-    case UPDATE_FILE:
+    case Opcode::UPDATE_FILE:
         clientProtocol.requestDispatcher(mex);
-        propagateUpdateFile(mex.args["filePath"], stoi(mex.args["fileVersion"]), clientProtocol);
-        FileManager::getInstance().deleteFileAndVersion(mex.args["filePath"]);
+        propagateUpdateFile(filePath, fileVersion, clientProtocol);
+        FileManager::getInstance().deleteFileAndVersion(filePath);
         break;
-    case DELETE_FILE:
+    case Opcode::DELETE_FILE:
         clientProtocol.requestDispatcher(mex);
-        propagateDeleteFile(mex.args["filePath"], clientProtocol);
-        dataNodeReplicationMap.erase(mex.args["filePath"]);
-        FileManager::getInstance().deleteFileAndVersion(mex.args["filePath"]);
+        propagateDeleteFile(filePath, clientProtocol);
+        dataNodeReplicationMap.erase(filePath);
+        FileManager::getInstance().deleteFileAndVersion(filePath);
         break;
-    case SYNC_STATUS:
+    case Opcode::SYNC_STATUS:
         cout << "SERVER: received sync status request\n";
         clientProtocol.response(getFileVersionMap());
         break;
-    case ACQUIRE_LOCK:
-        cout << "[SERVER]: received acquire lock request for " << mex.args["filePath"] << endl;
-        clientProtocol.response(this->acquireLock(mex.args["filePath"]));
+    case Opcode::ACQUIRE_LOCK:
+        cout << "[SERVER]: received acquire lock request for " << filePath << endl;
+        clientProtocol.response(this->acquireLock(filePath));
         break;
-    case RELEASE_LOCK:
-        this->releaseLock(mex.args["filePath"]);
-        clientProtocol.response(string("ACK"));
+    case Opcode::RELEASE_LOCK:
+        this->releaseLock(filePath);
+        clientProtocol.response(true);
         break;
     default:
         clientProtocol.requestDispatcher(mex);
@@ -511,24 +508,23 @@ void Server::buildFileLockMap()
     for (auto &datanodeEndpoint : dataNodeEndpointMap)
     {
         cout << "[SERVER]: Building file map from datanode: " + datanodeEndpoint.first << endl;
-        Message files = datanodeEndpoint.second.listFiles(); // <filename; version>
-        for (auto &file : files.args)
+        Message files = datanodeEndpoint.second.listFiles();
+        if (!files.isResponse())
         {
-            if (file.second == "NACK")
-            {
-                cout << "[SERVER]: NACK for: " + datanodeEndpoint.first << endl;
-                // cout << "[SERVER]: File map not built" << endl;
-                // return;
-                continue;
-            }
+            cout << "[SERVER]: NACK for: " + datanodeEndpoint.first << endl;
+            continue;
+        }
+        map<string, int> fileMap = files.getFileVersionMap();
+        for (auto &file : fileMap)
+        {
             if (fileLockMap.find(file.first) == fileLockMap.end())
-            { // new file
+            {
                 cout << "raw version -> " << file.second << "\n";
                 fileLockMap[file.first] = FileLock(file.first);
-                FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
+                FileManager::getInstance().setFileVersion(file.first, file.second);
             }
-            else if (FileManager::getInstance().getFileVersion(file.first) > stoi(file.second))
-            { // if file on server is neewer, update datanode
+            else if (FileManager::getInstance().getFileVersion(file.first) > file.second)
+            {
                 cout << "updating datanode file version\n";
                 auto fileHoldersMap = dataNodeReplicationMap[file.first];
                 for (auto it = fileHoldersMap.begin(); it != fileHoldersMap.end(); ++it)
@@ -542,10 +538,10 @@ void Server::buildFileLockMap()
                 }
                 datanodeEndpoint.second.updateFile(file.first, FileManager::getInstance().getFileVersion(file.first));
             }
-            else if (FileManager::getInstance().getFileVersion(file.first) < stoi(file.second))
-            { // if file on server is older, update file time map
+            else if (FileManager::getInstance().getFileVersion(file.first) < file.second)
+            {
                 cout << "updating server file version\n";
-                FileManager::getInstance().setFileVersion(file.first, stoi(file.second));
+                FileManager::getInstance().setFileVersion(file.first, file.second);
             }
 
             dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
@@ -587,7 +583,7 @@ void Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
     }
 
     Message mex = dataNodeHolderProtocol.readFile(filePath);
-    if (mex.args["ACK"] != "ACK")
+    if (!mex.isAck())
         cerr << "Error while retriving file from datanode";
     else
         cout << "Retrived file from datanode holder" << endl;
@@ -598,19 +594,15 @@ map<string, int> Server::getFileVersionMap()
     map<string, int> fileVersionMap;
     for (auto &datanode : dataNodeEndpointMap)
     {
-
         Message mex = datanode.second.listFiles();
-
-        for (auto &file : mex.args)
+        map<string, int> datanodeMap = mex.getFileVersionMap();
+        for (auto &file : datanodeMap)
         {
-            if (fileVersionMap.find(file.first) == fileVersionMap.end())
-            {
-                fileVersionMap[file.first] = stoi(file.second);
-            }
+            auto it = fileVersionMap.find(file.first);
+            if (it == fileVersionMap.end())
+                fileVersionMap[file.first] = file.second;
             else
-            {
-                fileVersionMap[file.first] = max(fileVersionMap[file.first], stoi(file.second));
-            }
+                it->second = max(it->second, file.second);
         }
     }
     return fileVersionMap;

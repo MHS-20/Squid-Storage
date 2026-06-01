@@ -1,78 +1,79 @@
 #pragma once
+
+#include <string>
+#include <vector>
+#include <map>
+#include <filesystem>
+#include <cstdint>
 #include <sys/socket.h>
+#include <unistd.h>
 #include <signal.h>
-#include <thread>
-#include "filetransfer.hpp"
-#include "filemanager.hpp"
+
+#include "../filesystem/filetransfer.hpp"
+#include "../filesystem/filemanager.hpp"
 #include "squidProtocolFormatter.hpp"
 
-#define BUFFER_SIZE 1024
-#define DEFAULT_FOLDER_PATH fs::current_path().string() // current directory
-using namespace std;
+namespace fs = std::filesystem;
+
+#define DEFAULT_FOLDER_PATH fs::current_path().string()
 
 class SquidProtocol
 {
 public:
     SquidProtocol();
-    ~SquidProtocol();
-    SquidProtocol(int socket_fd, string nodeType, string processName);
+    SquidProtocol(int socket_fd, std::string nodeType, std::string processName);
+    virtual ~SquidProtocol();
 
-    virtual bool isAlive();
-    virtual void setIsAlive(bool isAlive);
+    virtual bool        isAlive()        const { return alive_; }
+    virtual void        setIsAlive(bool v)     { alive_ = v; }
+    virtual int         getSocket()      const { return socket_fd_; }
+    virtual void        setSocket(int fd)      { socket_fd_ = fd; }
+    virtual std::string getProcessName() const { return processName_; }
+    virtual std::string getNodeType()    const { return nodeType_; }
+    virtual std::string toString()       const;
 
-    virtual int getSocket();
-    virtual void setSocket(int socket_fd);
-
-    virtual string getProcessName() const { return processName; }
-    virtual string getNodeType() const { return nodeType; }
-    virtual string toString() const;
-
-    virtual Message receiveAndParseMessage();
-    virtual string receiveMessageWithLength();
-    bool handleErrors(ssize_t bytesRead);
-
-    virtual void requestDispatcher(Message request);
-    virtual void responseDispatcher(Message response);
+    void sendFrame(const std::vector<uint8_t> &frame);
+    std::vector<uint8_t> receiveFrame();
+    virtual Message receiveAndParse();
 
     virtual Message identify();
     virtual Message connectServer();
     virtual Message closeConn();
     virtual Message listFiles();
-
-    virtual Message createFile(string filePath);
-    virtual Message createFile(string filePath, int version);
-    virtual Message readFile(string filePath);
-    virtual Message updateFile(string filePath);
-    virtual Message updateFile(string filePath, int version);
-    virtual Message deleteFile(string filePath);
-
-    virtual Message acquireLock(string filePath);
-    virtual Message releaseLock(string filePath);
-
-    virtual Message heartbeat();
     virtual Message syncStatus();
 
-    void sendMessage(string message);
-    void transferFile(string filePath, Message response);
-    void sendMessageWithLength(string &message);
+    virtual Message createFile(const std::string &filePath);
+    virtual Message createFile(const std::string &filePath, int version);
+    virtual Message readFile  (const std::string &filePath);
+    virtual Message updateFile(const std::string &filePath);
+    virtual Message updateFile(const std::string &filePath, int version);
+    virtual Message deleteFile(const std::string &filePath);
 
-    virtual void response(bool lock);
+    virtual Message acquireLock(const std::string &filePath);
+    virtual Message releaseLock(const std::string &filePath);
+    virtual Message heartbeat();
+
+    virtual void response(bool isAck);
     virtual void response(int port);
-    virtual void response(string ack);
-    virtual void response(string nodeType, string processName);
-    virtual void response(map<string, int> fileVersionMap);
-    // deprecated
-    virtual void response(map<string, fs::file_time_type> filesLastWrite);
-    virtual void response(map<string, long long> fileTimeMap);
+    virtual void response(const std::string &ack);
+    virtual void response(const std::string &nodeType, const std::string &processName);
+    virtual void response(const std::map<std::string, int> &fileVersionMap);
+    virtual void response(const std::map<std::string, long long> &fileTimeMap);
+    virtual void response(const std::map<std::string, fs::file_time_type> &filesLastWrite);
+
+    virtual void requestDispatcher (const Message &request);
+    virtual void responseDispatcher(const Message &response);
 
 protected:
-    int socket_fd;
-    char buffer[BUFFER_SIZE] = {0};
+    int         socket_fd_   = -1;
+    bool        alive_       = false;
+    std::string processName_;
+    std::string nodeType_;
 
-    bool alive;
-    string processName;
-    string nodeType;
+    FileTransfer           fileTransfer_;
+    SquidProtocolFormatter formatter_;
 
-    FileTransfer fileTransfer;
-    SquidProtocolFormatter formatter;
+    bool recvExact(uint8_t *buf, size_t n);
+    bool handleRecvError(ssize_t bytes);
+    void sendFileAfterAck(const std::string &filePath, const Message &ackMsg);
 };

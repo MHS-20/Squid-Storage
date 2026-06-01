@@ -1,0 +1,70 @@
+services:
+  # 1. Central Coordinator Node
+  server:
+    image: archlinux:latest
+    volumes:
+      - ./build:/app/bin:ro
+      - server_storage:/app/mockfiles # Provide a storage directory if it manages file caches
+    working_dir: /app
+    command: ./bin/SquidStorageServer 12345 2 10
+    ports:
+      - "12345:12345"
+    networks:
+      squid_network:
+        ipv4_address: 172.20.0.10
+
+  # 2. DataNode Alpha
+  datanode1:
+    image: archlinux:latest
+    volumes:
+      - ./build:/app/bin:ro
+      - dn1_storage:/app/mockfiles    # Mount a dedicated workspace folder named mockfiles
+    working_dir: /app
+    command: ./bin/DataNode 172.20.0.10 12345 DATANODE_ALPHA
+    depends_on:
+      - server
+    networks:
+      squid_network:
+        ipv4_address: 172.20.0.11
+
+  # 3. DataNode Beta
+  datanode2:
+    image: archlinux:latest
+    volumes:
+      - ./build:/app/bin:ro
+      - dn2_storage:/app/mockfiles    # Mount a dedicated workspace folder named mockfiles
+    working_dir: /app
+    command: ./bin/DataNode 172.20.0.10 12345 DATANODE_BETA
+    depends_on:
+      - server
+    networks:
+      squid_network:
+        ipv4_address: 172.20.0.12
+
+  # 4. Automated Test Runner (Mock Client)
+  mock_client:
+    image: archlinux:latest
+    volumes:
+      - ./build:/app/bin:ro
+      - ./mockfiles:/app/mockfiles     # Binds your local host folder containing testfile.txt
+    working_dir: /app
+    command: ./bin/SquidStorageClient 172.20.0.10 12345 12346 MOCK_CLIENT_CONTAINER
+    depends_on:
+      - datanode1
+      - datanode2
+    networks:
+      squid_network:
+        ipv4_address: 172.20.0.20
+
+networks:
+  squid_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Use Docker volumes to create real, writeable, isolated test workspaces
+volumes:
+  server_storage:
+  dn1_storage:
+  dn2_storage:

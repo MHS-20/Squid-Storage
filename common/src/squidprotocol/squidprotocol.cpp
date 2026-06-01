@@ -1,522 +1,433 @@
 #include "squidprotocol.hpp"
-using namespace std;
+#include <iostream>
+#include <cerrno>
 
 SquidProtocol::SquidProtocol() {}
 
-SquidProtocol::SquidProtocol(int socket_fd, string nodeType, string processName)
+SquidProtocol::SquidProtocol(int socket_fd, std::string nodeType, std::string processName)
+    : socket_fd_(socket_fd),
+      alive_(true),
+      processName_(std::move(processName)),
+      nodeType_(std::move(nodeType)),
+      formatter_(nodeType_)
 {
-    this->socket_fd = socket_fd;
-    this->processName = processName;
-    this->nodeType = nodeType;
-    this->alive = true;
-
     signal(SIGPIPE, SIG_IGN);
-    this->fileTransfer = FileTransfer();
-    this->formatter = SquidProtocolFormatter(nodeType);
+    fileTransfer_ = FileTransfer();
 }
 
 SquidProtocol::~SquidProtocol() {}
 
-bool SquidProtocol::isAlive()
+std::string SquidProtocol::toString() const
 {
-    return alive;
+    return "Protocol{" + nodeType_ + ":" + processName_ + "}";
 }
 
-void SquidProtocol::setIsAlive(bool isAlive)
+bool SquidProtocol::recvExact(uint8_t *buf, size_t n)
 {
-    this->alive = isAlive;
+    size_t total = 0;
+    while (total < n)
+    {
+        ssize_t r = recv(socket_fd_, buf + total, n - total, 0);
+        if (!handleRecvError(r)) return false;
+        total += static_cast<size_t>(r);
+    }
+    return true;
 }
 
-int SquidProtocol::getSocket()
+bool SquidProtocol::handleRecvError(ssize_t bytes)
 {
-    return socket_fd;
+    if (bytes == 0)
+    {
+        std::cout << nodeType_ + ": Connection closed by peer" << std::endl;
+        alive_ = false;
+        return false;
+    }
+    if (bytes < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            std::cout << nodeType_ + ": Socket timeout" << std::endl;
+        alive_ = false;
+        return false;
+    }
+    return true;
 }
 
-void SquidProtocol::setSocket(int socket_fd)
+void SquidProtocol::sendFrame(const std::vector<uint8_t> &frame)
 {
-    this->socket_fd = socket_fd;
+    size_t total = 0;
+    while (total < frame.size())
+    {
+        ssize_t sent = send(socket_fd_, frame.data() + total, frame.size() - total, 0);
+        if (sent <= 0)
+        {
+            alive_ = false;
+            return;
+        }
+        total += static_cast<size_t>(sent);
+    }
 }
 
-string SquidProtocol::toString() const
+std::vector<uint8_t> SquidProtocol::receiveFrame()
 {
-    return "Protocol{" + nodeType + ":" + processName + "}";
+    uint8_t header[FRAME_HEADER_SIZE];
+    if (!recvExact(header, FRAME_HEADER_SIZE))
+        return {};
+
+    uint16_t magic = (uint16_t(header[0]) << 8) | header[1];
+    if (magic != SQUID_MAGIC)
+    {
+        std::cerr << nodeType_ + ": Bad frame magic" << std::endl;
+        alive_ = false;
+        return {};
+    }
+
+    uint8_t numFields  = header[4];
+    uint32_t payloadLen = (uint32_t(header[5]) << 24) | (uint32_t(header[6]) << 16) |
+                          (uint32_t(header[7]) <<  8) |  uint32_t(header[8]);
+
+    std::vector<uint8_t> frame(header, header + FRAME_HEADER_SIZE);
+
+    for (uint8_t i = 0; i < numFields; ++i)
+    {
+        uint8_t fhdr[3];
+        if (!recvExact(fhdr, 3)) return {};
+        uint16_t vlen = (uint16_t(fhdr[1]) << 8) | fhdr[2];
+        frame.push_back(fhdr[0]);
+        frame.push_back(fhdr[1]);
+        frame.push_back(fhdr[2]);
+        if (vlen > 0)
+        {
+            size_t before = frame.size();
+            frame.resize(before + vlen);
+            if (!recvExact(frame.data() + before, vlen)) return {};
+        }
+    }
+
+    if (payloadLen > 0)
+    {
+        size_t before = frame.size();
+        frame.resize(before + payloadLen);
+        if (!recvExact(frame.data() + before, payloadLen)) return {};
+    }
+
+    return frame;
 }
 
-Message SquidProtocol::closeConn()
+Message SquidProtocol::receiveAndParse()
 {
-    this->sendMessage(this->formatter.closeFormat());
-    return receiveAndParseMessage();
+    std::vector<uint8_t> raw = receiveFrame();
+    if (raw.empty()) return formatter_.makeNack();
+    try { return formatter_.parseMessage(raw); }
+    catch (const std::exception &e)
+    {
+        std::cerr << nodeType_ + ": parse error: " << e.what() << std::endl;
+        return formatter_.makeNack();
+    }
+}
+
+void SquidProtocol::sendFileAfterAck(const std::string &filePath, const Message &ackMsg)
+{
+    if (ackMsg.isAck())
+        fileTransfer_.sendFile(socket_fd_, processName_.c_str(), filePath.c_str());
+    else
+        std::cerr << nodeType_ + ": Error while transferring file: " + filePath << std::endl;
 }
 
 Message SquidProtocol::identify()
 {
-    this->sendMessage(this->formatter.identifyFormat());
-    return this->receiveAndParseMessage();
-}
-
-// ----------------------------
-// --------- REQUESTS ---------
-// ----------------------------
-
-Message SquidProtocol::createFile(string filePath)
-{
-    cout << "file name: " + filePath << endl;
-    this->sendMessage(this->formatter.createFileFormat(filePath));
-    Message response = receiveAndParseMessage();
-    cout << nodeType + ": received create file response" << endl;
-    transferFile(filePath, response);
-    return receiveAndParseMessage();
-}
-Message SquidProtocol::createFile(string filePath, int version)
-{
-    cout << "file name: " + filePath << endl;
-    this->sendMessage(this->formatter.createFileFormat(filePath, version));
-    cout << nodeType + ": sent create file request" << endl;
-    Message response = receiveAndParseMessage();
-    cout << nodeType + ": received create file response" << endl;
-    transferFile(filePath, response);
-    return receiveAndParseMessage();
-}
-
-
-
-Message SquidProtocol::updateFile(string filePath)
-{
-    this->sendMessage(this->formatter.updateFileFormat(filePath));
-    Message response = receiveAndParseMessage();
-    transferFile(filePath, response);
-    return receiveAndParseMessage();
-}
-
-Message SquidProtocol::updateFile(string filePath, int version)
-{
-    this->sendMessage(this->formatter.updateFileFormat(filePath, version));
-    Message response = receiveAndParseMessage();
-    transferFile(filePath, response);
-    return receiveAndParseMessage();
-}
-
-void SquidProtocol::transferFile(string filePath, Message response)
-{
-    cout << nodeType + ": trying transfering file" << endl;
-    cout << response.toString() << endl;
-
-    if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
-        this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
-    else
-        cerr << nodeType + ": Error while transfering file: " + filePath << endl;
-    return;
-}
-
-Message SquidProtocol::readFile(string filePath)
-{
-    cout << nodeType + ": sending read file request" << endl;
-    this->sendMessage(this->formatter.readFileFormat(filePath));
-    Message response = receiveAndParseMessage();
-    if (response.keyword == RESPONSE && response.args["ACK"] == "ACK")
-        this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), filePath.c_str());
-    return receiveAndParseMessage();
-}
-
-Message SquidProtocol::deleteFile(string filePath)
-{
-    this->sendMessage(this->formatter.deleteFileFormat(filePath));
-    return receiveAndParseMessage();
-}
-
-Message SquidProtocol::acquireLock(string filePath)
-{
-    cout << nodeType + ": sending acquire lock request for " << filePath << endl;
-    this->sendMessage(this->formatter.acquireLockFormat(filePath));
-    return receiveAndParseMessage();
-}
-
-Message SquidProtocol::releaseLock(string filePath)
-{
-    this->sendMessage(this->formatter.releaseLockFormat(filePath));
-    return receiveAndParseMessage();
-}
-
-Message SquidProtocol::heartbeat()
-{
-    this->sendMessage(this->formatter.heartbeatFormat());
-    return receiveAndParseMessage();
+    sendFrame(formatter_.identifyFormat());
+    return receiveAndParse();
 }
 
 Message SquidProtocol::connectServer()
 {
-    cout << nodeType + ": sending connect server request" << endl;
-    this->sendMessage(this->formatter.connectServerFormat());
-    Message response = receiveAndParseMessage();
-    cout << nodeType + ": received connect server response" << endl;
-    return response;
+    std::cout << nodeType_ + ": sending connect server request" << std::endl;
+    sendFrame(formatter_.connectServerFormat());
+    Message r = receiveAndParse();
+    std::cout << nodeType_ + ": received connect server response" << std::endl;
+    return r;
 }
 
-// executed by server
+Message SquidProtocol::closeConn()
+{
+    sendFrame(formatter_.closeFormat());
+    return receiveAndParse();
+}
+
 Message SquidProtocol::listFiles()
 {
-    cout << nodeType + ": sending list files request" << endl;
-    this->sendMessage(this->formatter.syncStatusFormat());
-    Message response = receiveAndParseMessage();
-    cout << nodeType + ": received list files response" << endl;
-    return response;
+    std::cout << nodeType_ + ": sending list files request" << std::endl;
+    sendFrame(formatter_.syncStatusFormat());
+    Message r = receiveAndParse();
+    std::cout << nodeType_ + ": received list files response" << std::endl;
+    return r;
 }
 
-
-// executed by client
 Message SquidProtocol::syncStatus()
 {
-    cout << nodeType + ": sending sync status request" << endl;
-    this->sendMessage(this->formatter.syncStatusFormat());
-    Message response = receiveAndParseMessage();
-    if (response.keyword == RESPONSE)
+    std::cout << nodeType_ + ": sending sync status request" << std::endl;
+    sendFrame(formatter_.syncStatusFormat());
+    Message response = receiveAndParse();
+
+    if (!response.isResponse()) return response;
+
+    if (response.isAck())
     {
-        cout << nodeType + "response.args.size()" << response.args.size() << endl;
-        if (response.args.find("ACK") != response.args.end())
+        std::cout << nodeType_ + ": received NACK from server" << std::endl;
+        return response;
+    }
+
+    std::cout << nodeType_ + ": received sync status response" << std::endl;
+    std::map<std::string, int> serverMap = response.getFileVersionMap();
+    std::map<std::string, int> localMap  = FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH);
+
+    for (auto &localFile : localMap)
+    {
+        auto it = serverMap.find(localFile.first);
+        if (it != serverMap.end())
         {
-            cout << nodeType + ": received NACK from server" << endl;
-            return response;
-        }
-        cout << nodeType + ": received sync status response" << endl;
-        map<string, int> fileVersionMap;
-        fileVersionMap = FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH);
-        cout << nodeType + ": checking files: " << endl;
-        for (auto localFile : fileVersionMap)
-        {
-            if (response.args.find(localFile.first) != response.args.end())
+            if (localFile.second > it->second)
             {
-                cout << nodeType + ": found file that already exists on server " << localFile.first << endl;
-                if (localFile.second  > stoi(response.args[localFile.first]))
-                {
-                    // in this case server needs to update the file
-                    cout << nodeType + ": server needs to update the file: " + localFile.first << endl;
-                    this->updateFile(localFile.first, localFile.second);
-                    // this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
-                }
-                else if (localFile.second < stoi(response.args[localFile.first]))
-                {
-                    // in this case client needs to update the file
-                    // this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), localFile.first.c_str());
-                    cout << nodeType + ": client needs to update the file: " + localFile.first << endl;
-                    this->readFile(localFile.first);
-                    FileManager::getInstance().setFileVersion(localFile.first, stoi(response.args[localFile.first]));
-                }
-                response.args.erase(localFile.first);
+                std::cout << nodeType_ + ": server needs to update the file: " + localFile.first << std::endl;
+                updateFile(localFile.first, localFile.second);
             }
-            else
+            else if (localFile.second < it->second)
             {
-                // in this case server needs to create the file
-                cout << nodeType + ": server needs to create the file: " + localFile.first << endl;
-                this->createFile(localFile.first, localFile.second);
+                std::cout << nodeType_ + ": client needs to update the file: " + localFile.first << std::endl;
+                readFile(localFile.first);
+                FileManager::getInstance().setFileVersion(localFile.first, it->second);
             }
+            serverMap.erase(it);
         }
-        cout << nodeType + "response.args.size()" << response.args.size() << endl;
-        if (response.args.size() > 0)
+        else
         {
-            for (auto remoteFile : response.args)
-            {
-                // in this case client needs to create the file
-                // this->fileManager.deleteFile(remoteFile.first);
-                cout << nodeType + ": client needs to create the file: " + remoteFile.first << endl;
-                this->readFile(remoteFile.first);
-                FileManager::getInstance().setFileVersion(remoteFile.first, stoi(remoteFile.second));
-            }
+            std::cout << nodeType_ + ": server needs to create the file: " + localFile.first << std::endl;
+            createFile(localFile.first, localFile.second);
         }
     }
-    return formatter.parseMessage(formatter.responseFormat(string("ACK")));
-}
 
-
-
-// ---------------------------
-// --------- PARSING ---------
-// ---------------------------
-Message SquidProtocol::receiveAndParseMessage()
-{
-    string receivedMessage = receiveMessageWithLength();
-    return this->formatter.parseMessage(receivedMessage);
-}
-
-string SquidProtocol::receiveMessageWithLength()
-{
-    // Read the length of the message
-    uint32_t messageLength;
-    ssize_t bytesRead = recv(socket_fd, &messageLength, sizeof(messageLength), 0);
-    if (!handleErrors(bytesRead))
+    for (auto &remoteFile : serverMap)
     {
-        return formatter.responseFormat(string("NACK"));
+        std::cout << nodeType_ + ": client needs to create the file: " + remoteFile.first << std::endl;
+        readFile(remoteFile.first);
+        FileManager::getInstance().setFileVersion(remoteFile.first, remoteFile.second);
     }
 
-    messageLength = ntohl(messageLength);
-    // cout << nodeType + ": Expecting message of length: " << messageLength << endl;
-
-    // Read the actual message
-    char *buffer = new char[messageLength + 1];
-    bytesRead = recv(socket_fd, buffer, messageLength, 0);
-    if (!handleErrors(bytesRead))
-    {
-        return formatter.responseFormat(string("NACK"));
-    }
-
-    buffer[messageLength] = '\0';
-    string message(buffer);
-    delete[] buffer;
-
-    cout << "[INFO]: Received message: " << message << endl;
-    return message;
+    return formatter_.makeNack();
 }
 
-bool SquidProtocol::handleErrors(ssize_t bytes)
+Message SquidProtocol::createFile(const std::string &filePath)
 {
-    if (bytes == 0)
-    {
-        cout << nodeType + ": Connection closed by peer" << endl;
-        // close(socket_fd);
-        alive = false;
-        return false;
-    }
-    else if (bytes < 0)
-    {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-        {
-            cout << nodeType + "Socket timeout" << endl;
-        }
-        // close(socket_fd);
-        alive = false;
-        return false;
-    }
-
-    return true;
+    std::cout << "file name: " + filePath << std::endl;
+    sendFrame(formatter_.createFileFormat(filePath));
+    Message ack = receiveAndParse();
+    std::cout << nodeType_ + ": received create file response" << std::endl;
+    sendFileAfterAck(filePath, ack);
+    return receiveAndParse();
 }
 
-// -----------------------------
-// --------- RESPONSES ---------
-// -----------------------------
-
-void SquidProtocol::response(string ack)
+Message SquidProtocol::createFile(const std::string &filePath, int version)
 {
-    cout << nodeType + "Sending response: " << ack << endl;
-    this->sendMessage(this->formatter.responseFormat(ack));
+    std::cout << "file name: " + filePath << std::endl;
+    sendFrame(formatter_.createFileFormat(filePath, version));
+    std::cout << nodeType_ + ": sent create file request" << std::endl;
+    Message ack = receiveAndParse();
+    std::cout << nodeType_ + ": received create file response" << std::endl;
+    sendFileAfterAck(filePath, ack);
+    return receiveAndParse();
+}
+
+Message SquidProtocol::readFile(const std::string &filePath)
+{
+    std::cout << nodeType_ + ": sending read file request" << std::endl;
+    sendFrame(formatter_.readFileFormat(filePath));
+    Message ack = receiveAndParse();
+    if (ack.isAck())
+        fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), filePath.c_str());
+    return receiveAndParse();
+}
+
+Message SquidProtocol::updateFile(const std::string &filePath)
+{
+    sendFrame(formatter_.updateFileFormat(filePath));
+    Message ack = receiveAndParse();
+    sendFileAfterAck(filePath, ack);
+    return receiveAndParse();
+}
+
+Message SquidProtocol::updateFile(const std::string &filePath, int version)
+{
+    sendFrame(formatter_.updateFileFormat(filePath, version));
+    Message ack = receiveAndParse();
+    sendFileAfterAck(filePath, ack);
+    return receiveAndParse();
+}
+
+Message SquidProtocol::deleteFile(const std::string &filePath)
+{
+    sendFrame(formatter_.deleteFileFormat(filePath));
+    return receiveAndParse();
+}
+
+Message SquidProtocol::acquireLock(const std::string &filePath)
+{
+    std::cout << nodeType_ + ": sending acquire lock request for " << filePath << std::endl;
+    sendFrame(formatter_.acquireLockFormat(filePath));
+    return receiveAndParse();
+}
+
+Message SquidProtocol::releaseLock(const std::string &filePath)
+{
+    sendFrame(formatter_.releaseLockFormat(filePath));
+    return receiveAndParse();
+}
+
+Message SquidProtocol::heartbeat()
+{
+    sendFrame(formatter_.heartbeatFormat());
+    return receiveAndParse();
+}
+
+void SquidProtocol::response(bool isAck)
+{
+    std::cout << nodeType_ + ": Sending response: " << isAck << std::endl;
+    sendFrame(formatter_.responseAck(isAck));
 }
 
 void SquidProtocol::response(int port)
 {
-    this->sendMessage(this->formatter.responseFormat(port));
+    sendFrame(formatter_.responsePort(port));
 }
 
-void SquidProtocol::response(string nodeType, string processName)
+void SquidProtocol::response(const std::string &ack)
 {
-    this->sendMessage(this->formatter.responseFormat(nodeType, processName));
+    std::cout << nodeType_ + ": Sending response: " << ack << std::endl;
+    sendFrame(formatter_.responseFormat(ack));
 }
 
-// deprecated
-void SquidProtocol::response(map<string, fs::file_time_type> filesLastWrite)
+void SquidProtocol::response(const std::string &nodeType, const std::string &processName)
 {
-    this->sendMessage(this->formatter.responseFormat(filesLastWrite));
+    sendFrame(formatter_.responseIdentity(nodeType, processName));
 }
 
-void SquidProtocol::response(map<string, int> fileVersionMap)
+void SquidProtocol::response(const std::map<std::string, int> &fileVersionMap)
 {
-    this->sendMessage(this->formatter.responseFormat(fileVersionMap));
+    sendFrame(formatter_.responseFileVersionMap(fileVersionMap));
 }
 
-void SquidProtocol::response(map<string, long long> fileTimeMap)
+void SquidProtocol::response(const std::map<std::string, long long> &fileTimeMap)
 {
-    this->sendMessage(this->formatter.responseFormat(fileTimeMap));
+    sendFrame(formatter_.responseFormat(fileTimeMap));
 }
 
-void SquidProtocol::response(bool lock)
+void SquidProtocol::response(const std::map<std::string, fs::file_time_type> &filesLastWrite)
 {
-    cout << nodeType + "Sending response: " << lock << endl;
-    this->sendMessage(this->formatter.responseFormat(lock));
+    sendFrame(formatter_.responseFormat(filesLastWrite));
 }
 
-// --------------------------------
-// --------- SEND MESSAGE ---------
-// --------------------------------
-
-void SquidProtocol::sendMessage(string message)
+void SquidProtocol::requestDispatcher(const Message &message)
 {
-    sendMessageWithLength(message);
-}
+    std::string path = message.getString(FieldID::FILE_PATH);
+    int version      = static_cast<int>(message.getUint32(FieldID::FILE_VERSION, 0));
 
-void SquidProtocol::sendMessageWithLength(string &message)
-{
-    // Send the length of the message
-    uint32_t messageLength = htonl(message.size());
-    ssize_t bytesSent = send(socket_fd, &messageLength, sizeof(messageLength), 0);
-    if (!handleErrors(bytesSent))
-        return;
-
-    // Send the actual message
-    bytesSent = send(socket_fd, message.c_str(), message.size(), 0);
-    if (!handleErrors(bytesSent))
-        return;
-    // cout << nodeType + ": Sent message with length: " << message.size() << endl;
-}
-
-// -------------------------------
-// --------- DISPATCHERS ---------
-// -------------------------------
-void SquidProtocol::requestDispatcher(Message message)
-{
-    switch (message.keyword)
+    switch (message.opcode)
     {
-    case CREATE_FILE:
-        cout << nodeType + ": received create file request\n";
-        this->response(string("ACK"));
-        cout << nodeType + ": Receiving file" << endl;
-        this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
-        FileManager::getInstance().setFileVersion(message.args["filePath"], stoi(message.args["fileVersion"]));
-        this->response(string("ACK"));
+    case Opcode::CREATE_FILE:
+        std::cout << nodeType_ + ": received create file request\n";
+        response(true);
+        std::cout << nodeType_ + ": Receiving file" << std::endl;
+        fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), path.c_str());
+        FileManager::getInstance().setFileVersion(path, version);
+        response(true);
         break;
-    case TRANSFER_FILE:
-        this->response(string("ACK"));
-        this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
-        this->response(string("ACK"));
+
+    case Opcode::TRANSFER_FILE:
+        response(true);
+        fileTransfer_.sendFile(socket_fd_, processName_.c_str(), path.c_str());
+        response(true);
         break;
-    case READ_FILE:
-        cout << nodeType + ": received read file request\n";
-        this->response(string("ACK"));
-        this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
-        this->response(string("ACK"));
+
+    case Opcode::READ_FILE:
+        std::cout << nodeType_ + ": received read file request\n";
+        response(true);
+        fileTransfer_.sendFile(socket_fd_, processName_.c_str(), path.c_str());
+        response(true);
         break;
-    case UPDATE_FILE:
-        cout << nodeType + ": received update file request\n";
-        this->response(string("ACK"));
-        this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
-        FileManager::getInstance().setFileVersion(message.args["filePath"], stoi(message.args["fileVersion"]));
-        this->response(string("ACK"));
+
+    case Opcode::UPDATE_FILE:
+        std::cout << nodeType_ + ": received update file request\n";
+        response(true);
+        fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), path.c_str());
+        FileManager::getInstance().setFileVersion(path, version);
+        response(true);
         break;
-    case DELETE_FILE:
-        cout << nodeType + ": received delete file request\n";
-        FileManager::getInstance().deleteFileAndVersion(message.args["filePath"]);
-        this->response(string("ACK"));
+
+    case Opcode::DELETE_FILE:
+        std::cout << nodeType_ + ": received delete file request\n";
+        FileManager::getInstance().deleteFileAndVersion(path);
+        response(true);
         break;
-    // case ACQUIRE_LOCK:
-    //     cout << nodeType + ": received acquire lock request for " << message.args["filePath"] << endl;
-    //     this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
-    //     break;
-    case RELEASE_LOCK:
-        // FileManager::getInstance().releaseLock(message.args["filePath"]);
-        this->response(string("ACK"));
+
+    case Opcode::RELEASE_LOCK:
+        response(true);
         break;
-    case HEARTBEAT:
-        this->response(string("ACK"));
+
+    case Opcode::HEARTBEAT:
+        response(true);
         break;
-    case SYNC_STATUS:
-        cout << nodeType + ": received sync status request\n";
-        cout << "getting file version map" << endl;
+
+    case Opcode::SYNC_STATUS:
+        std::cout << nodeType_ + ": received sync status request\n";
         this->response(FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH));
         break;
-    case IDENTIFY:
-        this->response(this->nodeType, this->processName);
+
+    case Opcode::IDENTIFY:
+        this->response(nodeType_, processName_);
         break;
-    case RESPONSE:
-        cerr << "Connection lost, aborting operation" << endl;
-        alive = false;
+
+    case Opcode::RESPONSE:
+        std::cerr << "Connection lost, aborting operation" << std::endl;
+        alive_ = false;
         break;
-    case CLOSE:
-        this->response(string("ACK"));
-        close(this->socket_fd);
-        // socket_fd = -1;
-        alive = false;
-        cout << nodeType + ": Connection closed" << endl;
+
+    case Opcode::CLOSE:
+        response(true);
+        close(socket_fd_);
+        alive_ = false;
+        std::cout << nodeType_ + ": Connection closed" << std::endl;
         break;
+
     default:
-        cerr << nodeType + ": Unknown request: " + message.toString() << endl;
+        std::cerr << nodeType_ + ": Unknown request: " + message.toString() << std::endl;
         break;
     }
 }
 
-void SquidProtocol::responseDispatcher(Message response)
+void SquidProtocol::responseDispatcher(const Message &response)
 {
-    switch (response.keyword)
+    if (response.opcode != Opcode::RESPONSE) return;
+
+    bool ack = response.isAck();
+
+    if (!ack)
+        std::cerr << nodeType_ + ": Error in response " + response.toString() << std::endl;
+    else
+        std::cout << nodeType_ + ": Operation performed" << std::endl;
+
+    if (response.opcode == Opcode::HEARTBEAT)
     {
-    case RESPONSE:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error in response " + response.toString() << endl;
+        alive_ = ack;
+        if (!ack) std::cerr << nodeType_ + ": Heartbeat error" << std::endl;
+        else      std::cout << nodeType_ + ": Received heartbeat successfully from server" << std::endl;
+    }
+
+    if (!ack) return;
+
+    if (response.findField(FieldID::IS_LOCKED))
+    {
+        if (!response.getBool(FieldID::IS_LOCKED))
+            std::cerr << nodeType_ + ": Lock refused" << std::endl;
         else
-            cout << nodeType + ": Operation performed" << endl;
-        break;
-    case CREATE_FILE:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while creating file: " + response.args["filePath"] << endl;
-        else
-            cout << nodeType + ": Created file successfully on server" << endl;
-        break;
-    case TRANSFER_FILE:
-        cout << "tf resp: " + response.args["ACK"] << endl;
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while transfering file: " + response.args["ACK"] << endl;
-        else
-            cout << nodeType + ": Transfered file successfully on server" << endl;
-        break;
-    case READ_FILE:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while reading file: " + response.args["filePath"] << endl;
-        else
-            cout << nodeType + ": Read file successfully on server" << endl;
-        break;
-    case UPDATE_FILE:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while updating file: " + response.args["filePath"] << endl;
-        else
-            cout << nodeType + ": Updated file successfully on server" << endl;
-        break;
-    case DELETE_FILE:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while deleting file: " + response.args["filePath"] << endl;
-        else
-            cout << nodeType + ": Deleted file successfully on server" << endl;
-        break;
-    case ACQUIRE_LOCK:
-        if (response.args["LOCK"] != "1")
-            cerr << nodeType + ": Lock refused for file: " + response.args["filePath"] << endl;
-        else
-            cout << nodeType + ": Acquired lock successfully on server" << endl;
-        break;
-    case RELEASE_LOCK:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while releasing lock for file: " + response.args["filePath"] << endl;
-        else
-            cout << nodeType + ": Released lock successfully on server" << endl;
-        break;
-    case HEARTBEAT:
-        if (response.args["ACK"] != "ACK")
-        {
-            alive = false;
-            cerr << nodeType + ": Heartbeat error" << endl;
-        }
-        else
-        {
-            alive = true;
-            cout << nodeType + ": Received heartbeat successfully from server" << endl;
-        }
-        break;
-    case SYNC_STATUS:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while synchronizing state" << endl;
-        else
-            cout << nodeType + ": Synchronization with server successful" << endl;
-        break;
-    case IDENTIFY:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while identifying" << endl;
-        else
-            cout << nodeType + ": Identified successfully on server" << endl;
-        break;
-    case CLOSE:
-        if (response.args["ACK"] != "ACK")
-            cerr << nodeType + ": Error while closing connection" << endl;
-        else
-        {
-            close(this->socket_fd);
-            alive = false;
-            cout << nodeType + ": Connection closed successfully" << endl;
-        }
-        break;
-    default:
-        break;
+            std::cout << nodeType_ + ": Acquired lock successfully" << std::endl;
     }
 }

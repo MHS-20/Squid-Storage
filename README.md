@@ -1,14 +1,16 @@
 # Squid Storage
+
 [![CMake Build (Ubuntu + macOS)](https://github.com/MHS-20/Squid-Storage/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/MHS-20/Squid-Storage/actions/workflows/cmake-multi-platform.yml)
 
 <div align="center">
-<img src="squidstorage_logo.png" alt="Storage Logo" width="250">
+<img src="squid.png" alt="Storage Logo" width="250">
 </div>
 
-Squid Storage is a distributed storage system designed to manage file replication and consistency of a specific folder across multiple nodes. 
+Squid Storage is a distributed storage system designed to manage file replication and consistency of a specific folder across multiple nodes.
 <br/>
 
 ## 1. Design
+
 The key components are:
 
 1. Server:
@@ -27,9 +29,8 @@ The key components are:
     * Communicates with the server to perform operations.
     * Receives update from other clients through the server.
 
-
-
 ## 2. Replication and Fault Tolerance
+
 The replication factor determines the number of datanodes that hold a copy of each file. A higher replication factor improves availability and fault tolerance but increases storage overhead.
 
 The ```dataNodeReplicationMap``` ensures that each file is replicated across multiple datanodes and track for all files where it can be found. The ```rebalanceDatanode``` function dynamically assigns new datanodes to files when replication levels fall below the desired threshold.
@@ -46,18 +47,20 @@ Squid Storage ensures partition tolerance by maintaining active every component 
 A client is able to modify files only when is connected to the server and it has acquired the lock for that file. If the client is disconnected, the files becomes view only, in order to avoid inconsistencies (prioritizing consistency over avaibility in this case).
 
 ## 3. Squid Protocol
-The squid protocol is a text-based protocol designed to express operations on files or other messages like hearbeat, syncStatus and so on. 
+
+The squid protocol is a text-based protocol designed to express operations on files or other messages like hearbeat, syncStatus and so on.
 
 Each message follows the format:
+
 ```
 Keyword<ArgName1:Arg1, ArgName2:Arg2, ..., ArgNamen:Argn>
 ```
 
-For example: 
+For example:
+
 ```
 UPDATE<filePath:/squistorage/example.txt>
 ```
-
 
 The full set of messages is displayed below:
 
@@ -80,3 +83,4 @@ The full set of messages is displayed below:
 | Close         | -                         | ACK                          |
 +---------------+---------------------------+------------------------------+
 ```
+

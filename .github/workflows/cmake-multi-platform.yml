@@ -1,10 +1,8 @@
-name: CMake Build (Ubuntu + macOS)
+name: CMake Build
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+#  pull_request:
 
 permissions:
   contents: write
@@ -19,18 +17,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install dependencies (SDL2 + GLEW)
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y libsdl2-dev libglew-dev
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            brew update
-            brew install sdl2 sdl2_image sdl2_mixer sdl2_ttf glew glfw
-          fi
-        shell: bash
+        uses: actions/checkout@v6
 
       - name: Configure CMake
         run: cmake -B build
@@ -42,9 +29,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SquidStorage-${{ matrix.os }}
+          name: SquidStorageClient-${{ matrix.os }}
           path: |
-            build/SquidStorage
+            build/SquidStorageClient
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

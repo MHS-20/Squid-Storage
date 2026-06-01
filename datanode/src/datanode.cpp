@@ -8,31 +8,30 @@ DataNode::DataNode(std::string nodeType, std::string processName) : Peer(nodeTyp
 DataNode::DataNode(int port, std::string nodeType, std::string processName) : Peer(port, nodeType, processName) {}
 DataNode::DataNode(const char *server_ip, int port, std::string nodeType, std::string processName) : Peer(server_ip, port, nodeType, processName) {}
 
-// passive deamon
+// passive daemon
 void DataNode::run()
 {
-    Message mex;
     this->connectToServer();
 
     while (true)
     {
-        if (!squidProtocol.isAlive()) // connection lost
+        if (!squidProtocol.isAlive())
         {
             std::cout << "[DATANODE]: Connection closed. Retrying..." << std::endl;
             std::this_thread::sleep_for(std::chrono::seconds(3));
             this->connectToServer();
-
             continue;
         }
 
         std::cout << "[DATANODE]: Waiting for messages..." << std::endl;
 
+        Message mex;
         try
         {
-            mex = squidProtocol.receiveAndParseMessage();
-            std::cout << "[DATANODE]: Received message: " + mex.keyword << std::endl;
+            mex = squidProtocol.receiveAndParse();
+            std::cout << "[DATANODE]: Received message: " << mex.toString() << std::endl;
         }
-        catch (std::exception &e)
+        catch (const std::exception &e)
         {
             std::cerr << "[DATANODE]: Error receiving message: " << e.what() << std::endl;
             break;
@@ -46,14 +45,20 @@ void DataNode::testing()
 {
     this->connectToServer();
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    Message mex = squidProtocol.receiveAndParseMessage();
-    std::cout << "[DATANODE]: Identify  request received from server: " + mex.keyword << std::endl;
 
+    // Expect an IDENTIFY request from the server
+    Message mex = squidProtocol.receiveAndParse();
+    std::cout << "[DATANODE]: Identify request received from server: " << opcodeToString(mex.opcode) << std::endl;
+
+    // Respond with our identity
     squidProtocol.response(std::string("DATANODE2"), std::string("DATANODE2"));
-    mex = squidProtocol.receiveAndParseMessage();
 
-    if (mex.args["ACK"] == "ACK")
+    // Expect ACK
+    mex = squidProtocol.receiveAndParse();
+    if (mex.isAck())
         std::cout << "[DATANODE]: ACK received" << std::endl;
+    else
+        std::cerr << "[DATANODE]: Expected ACK, got: " << mex.toString() << std::endl;
 
     handleRequest(squidProtocol.createFile("./test_txt/test_datanode/datanodefile.txt"));
     std::this_thread::sleep_for(std::chrono::seconds(2));

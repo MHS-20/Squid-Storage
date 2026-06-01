@@ -1,95 +1,64 @@
-#include <raylib.h>
-
-#define RAYGUI_IMPLEMENTATION
-#include "raygui.h"
+#include "client.hpp"
+#include <chrono>
 #include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
-#include "filemanager.hpp"
+#include <thread>
 
-int main()
-{
-    const std::string FOLDER_PATH = "./data";
-    constexpr int screenWidth = 800;
-    constexpr int screenHeight = 450;
-    FileManager fileManager;
-    std::vector<std::string> files = fileManager.getFiles(FOLDER_PATH);
-    const char *formattedFiles = fileManager.stringToChar(fileManager.formatFileList(files));
-    std::cout << formattedFiles << std::endl;
-    InitWindow(screenWidth, screenHeight, "Squid Storage");
-    // layout_name: controls initialization
-    //----------------------------------------------------------------------------------
-    int startIndex = 0;
-    int selectedIndex = 0;
-    bool newFileButtonPressed = false;
-    bool openButtonPressed = false;
-    bool deleteButtonPressed = false;
-    bool showFileNameInput = false;
-    bool showFileContent = false;
-    char newFileName[128] = "file.txt";
-    char *fileContentChar;
-    //----------------------------------------------------------------------------------
+static const char *TEST_FILE = "./mockfiles/testfile.txt";
 
-    SetTargetFPS(60);
+static void checkResponse(const std::string &op, const Message &msg) {
+  if (msg.isAck())
+    std::cout << "[main]: " << op << " -> ACK" << std::endl;
+  else
+    std::cerr << "[main]: " << op << " -> NACK  " << msg.toString()
+              << std::endl;
+}
 
-    while (!WindowShouldClose())
-    {
+int main(int argc, char **argv) {
+  const char *serverIp = MOCK_CLIENT_SERVER_IP;
+  int serverPort = MOCK_CLIENT_SERVER_PORT;
+  int secondaryPort = MOCK_CLIENT_SECONDARY_PORT;
+  std::string processName = "MOCK_CLIENT_1";
 
-        BeginDrawing();
-        ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
+  if (argc > 1)
+    serverIp = argv[1];
+  if (argc > 2)
+    serverPort = std::atoi(argv[2]);
+  if (argc > 3)
+    secondaryPort = std::atoi(argv[3]);
+  if (argc > 4)
+    processName = argv[4];
 
-        // raygui: controls drawing
-        //----------------------------------------------------------------------------------
-        GuiListView((Rectangle){8, 8, 392, 496}, formattedFiles, &startIndex, &selectedIndex);
-        newFileButtonPressed = GuiButton((Rectangle){432, 8, 120, 24}, "New File");
-        openButtonPressed = GuiButton((Rectangle){432, 40, 120, 24}, "Open");
-        deleteButtonPressed = GuiButton((Rectangle){432, 72, 120, 24}, "Delete");
-        //----------------------------------------------------------------------------------
-        if (newFileButtonPressed)
-        {
-            showFileNameInput = true;
-        }
-        if (showFileNameInput)
-        {
-            bool editMode = true;
+  MockClient client(serverIp, serverPort, secondaryPort, processName);
 
-            if (GuiTextBox((Rectangle){432, 104, 120, 24}, newFileName, 128, editMode))
-            {
-                std::string newFilePath = FOLDER_PATH + "/" + std::string(newFileName);
-                fileManager.createFile(newFilePath);
-                files = fileManager.getFiles(FOLDER_PATH);
-                formattedFiles = fileManager.stringToChar(fileManager.formatFileList(files));
-                showFileNameInput = false;
-                strcpy(newFileName, "file.txt");
-            }
-        }
+  client.connect();
+  client.runPushListener();
 
-        if (openButtonPressed)
-        {
-            showFileContent = true;
-            std::string fileContent = fileManager.readFile(files[selectedIndex]);
-            fileContentChar = fileManager.stringToChar(fileContent);
-        }
-        if (showFileContent)
-        {
-            if (GuiTextBoxMultiline((Rectangle){8, 8, 400, 200}, fileContentChar, 1024, true))
-            {
-                std::string newContent = fileContentChar;
-                fileManager.updateFile(files[selectedIndex], newContent);
-                showFileContent = false;
-            }
-        }
-        if (deleteButtonPressed)
-        {
-            std::string selectedFile = files[selectedIndex];
-            fileManager.deleteFile(selectedFile);
-            files = fileManager.getFiles(FOLDER_PATH);
-            formattedFiles = fileManager.stringToChar(fileManager.formatFileList(files));
-        }
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-        EndDrawing();
-    }
+  checkResponse("createFile", client.createFile(TEST_FILE, 1));
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    CloseWindow();
+  checkResponse("acquireLock", client.acquireLock(TEST_FILE));
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  checkResponse("updateFile", client.updateFile(TEST_FILE, 2));
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  checkResponse("releaseLock", client.releaseLock(TEST_FILE));
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  checkResponse("readFile", client.readFile(TEST_FILE));
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  checkResponse("syncStatus", client.syncStatus());
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  checkResponse("heartbeat", client.heartbeat());
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  checkResponse("deleteFile", client.deleteFile(TEST_FILE));
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  client.disconnect();
+  return 0;
 }

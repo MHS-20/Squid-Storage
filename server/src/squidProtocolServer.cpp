@@ -2,7 +2,6 @@
 
 class SquidProtocolServer : public SquidProtocol
 {
-
 public:
     int replicationFactor;
     std::map<std::string, SquidProtocolServer> *clientEndpointMap;
@@ -12,33 +11,34 @@ public:
     std::map<std::string, SquidProtocolServer>::iterator endpointIterator;
     std::map<std::string, SquidProtocolServer>::iterator readsLoadBalancingIterator;
 
-    SquidProtocolServer() : SquidProtocol() {
+    SquidProtocolServer() : SquidProtocol()
+    {
         this->replicationFactor = 0;
         this->clientEndpointMap = nullptr;
         this->dataNodeEndpointMap = nullptr;
         this->dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
     }
+
     SquidProtocolServer(int socket_fd, int replicationFactor,
                         std::string nodeType, std::string processName,
                         std::map<std::string, SquidProtocolServer> *clientEndpointMap,
                         std::map<std::string, SquidProtocolServer> *dataNodeEndpointMap)
     {
-        this->socket_fd = socket_fd;
+        this->socket_fd_      = socket_fd;
         this->replicationFactor = replicationFactor;
-        this->processName = processName;
-        this->nodeType = nodeType;
-
-        this->fileTransfer = FileTransfer();
-        this->formatter = SquidProtocolFormatter(nodeType);
-
-        this->clientEndpointMap = clientEndpointMap;
+        this->processName_    = processName;
+        this->nodeType_       = nodeType;
+        this->alive_          = true;
+        this->fileTransfer_   = FileTransfer();
+        this->formatter_      = SquidProtocolFormatter(nodeType);
+        this->clientEndpointMap   = clientEndpointMap;
         this->dataNodeEndpointMap = dataNodeEndpointMap;
         this->dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
         this->endpointIterator = dataNodeEndpointMap->begin();
     }
 
-    void createFileReplication(std::string filePath)
-    { // round robin replication
+    void createFileReplication(const std::string &filePath)
+    {
         auto fileHoldersMap = std::map<std::string, SquidProtocolServer>();
         for (int i = 0; i < replicationFactor; i++)
         {
@@ -51,7 +51,7 @@ public:
         this->readsLoadBalancingIterator = dataNodeReplicationMap[filePath].begin();
     }
 
-    void getFileFromDataNode(std::string filePath)
+    void getFileFromDataNode(const std::string &filePath)
     {
         auto &fileHoldersMap = dataNodeReplicationMap[filePath];
         if (readsLoadBalancingIterator == fileHoldersMap.end())
@@ -60,73 +60,85 @@ public:
         readsLoadBalancingIterator++;
     }
 
-    void requestDispatcher(Message message) override
+    void requestDispatcher(const Message &message) override
     {
-        switch (message.keyword)
+        std::string path = message.getString(FieldID::FILE_PATH);
+        int version      = static_cast<int>(message.getUint32(FieldID::FILE_VERSION, 0));
+
+        switch (message.opcode)
         {
-        case CREATE_FILE:
-            this->response(std::string("ACK"));
-            this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
-            this->response(std::string("ACK"));
+        case Opcode::CREATE_FILE:
+            response(true);
+            fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), path.c_str());
+            FileManager::getInstance().setFileVersion(path, version);
+            response(true);
             for (auto &client : *clientEndpointMap)
-                client.second.createFile(message.args["filePath"]);
-            createFileReplication(message.args["filePath"]);
-            for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
-                datanode.second.createFile(message.args["filePath"]);
-            // FileManager::getInstance().deleteFile(message.args["filePath"]);
+                client.second.createFile(path);
+            createFileReplication(path);
+            for (auto &datanode : dataNodeReplicationMap[path])
+                datanode.second.createFile(path);
             break;
-        case TRANSFER_FILE:
-            this->response(std::string("ACK"));
-            getFileFromDataNode(message.args["filePath"]);
-            this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
-            this->response(std::string("ACK"));
-            // FileManager::getInstance().deleteFile(message.args["filePath"]);
+
+        case Opcode::TRANSFER_FILE:
+            response(true);
+            getFileFromDataNode(path);
+            fileTransfer_.sendFile(socket_fd_, processName_.c_str(), path.c_str());
+            response(true);
             break;
-        case READ_FILE:
-            this->response(std::string("ACK"));
-            getFileFromDataNode(message.args["filePath"]);
-            this->fileTransfer.sendFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
-            this->response(std::string("ACK"));
-            // FileManager::getInstance().deleteFile(message.args["filePath"]);
+
+        case Opcode::READ_FILE:
+            response(true);
+            getFileFromDataNode(path);
+            fileTransfer_.sendFile(socket_fd_, processName_.c_str(), path.c_str());
+            response(true);
             break;
-        case UPDATE_FILE:
-            this->response(std::string("ACK"));
-            this->fileTransfer.receiveFile(this->socket_fd, this->processName.c_str(), message.args["filePath"].c_str());
-            this->response(std::string("ACK"));
+
+        case Opcode::UPDATE_FILE:
+            response(true);
+            fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), path.c_str());
+            FileManager::getInstance().setFileVersion(path, version);
+            response(true);
             for (auto &client : *clientEndpointMap)
-                client.second.updateFile(message.args["filePath"]);
-            for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
-                datanode.second.updateFile(message.args["filePath"]);
-            // FileManager::getInstance().deleteFile(message.args["filePath"]);
+                client.second.updateFile(path);
+            for (auto &datanode : dataNodeReplicationMap[path])
+                datanode.second.updateFile(path);
             break;
-        case DELETE_FILE:
-            FileManager::getInstance().deleteFile(message.args["filePath"]);
-            this->response(std::string("ACK"));
+
+        case Opcode::DELETE_FILE:
+            FileManager::getInstance().deleteFile(path);
+            response(true);
             for (auto &client : *clientEndpointMap)
-                client.second.deleteFile(message.args["filePath"]);
-            for (auto &datanode : dataNodeReplicationMap[message.args["filePath"]])
-                datanode.second.deleteFile(message.args["filePath"]);
-            dataNodeReplicationMap.erase(message.args["filePath"]);
+                client.second.deleteFile(path);
+            for (auto &datanode : dataNodeReplicationMap[path])
+                datanode.second.deleteFile(path);
+            dataNodeReplicationMap.erase(path);
             break;
-        case ACQUIRE_LOCK:
-            this->response(FileManager::getInstance().acquireLock(message.args["filePath"]));
+
+        case Opcode::ACQUIRE_LOCK:
+            response(FileManager::getInstance().acquireLock(path));
             break;
-        case RELEASE_LOCK:
-            FileManager::getInstance().releaseLock(message.args["filePath"]);
-            this->response(std::string("ACK"));
+
+        case Opcode::RELEASE_LOCK:
+            FileManager::getInstance().releaseLock(path);
+            response(true);
             break;
-        case HEARTBEAT:
-            this->response(std::string("ACK"));
+
+        case Opcode::HEARTBEAT:
+            response(true);
             break;
-        case SYNC_STATUS:
-            this->response(FileManager::getInstance().getFilesLastWrite(DEFAULT_FOLDER_PATH));
+
+        case Opcode::SYNC_STATUS:
+            response(FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH));
             break;
-        case CLOSE:
-            this->response(std::string("ACK"));
-            close(this->socket_fd);
-            socket_fd = -1;
-            std::cout << nodeType + ": Connection closed" << std::endl;
+
+        case Opcode::CLOSE:
+            response(true);
+            close(socket_fd_);
+            socket_fd_ = -1;
+            alive_ = false;
+            std::cout << nodeType_ + ": Connection closed" << std::endl;
             break;
+
         default:
             break;
         }

@@ -28,7 +28,6 @@ int Peer::getSocket()
 
 void Peer::connectToServer()
 {
-    // create socket
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0)
     {
@@ -42,12 +41,12 @@ void Peer::connectToServer()
 
     if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
     {
-        perror("[SERVER]: setsockopt failed (SO_RCVTIMEO)");
+        perror("[Peer]: setsockopt failed (SO_RCVTIMEO)");
         exit(EXIT_FAILURE);
     }
     if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
     {
-        perror("[SERVER]: setsockopt failed (SO_SNDTIMEO)");
+        perror("[Peer]: setsockopt failed (SO_SNDTIMEO)");
         exit(EXIT_FAILURE);
     }
 
@@ -60,7 +59,6 @@ void Peer::connectToServer()
         exit(EXIT_FAILURE);
     }
 
-    // connect to server
     while (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
         std::cerr << nodeType + ": connection to server failed, retrying..." << std::endl;
@@ -84,21 +82,22 @@ void Peer::reconnect()
     while (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
         std::cerr << nodeType + ": connection to server failed, retrying..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(3));
     }
     std::cout << nodeType + ": Reconnected to server...\n";
     squidProtocol.setSocket(socket_fd);
     squidProtocol.setIsAlive(true);
 }
 
-void Peer::handleRequest(Message mex)
+void Peer::handleRequest(const Message &msg)
 {
     try
     {
-        std::cout << nodeType << ": Received message: " << mex.keyword << std::endl;
-        squidProtocol.responseDispatcher(mex);
+        std::cout << nodeType << ": Received message: " << msg.toString() << std::endl;
+        squidProtocol.responseDispatcher(msg);
     }
-    catch (std::exception &e)
+    catch (const std::exception &e)
     {
-        std::cerr << nodeType + ": Error receiving message: " << e.what() << std::endl;
+        std::cerr << nodeType + ": Error handling message: " << e.what() << std::endl;
     }
 }

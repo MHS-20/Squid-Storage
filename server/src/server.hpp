@@ -14,7 +14,7 @@
 #include "filelock.hpp"
 #include "filemanager.hpp"
 #include "filetransfer.hpp"
-#include "squidProtocolServer.cpp"
+#include "squidprotocol.hpp"
 
 #define DEFAULT_PORT 12345
 #define BUFFER_SIZE 1024

@@ -1,212 +1,164 @@
 #include "client.hpp"
-using namespace std;
+#include <cerrno>
+#include <cstring>
+#include <iostream>
+#include <stdexcept>
 
-Client::Client() : Peer() {}
-Client::Client(const char *server_ip, int port) : Peer(server_ip, port, "CLIENT", "CLIENT") {}
-Client::Client(string nodeType, string processName) : Peer(nodeType, processName) {}
-Client::Client(const char *server_ip, int port, string nodeType, string processName) : Peer(server_ip, port, nodeType, processName) {}
+MockClient::MockClient(const char *serverIp, int serverPort, int secondaryPort,
+                       const std::string &processName)
+    : serverIp_(serverIp), serverPort_(serverPort),
+      secondaryPort_(secondaryPort), processName_(processName),
+      primaryProtocol_(), secondaryProtocol_() {}
 
-void Client::run()
-{
-    Message mex;
-    cout << "[CLIENT]: Secondary socket: thread started" << endl;
-    while (true)
-    {
-        while (!secondarySquidProtocol.isAlive()) // connection lost
-        {
-            cout << "[CLIENT]: Secondary socket: Connection lost" << endl;
-            this_thread::sleep_for(chrono::seconds(5));
-            this->initiateConnection();
-            if(secondarySquidProtocol.isAlive()) this->syncStatus();
-        }
-    
-        cout << "[CLIENT]: Secondary socket: waiting for messages..." << endl;
-        try
-        {
-            mex = secondarySquidProtocol.receiveAndParseMessage();
-            cout << "[CLIENT]: Secondary socket: Received message: " + mex.keyword << endl;
-            secondarySquidProtocol.requestDispatcher(mex);
-        }
-        catch (exception &e)
-        {
-            cerr << "[CLIENT]: Secondary socket: Error receiving message: " << e.what() << endl;
-            break;
-        }
+MockClient::~MockClient() {
+  stopPushListener();
+  if (primaryFd_ >= 0)
+    ::close(primaryFd_);
+  if (secondaryFd_ >= 0)
+    ::close(secondaryFd_);
+  if (listenFd_ >= 0)
+    ::close(listenFd_);
+}
+
+void MockClient::openSecondaryListener() {
+  listenFd_ = ::socket(AF_INET, SOCK_STREAM, 0);
+  if (listenFd_ < 0)
+    throw std::runtime_error("MockClient: secondary listen socket failed");
+
+  int opt = 1;
+  setsockopt(listenFd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = INADDR_ANY;
+  addr.sin_port = htons(static_cast<uint16_t>(secondaryPort_));
+
+  if (::bind(listenFd_, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
+    throw std::runtime_error(std::string("MockClient: bind secondary port: ") +
+                             std::strerror(errno));
+
+  if (::listen(listenFd_, 1) < 0)
+    throw std::runtime_error("MockClient: listen secondary failed");
+}
+
+void MockClient::acceptSecondaryConnection() {
+  sockaddr_in peer{};
+  socklen_t len = sizeof(peer);
+  secondaryFd_ = ::accept(listenFd_, reinterpret_cast<sockaddr *>(&peer), &len);
+  if (secondaryFd_ < 0)
+    throw std::runtime_error("MockClient: accept secondary failed");
+
+  secondaryProtocol_ = SquidProtocol(secondaryFd_, "CLIENT", processName_);
+  std::cout << "[MockClient]: Secondary connection accepted" << std::endl;
+}
+
+void MockClient::doHandshake() {
+  Message identify = primaryProtocol_.receiveAndParse();
+  if (identify.opcode != Opcode::IDENTIFY)
+    throw std::runtime_error("MockClient: expected IDENTIFY, got " +
+                             identify.toString());
+
+  primaryProtocol_.response(std::string("CLIENT"), processName_);
+
+  Message ack = primaryProtocol_.receiveAndParse();
+  if (!ack.isAck())
+    throw std::runtime_error("MockClient: handshake ACK not received");
+
+  std::cout << "[MockClient]: Identity acknowledged by server" << std::endl;
+
+  Message connectReq = primaryProtocol_.receiveAndParse();
+  if (connectReq.opcode != Opcode::CONNECT)
+    throw std::runtime_error("MockClient: expected CONNECT, got " +
+                             connectReq.toString());
+
+  primaryProtocol_.response(secondaryPort_);
+  std::cout << "[MockClient]: Sent secondary port " << secondaryPort_
+            << " to server" << std::endl;
+
+  acceptSecondaryConnection();
+}
+
+void MockClient::connect() {
+  primaryFd_ = ::socket(AF_INET, SOCK_STREAM, 0);
+  if (primaryFd_ < 0)
+    throw std::runtime_error("MockClient: socket failed");
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(static_cast<uint16_t>(serverPort_));
+  if (inet_pton(AF_INET, serverIp_, &addr.sin_addr) <= 0)
+    throw std::runtime_error("MockClient: invalid server IP");
+
+  while (::connect(primaryFd_, reinterpret_cast<sockaddr *>(&addr),
+                   sizeof(addr)) < 0) {
+    std::cerr << "[MockClient]: connect failed, retrying..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
+  std::cout << "[MockClient]: Primary connection established" << std::endl;
+
+  primaryProtocol_ = SquidProtocol(primaryFd_, "CLIENT", processName_);
+
+  openSecondaryListener();
+  doHandshake();
+
+  ::close(listenFd_);
+  listenFd_ = -1;
+}
+
+void MockClient::disconnect() {
+  stopPushListener();
+  primaryProtocol_.closeConn();
+}
+
+Message MockClient::createFile(const std::string &filePath, int version) {
+  return version > 0 ? primaryProtocol_.createFile(filePath, version)
+                     : primaryProtocol_.createFile(filePath);
+}
+
+Message MockClient::readFile(const std::string &filePath) {
+  return primaryProtocol_.readFile(filePath);
+}
+
+Message MockClient::updateFile(const std::string &filePath, int version) {
+  return version > 0 ? primaryProtocol_.updateFile(filePath, version)
+                     : primaryProtocol_.updateFile(filePath);
+}
+
+Message MockClient::deleteFile(const std::string &filePath) {
+  return primaryProtocol_.deleteFile(filePath);
+}
+
+Message MockClient::acquireLock(const std::string &filePath) {
+  return primaryProtocol_.acquireLock(filePath);
+}
+
+Message MockClient::releaseLock(const std::string &filePath) {
+  return primaryProtocol_.releaseLock(filePath);
+}
+
+Message MockClient::syncStatus() { return primaryProtocol_.syncStatus(); }
+
+Message MockClient::heartbeat() { return primaryProtocol_.heartbeat(); }
+
+void MockClient::runPushListener() {
+  pushRunning_ = true;
+  pushThread_ = std::thread([this]() {
+    std::cout << "[MockClient]: Push listener started" << std::endl;
+    while (pushRunning_ && secondaryProtocol_.isAlive()) {
+      Message msg = secondaryProtocol_.receiveAndParse();
+      if (!secondaryProtocol_.isAlive())
+        break;
+
+      std::cout << "[MockClient]: Push received: " << msg.toString()
+                << std::endl;
+      secondaryProtocol_.requestDispatcher(msg);
     }
+    std::cout << "[MockClient]: Push listener stopped" << std::endl;
+  });
 }
 
-void Client::checkSecondarySocket()
-{
-    if (!secondarySquidProtocol.isAlive())
-    {
-        cout << "[CLIENT]: Lost connection, reconnecting..." << endl;
-        return;
-        // this->initiateConnection();
-        // if(secondarySquidProtocol.isAlive()) this->syncStatus();
-    }
-
-    // select mask
-    fd_set readfds;
-    FD_ZERO(&readfds);
-    FD_SET(secondarySquidProtocol.getSocket(), &readfds);
-
-    // timeout of 0 seconds to make the call non-blocking
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 0;
-
-    int activity = select(secondarySquidProtocol.getSocket() + 1, &readfds, NULL, NULL, &timeout);
-    if (activity < 0)
-    {
-        perror("[CLIENT]: Select error");
-        return;
-    }
-
-    // if data on second socket
-    if (FD_ISSET(secondarySquidProtocol.getSocket(), &readfds))
-    {
-        try
-        {
-            Message mex = secondarySquidProtocol.receiveAndParseMessage();
-            cout << "[CLIENT]: Received message on secondary socket: " + mex.keyword << endl;
-            if (mex.keyword == RELEASE_LOCK)
-            {
-                cout << "[CLIENT]: Received request for FileLock release" << endl;
-                FileManager::getInstance().getFileLock().setIsLocked(true);
-            }
-            else 
-            {
-                secondarySquidProtocol.requestDispatcher(mex);
-            }
-            
-        }
-        catch (exception &e)
-        {
-            cerr << "[CLIENT]: Error receiving message on secondary socket: " << e.what() << endl;
-        }
-    }
-    else
-    {
-        return;
-        // cout << "[CLIENT]: No message available on secondary socket" << endl;
-    }
-}
-
-void Client::initiateConnection()
-{
-    this->connectToServer();
-
-    // indetifying to server
-    Message mex = squidProtocol.receiveAndParseMessage();
-    cout << "[CLIENT]: Identify request received from server: " + mex.keyword << endl;
-    squidProtocol.response(string("CLIENT"), string(processName));
-    mex = squidProtocol.receiveAndParseMessage();
-    if (mex.args["ACK"] == "ACK")
-        cout << "[CLIENT]: ACK received" << endl;
-    else
-        cerr << "[CLIENT]: Error: ACK not received" << endl;
-
-    // accepting connection from server
-    // listen on port
-    int secondary_fd = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in secondary_addr{};
-    secondary_addr.sin_family = AF_INET;
-    // secondary_addr.sin_port = htons(CLIENT_PORT);
-    secondary_addr.sin_port = 0;
-    secondary_addr.sin_addr.s_addr = INADDR_ANY;
-    if (::bind(secondary_fd, (struct sockaddr *)&secondary_addr, sizeof(secondary_addr)) < 0)
-    {
-        cerr << "[CLIENT]: Bind failed" << endl;
-        return;
-    }
-    if (listen(secondary_fd, 3) < 0)
-    {
-        cerr << "[CLIENT]: Listen failed" << endl;
-        return;
-    }
-
-    socklen_t addrlen = sizeof(secondary_addr);
-    if (getsockname(secondary_fd, (struct sockaddr *)&secondary_addr, &addrlen) == -1)
-    {
-        perror("[CLIENT]: getsockname failed");
-        return;
-    }
-
-    int assignedPort = ntohs(secondary_addr.sin_port);
-    cout << "[CLIENT]: Listening on port: " << assignedPort << endl;
-
-    mex = squidProtocol.receiveAndParseMessage();
-    cout << mex.keyword << endl;
-    squidProtocol.response(assignedPort);
-
-    // accept connection
-    addrlen = sizeof(server_addr);
-    int new_socket = accept(secondary_fd, (struct sockaddr *)&server_addr, (socklen_t *)&addrlen);
-    if (new_socket < 0)
-    {
-        cerr << "[CLIENT]: Accept failed" << endl;
-        return;
-    }
-    cout << "[CLIENT]: Accepted connection from server" << endl;
-    secondarySquidProtocol = SquidProtocol(new_socket, "CLIENT_SECONDARY", "CLIENT_SECONDARY");
-    secondarySquidProtocol.setIsAlive(true);
-}
-
-void Client::createFile(string filePath)
-{
-    handleRequest(squidProtocol.createFile(filePath));
-}
-void Client::createFile(string filePath, int version)
-{
-    handleRequest(squidProtocol.createFile(filePath, version));
-}
-
-void Client::deleteFile(string filePath)
-{
-    handleRequest(squidProtocol.deleteFile(filePath));
-}
-
-void Client::updateFile(string filePath)
-{
-    handleRequest(squidProtocol.updateFile(filePath));
-}
-
-void Client::updateFile(std::string filePath, int version)
-{
-    handleRequest(squidProtocol.updateFile(filePath, version));
-}
-
-void Client::syncStatus()
-{
-    handleRequest(squidProtocol.syncStatus());
-}
-
-bool Client::acquireLock(string filePath)
-{
-    return squidProtocol.acquireLock(filePath).args["isLocked"] == "1";
-}
-
-void Client::releaseLock(string filePath)
-{
-    handleRequest(squidProtocol.releaseLock(filePath));
-}
-
-bool Client::isSecondarySocketAlive()
-{
-    return secondarySquidProtocol.isAlive();
-}
-
-void Client::testing()
-{
-    this->initiateConnection();
-
-    handleRequest(squidProtocol.createFile("./test_txt/test_client/clientfile.txt"));
-    handleRequest(squidProtocol.updateFile("./test_txt/test_client/clientfile.txt"));
-    handleRequest(squidProtocol.acquireLock("./test_txt/test_client/clientfile.txt"));
-    handleRequest(squidProtocol.releaseLock("./test_txt/test_client/clientfile.txt"));
-    handleRequest(squidProtocol.heartbeat());
-    handleRequest(squidProtocol.syncStatus());
-    handleRequest(squidProtocol.readFile("./test_txt/test_client/clientfile.txt"));
-    handleRequest(squidProtocol.deleteFile("./test_txt/test_client/clientfile.txt"));
-    handleRequest(squidProtocol.closeConn());
+void MockClient::stopPushListener() {
+  pushRunning_ = false;
+  if (pushThread_.joinable())
+    pushThread_.join();
 }

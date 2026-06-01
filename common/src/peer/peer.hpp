@@ -15,16 +15,15 @@
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
 #define BUFFER_SIZE 1024
-using namespace std;
 
 class Peer
 {
 public:
     Peer();
-    Peer(string nodeType, string processName);
-    Peer(int port, string nodeType, string processName);
-    Peer(const char *server_ip, int port, string nodeType, string processName);
-    ~Peer();
+    Peer(std::string nodeType, std::string processName);
+    Peer(int port, std::string nodeType, std::string processName);
+    Peer(const char *server_ip, int port, std::string nodeType, std::string processName);
+    virtual ~Peer();
 
     virtual void connectToServer();
     virtual void reconnect();
@@ -32,18 +31,18 @@ public:
     virtual int getSocket();
 
     virtual void run() = 0;
-    virtual void handleRequest(Message mex);
+    virtual void handleRequest(const Message &msg);
 
 protected:
-    int port;
+    int port = SERVER_PORT;
     int socket_fd = -1;
-    const char *server_ip;
+    const char *server_ip = SERVER_IP;
     int timeoutSeconds = 60;
-    struct sockaddr_in server_addr;
+    struct sockaddr_in server_addr{};
     char buffer[BUFFER_SIZE] = {0};
 
-    string nodeType;
-    string processName;
+    std::string nodeType;
+    std::string processName;
 
     FileLock file_lock;
     FileTransfer fileTransfer;

@@ -1,11 +1,10 @@
 *.o
-test_txt/
 main
+test_txt/
+mockfiles/
+
+vcpkg_installed/
+.vcpkg/
 
 build/*
 CMakeFiles/*
-!build/build.sh
-!build/buildGnome.sh
-!build/buildTestMultiClient.sh
-!build/buildTestMultiDataNode.sh
-!build/buildTestMultiple.sh
