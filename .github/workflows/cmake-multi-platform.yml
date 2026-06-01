@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -56,3 +59,29 @@ jobs:
           name: DataNode-${{ matrix.os }}
           path: |
             build/DataNode
+
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    # needs: test
+    if: github.event_name == 'push'
+    outputs:
+      released:       ${{ steps.semrel.outputs.new_release_published }}
+      version:        ${{ steps.semrel.outputs.new_release_version }}
+      version_major:  ${{ steps.semrel.outputs.new_release_major_version }}
+      version_minor:  ${{ steps.semrel.outputs.new_release_minor_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run semantic-release
+        id: semrel
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          extra_plugins: |
+            @semantic-release/github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
