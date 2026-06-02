@@ -243,52 +243,8 @@ Message SquidProtocol::syncStatus()
     std::cout << nodeType_ + ": sending sync status request" << std::endl;
     sendFrame(formatter_.syncStatusFormat());
     Message response = receiveAndParse();
-
-    if (!response.isResponse()) return response;
-
-    if (response.isAck())
-    {
-        std::cout << nodeType_ + ": received NACK from server" << std::endl;
-        return response;
-    }
-
     std::cout << nodeType_ + ": received sync status response" << std::endl;
-    std::map<std::string, int> serverMap = response.getFileVersionMap();
-    std::map<std::string, int> localMap  = FileManager::getInstance().getFileVersionMap(FileManager::storageRoot().string());
-
-    for (auto &localFile : localMap)
-    {
-        auto it = serverMap.find(localFile.first);
-        if (it != serverMap.end())
-        {
-            if (localFile.second > it->second)
-            {
-                std::cout << nodeType_ + ": server needs to update the file: " + localFile.first << std::endl;
-                updateFile(localFile.first, localFile.second);
-            }
-            else if (localFile.second < it->second)
-            {
-                std::cout << nodeType_ + ": client needs to update the file: " + localFile.first << std::endl;
-                readFile(localFile.first);
-                FileManager::getInstance().setFileVersion(localFile.first, it->second);
-            }
-            serverMap.erase(it);
-        }
-        else
-        {
-            std::cout << nodeType_ + ": server needs to create the file: " + localFile.first << std::endl;
-            createFile(localFile.first, localFile.second);
-        }
-    }
-
-    for (auto &remoteFile : serverMap)
-    {
-        std::cout << nodeType_ + ": client needs to create the file: " + remoteFile.first << std::endl;
-        readFile(remoteFile.first);
-        FileManager::getInstance().setFileVersion(remoteFile.first, remoteFile.second);
-    }
-
-    return formatter_.makeNack();
+    return response;
 }
 
 Message SquidProtocol::createFile(const std::string &filePath)

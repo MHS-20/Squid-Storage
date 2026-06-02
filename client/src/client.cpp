@@ -3,6 +3,9 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "filesystem/syncplanner.hpp"
+#include "filesystem/filemanager.hpp"
+
 Client::Client(const std::string &serverIp, int serverPort, const std::string &processName)
     : serverIp_(serverIp), serverPort_(serverPort), processName_(processName)
 {
@@ -160,9 +163,49 @@ Message Client::syncStatus()
     if (!session_ || !session_->isAlive())
         return {};
 
-    return session_->call([](SquidProtocol &proto) {
+    Message response = session_->call([](SquidProtocol &proto) {
         return proto.syncStatus();
     });
+
+    if (!response.isResponse() || response.isAck())
+        return response;
+
+    auto remoteMap = response.getFileVersionMap();
+    auto localMap  = FileManager::getInstance().getFileVersionMap(FileManager::storageRoot().string());
+    auto ops       = planSync(localMap, remoteMap);
+
+    for (const auto &op : ops)
+    {
+        switch (op.action)
+        {
+        case SyncAction::UPLOAD:
+        {
+            std::vector<uint8_t> data;
+            session_->call([&](SquidProtocol &proto) {
+                return proto.updateFile(op.filePath, op.version);
+            });
+            break;
+        }
+        case SyncAction::CREATE_REMOTE:
+        {
+            session_->call([&](SquidProtocol &proto) {
+                return proto.createFile(op.filePath, op.version);
+            });
+            break;
+        }
+        case SyncAction::DOWNLOAD:
+        {
+            session_->call([&](SquidProtocol &proto) {
+                Message r = proto.readFile(op.filePath);
+                return r;
+            });
+            FileManager::getInstance().setFileVersion(op.filePath, op.version);
+            break;
+        }
+        }
+    }
+
+    return response;
 }
 
 Message Client::heartbeat()
