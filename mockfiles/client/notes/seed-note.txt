@@ -1,2 +1,0 @@
-The Docker client can use this folder as a local scratch area.
-Keeping a nested directory here helps confirm path handling.

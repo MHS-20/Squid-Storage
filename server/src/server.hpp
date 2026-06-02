@@ -27,8 +27,8 @@
 #define DEFAULT_PORT 12345
 #define BUFFER_SIZE 1024
 
-#define DEFAULT_TIMEOUT 60      // seconds
-#define DEFAULT_LOCK_INTERVAL 5 // minutes
+#define DEFAULT_TIMEOUT 60
+#define DEFAULT_LOCK_INTERVAL 5
 #define DEFAULT_REPLICATION_FACTOR 2
 using namespace std;
 
@@ -90,12 +90,10 @@ private:
   map<string, long long> fileTimeMap;
 
   map<string, std::shared_ptr<ConnectionSession>> dataNodeEndpointMap;
-  map<string, pair<std::shared_ptr<ConnectionSession>, std::shared_ptr<ConnectionSession>>> clientEndpointMap;
+  map<string, std::shared_ptr<ConnectionSession>> clientEndpointMap;
 
-  // maps filename to datanode holding that file (datanode, socket)
   map<string, map<string, std::shared_ptr<ConnectionSession>>> dataNodeReplicationMap;
 
-  // iterators for round robin redundancy
   size_t roundRobinCursor = 0;
 
   map<string, int> getFileVersionMap();
@@ -103,11 +101,8 @@ private:
   void printMap(map<string, std::shared_ptr<ConnectionSession>> &map, string name);
   void printMap(map<string, FileLock> &map, string name);
   void printMap(map<string, map<string, std::shared_ptr<ConnectionSession>>> &map, string name);
-  void printMap(map<string, pair<std::shared_ptr<ConnectionSession>, std::shared_ptr<ConnectionSession>>> &map,
-                string name);
 
   std::vector<std::string> pickDataNodesLocked(size_t count);
   std::shared_ptr<ConnectionSession> getDataNodeSessionLocked(const std::string &name);
-  std::shared_ptr<ConnectionSession> getClientPrimarySessionLocked(const std::string &name);
-  std::shared_ptr<ConnectionSession> getClientSecondarySessionLocked(const std::string &name);
+  std::shared_ptr<ConnectionSession> getClientSessionLocked(const std::string &name);
 };

@@ -23,7 +23,7 @@ Server::Server(int port, int replicationFactor, int timeoutSeconds)
     fileTransfer = FileTransfer();
     fileLockMap = map<string, FileLock>();
     fileTimeMap = map<string, long long>();
-    clientEndpointMap = map<string, pair<shared_ptr<ConnectionSession>, shared_ptr<ConnectionSession>>>();
+    clientEndpointMap = map<string, shared_ptr<ConnectionSession>>();
     dataNodeEndpointMap = map<string, shared_ptr<ConnectionSession>>();
     dataNodeReplicationMap = map<string, map<string, shared_ptr<ConnectionSession>>>();
 }
@@ -44,10 +44,8 @@ Server::~Server()
 
         for (auto &entry : clientEndpointMap)
         {
-            if (entry.second.first)
-                entry.second.first->stop();
-            if (entry.second.second)
-                entry.second.second->stop();
+            if (entry.second)
+                entry.second->stop();
         }
     }
 
@@ -206,20 +204,19 @@ void Server::handleClientRequest(ConnectionSession &clientSession, const Message
 
 void Server::handleAccept(AcceptedConnection accepted)
 {
-    auto primaryChannel = accepted.channel;
-    auto peerIp = accepted.peerIp;
-    if (!primaryChannel)
+    auto channel = accepted.channel;
+    if (!channel)
         return;
 
-    SquidProtocol primaryProtocol(primaryChannel, "[SERVER_PRIMARY]", "SERVER_PRIMARY");
-    Message mex = primaryProtocol.identify();
+    SquidProtocol proto(channel, "[SERVER]", "SERVER");
+    Message mex = proto.identify();
     string peerProcessName = mex.getString(FieldID::PROCESS_NAME);
     string peerNodeType = mex.getString(FieldID::NODE_TYPE);
     cout << "[SERVER]: Identity received from peer: " + peerProcessName << endl;
 
     if (peerNodeType == "DATANODE")
     {
-        auto datanodeSession = std::make_shared<ConnectionSession>(primaryChannel, "DATANODE", peerProcessName);
+        auto datanodeSession = std::make_shared<ConnectionSession>(channel, "DATANODE", peerProcessName);
         datanodeSession->start(false);
 
         {
@@ -238,35 +235,20 @@ void Server::handleAccept(AcceptedConnection accepted)
         return;
     }
 
-    primaryProtocol.response(true);
+    proto.response(true);
     cout << "[SERVER]: Ack sent to client" << endl;
 
-    cout << "[SERVER]: Connecting to client..." << endl;
-    Message connectResponse = primaryProtocol.connectServer();
-    int secondaryPort = static_cast<int>(connectResponse.getUint32(FieldID::PORT, 0));
-    if (secondaryPort == 0)
-    {
-        cerr << "[SERVER]: Port not found in connect response" << endl;
-        return;
-    }
-
-    cout << "[SERVER]: Client port: " << secondaryPort << endl;
-    auto secondaryChannel = std::make_shared<TCPConnectorChannel>(peerIp, secondaryPort, 60, 2);
-    cout << "[SERVER]: Connected to client..." << endl;
-
-    auto primarySession = std::make_shared<ConnectionSession>(primaryChannel, "CLIENT", peerProcessName,
+    auto clientSession = std::make_shared<ConnectionSession>(channel, "CLIENT", peerProcessName,
         [this](ConnectionSession &session, const Message &message) {
             handleClientRequest(session, message);
         });
-    auto secondarySession = std::make_shared<ConnectionSession>(secondaryChannel, "CLIENT_SECONDARY", peerProcessName);
 
     {
         std::unique_lock<std::shared_mutex> lock(stateMutex);
-        clientEndpointMap[peerProcessName] = {primarySession, secondarySession};
+        clientEndpointMap[peerProcessName] = clientSession;
     }
 
-    secondarySession->start(false);
-    primarySession->start(true);
+    clientSession->start(true);
 }
 
 void Server::handleConnection(SquidProtocol &clientProtocol)
@@ -551,7 +533,7 @@ void Server::checkFileLockExpiration()
 
     for (auto &expired : expiredLocks)
     {
-        auto clientSession = getClientSecondarySessionLocked(expired.second);
+        auto clientSession = getClientSessionLocked(expired.second);
         if (clientSession)
             clientSession->post([expiredFile = expired.first](SquidProtocol &protocol) {
                 protocol.releaseLock(expiredFile);
@@ -643,7 +625,7 @@ bool Server::propagateCreateFile(string filePath, int version, const string &ori
         for (auto &entry : dataNodeEndpointMap)
             datanodes.push_back(entry);
         for (auto &entry : clientEndpointMap)
-            clients.push_back({entry.first, entry.second.second});
+            clients.push_back(entry);
     }
 
     bool ok = true;
@@ -713,7 +695,7 @@ bool Server::propagateUpdateFile(string filePath, int version, const string &ori
                 datanodes.push_back(entry);
         }
         for (auto &entry : clientEndpointMap)
-            clients.push_back({entry.first, entry.second.second});
+            clients.push_back(entry);
     }
 
     bool ok = true;
@@ -770,7 +752,7 @@ void Server::propagateDeleteFile(string filePath, const string &originProcessNam
                 datanodes.push_back(entry);
         }
         for (auto &entry : clientEndpointMap)
-            clients.push_back({entry.first, entry.second.second});
+            clients.push_back(entry);
     }
 
     for (auto &datanode : datanodes)
@@ -853,17 +835,6 @@ void Server::printMap(map<string, map<string, std::shared_ptr<ConnectionSession>
     }
 }
 
-void Server::printMap(map<string, pair<std::shared_ptr<ConnectionSession>, std::shared_ptr<ConnectionSession>>> &map, string name)
-{
-    cout << "[SERVER]: " << name << endl;
-    for (auto &pair : map)
-    {
-        cout << pair.first << " => "
-             << (pair.second.first ? pair.second.first->toString() : "<null>") << " : "
-             << (pair.second.second ? pair.second.second->toString() : "<null>") << endl;
-    }
-}
-
 std::vector<std::string> Server::pickDataNodesLocked(size_t count)
 {
     std::shared_lock<std::shared_mutex> lock(stateMutex);
@@ -891,16 +862,9 @@ std::shared_ptr<ConnectionSession> Server::getDataNodeSessionLocked(const std::s
     return it == dataNodeEndpointMap.end() ? nullptr : it->second;
 }
 
-std::shared_ptr<ConnectionSession> Server::getClientPrimarySessionLocked(const std::string &name)
+std::shared_ptr<ConnectionSession> Server::getClientSessionLocked(const std::string &name)
 {
     std::shared_lock<std::shared_mutex> lock(stateMutex);
     auto it = clientEndpointMap.find(name);
-    return it == clientEndpointMap.end() ? nullptr : it->second.first;
-}
-
-std::shared_ptr<ConnectionSession> Server::getClientSecondarySessionLocked(const std::string &name)
-{
-    std::shared_lock<std::shared_mutex> lock(stateMutex);
-    auto it = clientEndpointMap.find(name);
-    return it == clientEndpointMap.end() ? nullptr : it->second.second;
+    return it == clientEndpointMap.end() ? nullptr : it->second;
 }

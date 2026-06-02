@@ -9,7 +9,7 @@
 #include "../networking/TCPConnectorChannel.hpp"
 
 #define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 8080
+#define SERVER_PORT 12345
 #define BUFFER_SIZE 1024
 
 class Peer

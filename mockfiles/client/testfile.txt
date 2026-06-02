@@ -1,2 +1,1 @@
-This is the source file used by the mock client.
-It should be created on the server and replicated to the data nodes.
+world

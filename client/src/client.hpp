@@ -1,57 +1,53 @@
 #pragma once
 
-#include <memory>
-#include <string>
-#include <thread>
 #include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
 
-#include "squidprotocol.hpp"
 #include "networking/TCPConnectorChannel.hpp"
-#include "networking/TCPListenerChannel.hpp"
+#include "server_runtime.hpp"
+#include "squidprotocol.hpp"
 
-#define MOCK_CLIENT_SERVER_IP   "127.0.0.1"
-#define MOCK_CLIENT_SERVER_PORT 12345
-#define MOCK_CLIENT_SECONDARY_PORT 12346
+#define DEFAULT_SERVER_IP   "127.0.0.1"
+#define DEFAULT_SERVER_PORT 12345
 
-class MockClient
+class Client
 {
 public:
-    MockClient(const char *serverIp, int serverPort, int secondaryPort,
-               const std::string &processName);
-    ~MockClient();
+    using PushHandler = std::function<void(const Message &)>;
+
+    Client(const std::string &serverIp, int serverPort, const std::string &processName);
+    ~Client();
 
     void connect();
     void disconnect();
+    void setPushHandler(PushHandler handler);
 
-    Message createFile(const std::string &filePath, int version = 0);
-    Message readFile  (const std::string &filePath);
-    Message updateFile(const std::string &filePath, int version = 0);
+    bool isAlive() const;
+
+    Message createFile(const std::string &filePath, const std::vector<uint8_t> &data, int version = 0);
+    Message readFile(const std::string &filePath, std::vector<uint8_t> &dataOut);
+    Message updateFile(const std::string &filePath, const std::vector<uint8_t> &data, int version = 0);
     Message deleteFile(const std::string &filePath);
     Message acquireLock(const std::string &filePath);
     Message releaseLock(const std::string &filePath);
     Message syncStatus();
     Message heartbeat();
 
-    void runPushListener();
-    void stopPushListener();
-
-    bool isAlive() const { return primaryProtocol_.isAlive(); }
-
 private:
-    const char *serverIp_;
-    int         serverPort_;
-    int         secondaryPort_;
+    std::string serverIp_;
+    int serverPort_;
     std::string processName_;
 
-    std::unique_ptr<TCPListenerChannel> secondaryListener_;
+    PushHandler pushHandler_;
 
-    SquidProtocol primaryProtocol_;
-    SquidProtocol secondaryProtocol_;
+    std::shared_ptr<ConnectionSession> session_;
 
-    std::thread       pushThread_;
-    std::atomic<bool> pushRunning_{false};
-
-    void doHandshake();
-    void openSecondaryListener();
-    void acceptSecondaryConnection();
+    void handlePush(ConnectionSession &session, const Message &message);
+    void doHandshake(SquidProtocol &proto);
 };
