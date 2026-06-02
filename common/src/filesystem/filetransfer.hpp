@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <vector>
 #include <fstream>
 #include <cstdint>
 
@@ -20,5 +21,7 @@ public:
     ~FileTransfer();
     bool handleErrors(ssize_t bytes);
     bool sendFile(INetworkChannel &channel, const string &rolename, const string &filepath);
+    bool sendFile(INetworkChannel &channel, const string &rolename, const std::vector<uint8_t> &data);
     bool receiveFile(INetworkChannel &channel, const string &rolename, const string &outputpath);
+    bool receiveFile(INetworkChannel &channel, const string &rolename, std::vector<uint8_t> &data);
 };

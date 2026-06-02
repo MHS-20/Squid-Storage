@@ -180,6 +180,34 @@ bool SquidProtocol::sendFileAfterAck(const std::string &filePath, const Message 
     return fileTransfer_.sendFile(*channel_, processName_, filePath);
 }
 
+bool SquidProtocol::sendFileAfterAck(const std::vector<uint8_t> &fileData, const Message &ackMsg)
+{
+    if (!ackMsg.isAck())
+    {
+        std::cerr << nodeType_ + ": Error while transferring file" << std::endl;
+        return false;
+    }
+
+    if (!channel_)
+        return false;
+
+    return fileTransfer_.sendFile(*channel_, processName_, fileData);
+}
+
+bool SquidProtocol::receiveFileAfterAck(std::vector<uint8_t> &fileData, const Message &ackMsg)
+{
+    if (!ackMsg.isAck())
+    {
+        std::cerr << nodeType_ + ": Error while transferring file" << std::endl;
+        return false;
+    }
+
+    if (!channel_)
+        return false;
+
+    return fileTransfer_.receiveFile(*channel_, processName_, fileData);
+}
+
 Message SquidProtocol::identify()
 {
     sendFrame(formatter_.identifyFormat());
@@ -226,7 +254,7 @@ Message SquidProtocol::syncStatus()
 
     std::cout << nodeType_ + ": received sync status response" << std::endl;
     std::map<std::string, int> serverMap = response.getFileVersionMap();
-    std::map<std::string, int> localMap  = FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH);
+    std::map<std::string, int> localMap  = FileManager::getInstance().getFileVersionMap(FileManager::storageRoot().string());
 
     for (auto &localFile : localMap)
     {
@@ -294,6 +322,22 @@ Message SquidProtocol::createFile(const std::string &filePath, int version)
     return waitForTransferResult("create file");
 }
 
+Message SquidProtocol::createFile(const std::string &filePath, int version, const std::vector<uint8_t> &fileData)
+{
+    std::cout << "file name: " + filePath << std::endl;
+    sendFrame(formatter_.createFileFormat(filePath, version));
+    std::cout << nodeType_ + ": sent create file request" << std::endl;
+    Message ack;
+    if (!waitForAck(ack, "create file"))
+        return ack;
+
+    std::cout << nodeType_ + ": received create file response" << std::endl;
+    if (!sendFileAfterAck(fileData, ack))
+        return formatter_.makeNack();
+
+    return waitForTransferResult("create file");
+}
+
 Message SquidProtocol::readFile(const std::string &filePath)
 {
     std::cout << nodeType_ + ": sending read file request" << std::endl;
@@ -303,6 +347,20 @@ Message SquidProtocol::readFile(const std::string &filePath)
         return ack;
 
     if (!channel_ || !fileTransfer_.receiveFile(*channel_, processName_, filePath))
+        return formatter_.makeNack();
+
+    return waitForTransferResult("read file");
+}
+
+Message SquidProtocol::readFile(const std::string &filePath, std::vector<uint8_t> &fileData)
+{
+    std::cout << nodeType_ + ": sending read file request" << std::endl;
+    sendFrame(formatter_.readFileFormat(filePath));
+    Message ack;
+    if (!waitForAck(ack, "read file"))
+        return ack;
+
+    if (!receiveFileAfterAck(fileData, ack))
         return formatter_.makeNack();
 
     return waitForTransferResult("read file");
@@ -332,6 +390,35 @@ Message SquidProtocol::updateFile(const std::string &filePath, int version)
         return formatter_.makeNack();
 
     return waitForTransferResult("update file");
+}
+
+Message SquidProtocol::updateFile(const std::string &filePath, int version, const std::vector<uint8_t> &fileData)
+{
+    sendFrame(formatter_.updateFileFormat(filePath, version));
+    Message ack;
+    if (!waitForAck(ack, "update file"))
+        return ack;
+
+    if (!sendFileAfterAck(fileData, ack))
+        return formatter_.makeNack();
+
+    return waitForTransferResult("update file");
+}
+
+bool SquidProtocol::receiveFileData(std::vector<uint8_t> &fileData)
+{
+    if (!channel_)
+        return false;
+
+    return fileTransfer_.receiveFile(*channel_, processName_, fileData);
+}
+
+bool SquidProtocol::sendFileData(const std::vector<uint8_t> &fileData)
+{
+    if (!channel_)
+        return false;
+
+    return fileTransfer_.sendFile(*channel_, processName_, fileData);
 }
 
 Message SquidProtocol::deleteFile(const std::string &filePath)
@@ -454,7 +541,7 @@ void SquidProtocol::requestDispatcher(const Message &message)
 
     case Opcode::SYNC_STATUS:
         std::cout << nodeType_ + ": received sync status request\n";
-        this->response(FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH));
+        this->response(FileManager::getInstance().getFileVersionMap(FileManager::storageRoot().string()));
         break;
 
     case Opcode::IDENTIFY:

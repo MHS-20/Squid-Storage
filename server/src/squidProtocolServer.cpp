@@ -131,7 +131,7 @@ public:
             break;
 
         case Opcode::SYNC_STATUS:
-            response(FileManager::getInstance().getFileVersionMap(DEFAULT_FOLDER_PATH));
+            response(FileManager::getInstance().getFileVersionMap(FileManager::storageRoot().string()));
             break;
 
         case Opcode::CLOSE:

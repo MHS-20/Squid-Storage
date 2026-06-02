@@ -1,11 +1,14 @@
 services:
   server:
     image: archlinux:latest
+    environment:
+      HOME: /root
+      SQUID_STORAGE_ROOT: /root/SquidStorage
     volumes:
+      - ./mockfiles/server:/root/SquidStorage
       - ./build:/app/bin:ro
-      - ./mockfiles/server:/app/mockfiles
-    working_dir: /app
-    command: ./bin/SquidStorageServer 12345 2 10
+    working_dir: /root/SquidStorage
+    command: /app/bin/SquidStorageServer 12345 2 10
     ports:
       - "12345:12345"
     networks:
@@ -14,11 +17,14 @@ services:
 
   datanode1:
     image: archlinux:latest
+    environment:
+      HOME: /root
+      SQUID_STORAGE_ROOT: /root/SquidStorage
     volumes:
+      - ./mockfiles/datanode_alpha:/root/SquidStorage
       - ./build:/app/bin:ro
-      - ./mockfiles/datanode_alpha:/app/mockfiles
-    working_dir: /app
-    command: ./bin/DataNode 172.20.0.10 12345 DATANODE_ALPHA
+    working_dir: /root/SquidStorage
+    command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_ALPHA
     depends_on:
       - server
     networks:
@@ -27,11 +33,14 @@ services:
 
   datanode2:
     image: archlinux:latest
+    environment:
+      HOME: /root
+      SQUID_STORAGE_ROOT: /root/SquidStorage
     volumes:
+      - ./mockfiles/datanode_beta:/root/SquidStorage
       - ./build:/app/bin:ro
-      - ./mockfiles/datanode_beta:/app/mockfiles
-    working_dir: /app
-    command: ./bin/DataNode 172.20.0.10 12345 DATANODE_BETA
+    working_dir: /root/SquidStorage
+    command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_BETA
     depends_on:
       - server
     networks:
@@ -40,11 +49,14 @@ services:
 
   mock_client:
     image: archlinux:latest
+    environment:
+      HOME: /root
+      SQUID_STORAGE_ROOT: /root/SquidStorage
     volumes:
+      - ./mockfiles/client:/root/SquidStorage
       - ./build:/app/bin:ro
-      - ./mockfiles/client:/app/mockfiles
-    working_dir: /app
-    command: ./bin/SquidStorageClient 172.20.0.10 12345 12346 MOCK_CLIENT_CONTAINER
+    working_dir: /root/SquidStorage
+    command: /app/bin/SquidStorageClient 172.20.0.10 12345 12346 MOCK_CLIENT_CONTAINER
     depends_on:
       - datanode1
       - datanode2

@@ -47,13 +47,19 @@ public:
   void rebalanceFileReplication(string filePath,
                                 map<string, SquidProtocol> fileHoldersMap);
 
-  bool getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
+  bool getFileFromDataNode(string filePath, std::vector<uint8_t> &fileData);
   void propagateCreateFile(string filePath, const string &originProcessName);
   void propagateCreateFile(string filePath, int version,
                            const string &originProcessName);
+  bool propagateCreateFile(string filePath, int version,
+                           const string &originProcessName,
+                           const std::vector<uint8_t> &fileData);
   void propagateUpdateFile(string filePath, const string &originProcessName);
   void propagateUpdateFile(string filePath, int version,
                            const string &originProcessName);
+  bool propagateUpdateFile(string filePath, int version,
+                           const string &originProcessName,
+                           const std::vector<uint8_t> &fileData);
   void propagateDeleteFile(string filePath, const string &originProcessName);
 
 private:

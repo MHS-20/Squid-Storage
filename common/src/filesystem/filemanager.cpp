@@ -1,7 +1,22 @@
 #include "filemanager.hpp"
+#include <algorithm>
+
+namespace {
+bool isRuntimeFile(const fs::path &path)
+{
+  static const std::vector<std::string> ignoredFiles = {
+      ".DS_Store", ".fileVersion.txt", "README.md", "CMakeLists.txt",
+      "docker-compose.yaml", ".gitignore"};
+
+  const auto name = path.filename().string();
+  return std::find(ignoredFiles.begin(), ignoredFiles.end(), name) ==
+         ignoredFiles.end();
+}
+} // namespace
 
 FileManager::FileManager() {
-  std::vector<std::string> entries = getFiles(DEFAULT_PATH);
+  fs::create_directories(storageRoot());
+  std::vector<std::string> entries = getFiles(storageRoot().string());
   for (auto entry : entries) {
     fileMap[entry] = FileLock(entry);
   }
@@ -19,11 +34,16 @@ std::map<std::string, FileLock> FileManager::getFileMap() { return fileMap; }
 
 std::vector<std::string> FileManager::getFiles(std::string path) {
   std::vector<std::string> files;
+  fs::path root(path);
+  if (!fs::exists(root))
+    return files;
 
-  for (const auto &entry : fs::directory_iterator(path)) {
+  for (const auto &entry : fs::directory_iterator(root)) {
     if (!entry.is_regular_file())
       continue;
-    files.push_back(entry.path().filename().string());
+    if (!isRuntimeFile(entry.path()))
+      continue;
+    files.push_back(relativePath(entry.path()));
   }
 
   return files;
@@ -31,8 +51,14 @@ std::vector<std::string> FileManager::getFiles(std::string path) {
 
 std::vector<fs::directory_entry> FileManager::getFileEntries(std::string path) {
   std::vector<fs::directory_entry> entries;
-  for (const auto &entry : fs::directory_iterator(path)) {
+  fs::path root(path);
+  if (!fs::exists(root))
+    return entries;
+
+  for (const auto &entry : fs::directory_iterator(root)) {
     if (!entry.is_regular_file())
+      continue;
+    if (!isRuntimeFile(entry.path()))
       continue;
     entries.push_back(entry);
   }
@@ -42,21 +68,17 @@ std::vector<fs::directory_entry> FileManager::getFileEntries(std::string path) {
 
 std::map<std::string, fs::file_time_type>
 FileManager::getFilesLastWrite(std::string path) {
-  auto files = this->getFiles(path);
   std::map<std::string, fs::file_time_type> filesLastWrite;
-  for (auto file : files) {
-    if (file == ".DS_Store" || file == "SquidStorage" ||
-        file == "SquidStorageServer" || file == "imgui.ini" ||
-        file == "DataNode" || file == ".fileVersion.txt")
-      continue;
-    filesLastWrite[file] = fs::last_write_time(fs::path(path) / file);
+  for (const auto &entry : getFileEntries(path)) {
+    auto rel = relativePath(entry.path());
+    filesLastWrite[rel] = entry.last_write_time();
   }
   return filesLastWrite;
 }
 
 std::map<std::string, int> FileManager::getFileVersionMap(std::string path) {
   std::map<std::string, int> savedFilesVersion;
-  std::ifstream versionFile(FILE_VERSION_PATH);
+  std::ifstream versionFile(versionFilePath());
   std::string line;
   while (std::getline(versionFile, line)) {
     std::istringstream iss(line);
@@ -71,10 +93,6 @@ std::map<std::string, int> FileManager::getFileVersionMap(std::string path) {
   std::map<std::string, int> filesVersion;
   auto files = this->getFiles(path);
   for (auto file : files) {
-    if (file == ".DS_Store" || file == "SquidStorage" ||
-        file == "SquidStorageServer" || file == "imgui.ini" ||
-        file == "DataNode" || file == ".fileVersion.txt")
-      continue;
     if (savedFilesVersion.find(file) != savedFilesVersion.end()) {
       filesVersion[file] = savedFilesVersion[file];
     } else {
@@ -96,7 +114,9 @@ char *FileManager::stringToChar(std::string str) {
 }
 
 bool FileManager::createFile(std::string path) {
-  std::ofstream newFile(path);
+  fs::path fullPath = resolvePath(path);
+  fs::create_directories(fullPath.parent_path());
+  std::ofstream newFile(fullPath);
   newFile.close();
   return true;
 }
@@ -110,11 +130,11 @@ bool FileManager::createFile(std::string path, int version) {
   return false;
 }
 
-bool FileManager::deleteFile(std::string path) { return fs::remove(path); }
+bool FileManager::deleteFile(std::string path) { return fs::remove(resolvePath(path)); }
 
 bool FileManager::deleteFileAndVersion(std::string path) {
   if (deleteFile(path)) {
-    std::ifstream versionFile(FILE_VERSION_PATH);
+    std::ifstream versionFile(versionFilePath());
     std::string line;
     std::vector<std::string> lines;
     while (std::getline(versionFile, line)) {
@@ -128,7 +148,7 @@ bool FileManager::deleteFileAndVersion(std::string path) {
       }
     }
     versionFile.close();
-    std::ofstream newVersionFile(FILE_VERSION_PATH);
+    std::ofstream newVersionFile(versionFilePath());
     for (auto line : lines) {
       newVersionFile << line << std::endl;
     }
@@ -139,7 +159,9 @@ bool FileManager::deleteFileAndVersion(std::string path) {
 }
 
 bool FileManager::updateFile(std::string path, std::string content) {
-  std::ofstream file(path, std::ios::trunc);
+  fs::path fullPath = resolvePath(path);
+  fs::create_directories(fullPath.parent_path());
+  std::ofstream file(fullPath, std::ios::trunc);
   if (!file.is_open()) {
     return false;
   }
@@ -173,7 +195,7 @@ bool FileManager::updateFileAndVersion(std::string path, std::string content) {
 }
 
 std::string FileManager::readFile(std::string path) {
-  std::ifstream file(path);
+  std::ifstream file(resolvePath(path));
   std::string fileContent;
   std::string line;
   while (std::getline(file, line)) {
@@ -193,7 +215,7 @@ std::string FileManager::formatFileList(std::vector<std::string> files) {
 }
 
 int FileManager::getFileVersion(std::string path) {
-  std::ifstream versionFile(FILE_VERSION_PATH);
+  std::ifstream versionFile(versionFilePath());
   std::string line;
   while (std::getline(versionFile, line)) {
     std::istringstream iss(line);
@@ -210,7 +232,7 @@ int FileManager::getFileVersion(std::string path) {
 }
 
 bool FileManager::setFileVersion(std::string path, int version) {
-  std::ifstream versionFile(FILE_VERSION_PATH);
+  std::ifstream versionFile(versionFilePath());
   std::string line;
   std::vector<std::string> lines;
   bool found = false;
@@ -231,7 +253,7 @@ bool FileManager::setFileVersion(std::string path, int version) {
   if (!found) {
     lines.push_back(path + " " + std::to_string(version));
   }
-  std::ofstream newVersionFile(FILE_VERSION_PATH);
+  std::ofstream newVersionFile(versionFilePath());
   for (auto line : lines) {
     newVersionFile << line << std::endl;
   }
@@ -246,7 +268,7 @@ void FileManager::setFileLock(FileLock fileLock) { this->fileLock = fileLock; }
 FileLock &FileManager::getFileLock() { return this->fileLock; }
 
 void FileManager::updateFileMap() {
-  std::vector<std::string> entries = getFiles(DEFAULT_PATH);
+  std::vector<std::string> entries = getFiles(storageRoot().string());
   for (auto entry : entries) {
     if (fileMap.find(entry) == fileMap.end())
       fileMap[entry] = FileLock(entry);
@@ -254,9 +276,10 @@ void FileManager::updateFileMap() {
 }
 
 void FileManager::createFileVersionFile() {
-  std::ifstream versionFile(FILE_VERSION_PATH);
+  fs::create_directories(storageRoot());
+  std::ifstream versionFile(versionFilePath());
   if (!versionFile) {
-    std::ofstream newFile(FILE_VERSION_PATH);
+    std::ofstream newFile(versionFilePath());
     newFile.close();
   }
   versionFile.close();

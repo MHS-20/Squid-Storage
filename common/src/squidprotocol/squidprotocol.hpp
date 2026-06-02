@@ -17,7 +17,7 @@
 
 namespace fs = std::filesystem;
 
-#define DEFAULT_FOLDER_PATH fs::current_path().string()
+#define DEFAULT_FOLDER_PATH FileManager::storageRoot().string()
 
 class SquidProtocol
 {
@@ -47,10 +47,16 @@ public:
 
     virtual Message createFile(const std::string &filePath);
     virtual Message createFile(const std::string &filePath, int version);
+    virtual Message createFile(const std::string &filePath, int version, const std::vector<uint8_t> &fileData);
     virtual Message readFile  (const std::string &filePath);
+    virtual Message readFile  (const std::string &filePath, std::vector<uint8_t> &fileData);
     virtual Message updateFile(const std::string &filePath);
     virtual Message updateFile(const std::string &filePath, int version);
+    virtual Message updateFile(const std::string &filePath, int version, const std::vector<uint8_t> &fileData);
     virtual Message deleteFile(const std::string &filePath);
+
+    bool receiveFileData(std::vector<uint8_t> &fileData);
+    bool sendFileData(const std::vector<uint8_t> &fileData);
 
     virtual Message acquireLock(const std::string &filePath);
     virtual Message releaseLock(const std::string &filePath);
@@ -81,4 +87,6 @@ protected:
     bool waitForAck(Message &ackMsg, const std::string &operation);
     Message waitForTransferResult(const std::string &operation);
     bool sendFileAfterAck(const std::string &filePath, const Message &ackMsg);
+    bool sendFileAfterAck(const std::vector<uint8_t> &fileData, const Message &ackMsg);
+    bool receiveFileAfterAck(std::vector<uint8_t> &fileData, const Message &ackMsg);
 };

@@ -6,10 +6,8 @@
 #include <map>
 #include <sstream>
 #include <filesystem>
+#include <cstdlib>
 #include "filelock.hpp"
-
-#define DEFAULT_PATH fs::current_path().string() // current directory
-#define FILE_VERSION_PATH DEFAULT_PATH + "/.fileVersion.txt"
 
 namespace fs = std::filesystem;
 
@@ -20,8 +18,44 @@ class FileManager
 public:
     static FileManager &getInstance()
     {
-        static FileManager instance; // viene creata una sola volta, la prima volta che viene chiamata
+        static FileManager instance;
         return instance;
+    }
+
+    static fs::path storageRoot()
+    {
+        if (const char *overrideRoot = std::getenv("SQUID_STORAGE_ROOT"); overrideRoot && *overrideRoot)
+            return fs::path(overrideRoot).lexically_normal();
+
+        if (const char *home = std::getenv("HOME"); home && *home)
+            return (fs::path(home) / "SquidStorage").lexically_normal();
+
+        return fs::current_path().lexically_normal();
+    }
+
+    static fs::path versionFilePath()
+    {
+        return storageRoot() / ".fileVersion.txt";
+    }
+
+    static fs::path resolvePath(const std::string &path)
+    {
+        fs::path p(path);
+        if (p.is_absolute())
+            return p.lexically_normal();
+        return (storageRoot() / p).lexically_normal();
+    }
+
+    static std::string relativePath(const fs::path &path)
+    {
+        try
+        {
+            return fs::relative(path.lexically_normal(), storageRoot()).generic_string();
+        }
+        catch (...)
+        {
+            return path.lexically_normal().generic_string();
+        }
     }
 
     std::map<std::string, FileLock> getFileMap();

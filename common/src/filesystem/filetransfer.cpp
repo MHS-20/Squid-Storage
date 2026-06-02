@@ -1,5 +1,9 @@
 #include "filetransfer.hpp"
+#include "filemanager.hpp"
+#include <algorithm>
+#include <filesystem>
 using namespace std;
+namespace fs = std::filesystem;
 
 static ssize_t sendAll(INetworkChannel &channel, const void *buf, size_t len)
 {
@@ -34,7 +38,7 @@ FileTransfer::~FileTransfer() {}
 
 bool FileTransfer::sendFile(INetworkChannel &channel, const string &rolename, const string &filepath)
 {
-    ifstream file(filepath, ios::binary | ios::ate);
+    ifstream file(FileManager::resolvePath(filepath), ios::binary | ios::ate);
     if (!file)
     {
         cerr << rolename + " Error opening file: " + filepath << endl;
@@ -91,9 +95,45 @@ bool FileTransfer::sendFile(INetworkChannel &channel, const string &rolename, co
     return true;
 }
 
+bool FileTransfer::sendFile(INetworkChannel &channel, const string &rolename, const vector<uint8_t> &data)
+{
+    uint64_t filesize = static_cast<uint64_t>(data.size());
+    if (filesize > FILETRANSFER_MAX_SIZE)
+    {
+        cerr << rolename + " File too large to send: " << filesize << endl;
+        return false;
+    }
+
+    uint8_t sizebuf[8];
+    for (int i = 7; i >= 0; --i)
+    {
+        sizebuf[i] = static_cast<uint8_t>(filesize & 0xFF);
+        filesize >>= 8;
+    }
+
+    ssize_t bytes = sendAll(channel, sizebuf, sizeof(sizebuf));
+    if (!handleErrors(bytes))
+        return false;
+
+    size_t offset = 0;
+    while (offset < data.size())
+    {
+        size_t chunk = std::min(static_cast<size_t>(BUFFER_SIZE), data.size() - offset);
+        ssize_t s = sendAll(channel, data.data() + offset, chunk);
+        if (!handleErrors(s))
+            return false;
+        offset += chunk;
+    }
+
+    cout << string(rolename) + " File sent \n";
+    return true;
+}
+
 bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename, const string &outputpath)
 {
-    ofstream outfile(outputpath, ios::binary);
+    fs::path fullPath = FileManager::resolvePath(outputpath);
+    fs::create_directories(fullPath.parent_path());
+    ofstream outfile(fullPath, ios::binary);
     if (!outfile)
     {
         cerr << rolename + " Error creating file: " << outputpath << endl;
@@ -106,7 +146,7 @@ bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename,
     {
         // delete file
         outfile.close();
-        remove(outputpath.c_str());
+        fs::remove(fullPath);
         cerr << rolename + " Error receiving file size: " << endl;
         return false;
     }
@@ -118,7 +158,7 @@ bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename,
     if (filesize > FILETRANSFER_MAX_SIZE)
     {
         outfile.close();
-        remove(outputpath.c_str());
+        fs::remove(fullPath);
         cerr << rolename + " File too large to receive: " << filesize << endl;
         return false;
     }
@@ -133,7 +173,7 @@ bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename,
         {
             // delete file
             outfile.close();
-            remove(outputpath.c_str());
+            fs::remove(fullPath);
             cerr << rolename + " Error receiving file: " << endl;
             return false;
         }
@@ -144,6 +184,48 @@ bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename,
 
     cout << rolename + " File " + outputpath + " received \n";
     outfile.close();
+    return true;
+}
+
+bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename, vector<uint8_t> &data)
+{
+    uint8_t sizebuf[8];
+    ssize_t bytes = recvAll(channel, sizebuf, sizeof(sizebuf));
+    if (!handleErrors(bytes))
+    {
+        cerr << rolename + " Error receiving file size: " << endl;
+        return false;
+    }
+
+    uint64_t filesize = 0;
+    for (int i = 0; i < 8; ++i)
+        filesize = (filesize << 8) | static_cast<uint64_t>(sizebuf[i]);
+
+    if (filesize > FILETRANSFER_MAX_SIZE)
+    {
+        cerr << rolename + " File too large to receive: " << filesize << endl;
+        return false;
+    }
+
+    data.resize(static_cast<size_t>(filesize));
+    uint64_t remaining = filesize;
+    size_t offset = 0;
+    while (remaining > 0)
+    {
+        size_t chunk = (remaining > BUFFER_SIZE) ? BUFFER_SIZE : static_cast<size_t>(remaining);
+        ssize_t r = recvAll(channel, data.data() + offset, chunk);
+        if (!handleErrors(r))
+        {
+            cerr << rolename + " Error receiving file: " << endl;
+            data.clear();
+            return false;
+        }
+
+        remaining -= static_cast<uint64_t>(r);
+        offset += chunk;
+    }
+
+    cout << rolename + " File received \n";
     return true;
 }
 

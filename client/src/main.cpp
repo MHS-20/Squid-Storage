@@ -3,7 +3,7 @@
 #include <iostream>
 #include <thread>
 
-static const char *TEST_FILE = "./mockfiles/testfile.txt";
+static const char *TEST_FILE = "testfile.txt";
 
 static void checkResponse(const std::string &op, const Message &msg) {
   if (msg.isAck())

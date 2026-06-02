@@ -155,16 +155,12 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
     lock_guard<recursive_mutex> lock(mapMutex);
     cout << "[SERVER]: Rebalancing datanodes for file: " << filePath << endl;
 
-    // retrive file from datanode that already holds the file
-    ifstream file(filePath);
-    if (file)
+    vector<uint8_t> fileData;
+    cout << "[SERVER]: Retrieving file from datanode: " << fileHoldersMap.begin()->first << endl;
+    if (!getFileFromDataNode(filePath, fileData))
     {
-        file.close();
-    }
-    else
-    {
-        cout << "[SERVER]: File not found on server, retrieving from datanode: " << fileHoldersMap.begin()->first << endl;
-        getFileFromDataNode(filePath, fileHoldersMap.begin()->second);
+        cerr << "[SERVER]: Unable to retrieve file for rebalancing: " << filePath << endl;
+        return;
     }
 
     auto endpointIterator = dataNodeEndpointMap.begin();
@@ -189,8 +185,7 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
 
         // Send the file to the newly assigned datanode
         cout << "[SERVER]: Sending file " << filePath << " to datanode: " << datanodeName << endl;
-        Message response = endpointIterator->second.createFile(filePath, FileManager::getInstance().getFileVersion(filePath));
-        FileManager::getInstance().deleteFile(filePath);
+        Message response = endpointIterator->second.createFile(filePath, FileManager::getInstance().getFileVersion(filePath), fileData);
         endpointIterator++;
 
         // Check if the file transfer was successful
@@ -303,28 +298,62 @@ void Server::handleConnection(SquidProtocol &clientProtocol)
         switch (mex.opcode)
         {
         case Opcode::CREATE_FILE:
-            clientProtocol.requestDispatcher(mex);
-            propagateCreateFile(filePath, fileVersion, clientProtocol.getProcessName());
-            FileManager::getInstance().deleteFileAndVersion(filePath);
-            break;
-        case Opcode::READ_FILE:
-            if (getFileFromDataNode(filePath, clientProtocol))
-                clientProtocol.requestDispatcher(mex);
+        {
+            clientProtocol.response(true);
+            vector<uint8_t> fileData;
+            if (clientProtocol.receiveFileData(fileData))
+            {
+                bool ok = propagateCreateFile(filePath, fileVersion, clientProtocol.getProcessName(), fileData);
+                FileManager::getInstance().setFileVersion(filePath, fileVersion);
+                clientProtocol.response(ok);
+            }
             else
+            {
                 clientProtocol.response(false);
-            FileManager::getInstance().deleteFileAndVersion(filePath);
+            }
             break;
+        }
+        case Opcode::READ_FILE:
+        {
+            vector<uint8_t> fileData;
+            if (getFileFromDataNode(filePath, fileData))
+            {
+                clientProtocol.response(true);
+                if (clientProtocol.sendFileData(fileData))
+                    clientProtocol.response(true);
+                else
+                    clientProtocol.response(false);
+            }
+            else
+            {
+                clientProtocol.response(false);
+            }
+            break;
+        }
         case Opcode::UPDATE_FILE:
-            clientProtocol.requestDispatcher(mex);
-            propagateUpdateFile(filePath, fileVersion, clientProtocol.getProcessName());
-            FileManager::getInstance().deleteFileAndVersion(filePath);
+        {
+            clientProtocol.response(true);
+            vector<uint8_t> fileData;
+            if (clientProtocol.receiveFileData(fileData))
+            {
+                bool ok = propagateUpdateFile(filePath, fileVersion, clientProtocol.getProcessName(), fileData);
+                FileManager::getInstance().setFileVersion(filePath, fileVersion);
+                clientProtocol.response(ok);
+            }
+            else
+            {
+                clientProtocol.response(false);
+            }
             break;
+        }
         case Opcode::DELETE_FILE:
-            clientProtocol.requestDispatcher(mex);
+        {
             propagateDeleteFile(filePath, clientProtocol.getProcessName());
             dataNodeReplicationMap.erase(filePath);
             FileManager::getInstance().deleteFileAndVersion(filePath);
+            clientProtocol.response(true);
             break;
+        }
         case Opcode::SYNC_STATUS:
             cout << "SERVER: received sync status request\n";
             clientProtocol.response(getFileVersionMap());
@@ -432,16 +461,19 @@ void Server::buildFileLockMap()
             {
                 cout << "updating datanode file version\n";
                 auto fileHoldersMap = dataNodeReplicationMap[file.first];
+                vector<uint8_t> fileData;
                 for (auto it = fileHoldersMap.begin(); it != fileHoldersMap.end(); ++it)
                 {
                     if (it->first != datanodeEndpoint.first)
                     {
                         cout << "retriving file from datanode: " + it->first << endl;
-                        getFileFromDataNode(file.first, it->second);
+                        if (getFileFromDataNode(file.first, fileData))
+                        {
+                            datanodeEndpoint.second.updateFile(file.first, FileManager::getInstance().getFileVersion(file.first), fileData);
+                        }
                         break;
                     }
                 }
-                datanodeEndpoint.second.updateFile(file.first, FileManager::getInstance().getFileVersion(file.first));
             }
             else if (FileManager::getInstance().getFileVersion(file.first) < file.second)
             {
@@ -456,7 +488,7 @@ void Server::buildFileLockMap()
     cout << "[SERVER]: File map built successfully" << endl;
 }
 
-bool Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
+bool Server::getFileFromDataNode(string filePath, vector<uint8_t> &fileData)
 {
     lock_guard<recursive_mutex> lock(mapMutex);
     cout << "retriving file " + filePath << endl;
@@ -488,7 +520,7 @@ bool Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
         return false;
     }
 
-    Message mex = dataNodeHolderProtocol.readFile(filePath);
+    Message mex = dataNodeHolderProtocol.readFile(filePath, fileData);
     if (!mex.isAck())
     {
         cerr << "Error while retriving file from datanode";
@@ -637,6 +669,65 @@ void Server::propagateCreateFile(string filePath, int version, const string &ori
         if (client.first != originProcessName)
             client.second.second.createFile(filePath, version); // second channel
     }
+}
+
+bool Server::propagateCreateFile(string filePath, int version, const string &originProcessName, const vector<uint8_t> &fileData)
+{
+    lock_guard<recursive_mutex> lock(mapMutex);
+    auto fileHoldersMap = map<string, SquidProtocol>();
+
+    if (dataNodeEndpointMap.empty())
+        return false;
+
+    for (int i = 0; i < replicationFactor; i++)
+    {
+        if (endpointIterator == dataNodeEndpointMap.end())
+            endpointIterator = dataNodeEndpointMap.begin();
+
+        fileHoldersMap.insert({endpointIterator->first, endpointIterator->second});
+        endpointIterator++;
+    }
+
+    cout << "iterated" << endl;
+    dataNodeReplicationMap.insert({filePath, fileHoldersMap});
+
+    bool ok = true;
+    for (auto &datanode : dataNodeReplicationMap[filePath])
+    {
+        Message response = datanode.second.createFile(filePath, version, fileData);
+        if (!response.isAck())
+        {
+            ok = false;
+            cerr << "[SERVER]: Failed to send file " << filePath << " to datanode: " << datanode.first << endl;
+        }
+    }
+
+    if (ok)
+    {
+        fileLockMap.insert({filePath, FileLock(filePath)});
+        fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
+        printMap(fileLockMap, "File Lock Map");
+    }
+
+    return ok;
+}
+
+bool Server::propagateUpdateFile(string filePath, int version, const string &originProcessName, const vector<uint8_t> &fileData)
+{
+    lock_guard<recursive_mutex> lock(mapMutex);
+
+    bool ok = true;
+    for (auto &datanode : dataNodeReplicationMap[filePath])
+    {
+        Message response = datanode.second.updateFile(filePath, version, fileData);
+        if (!response.isAck())
+        {
+            ok = false;
+            cerr << "[SERVER]: Failed to update file " << filePath << " on datanode: " << datanode.first << endl;
+        }
+    }
+
+    return ok;
 }
 // -----------------------
 // ------ PERSISTANCE ----
