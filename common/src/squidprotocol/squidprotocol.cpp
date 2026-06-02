@@ -454,29 +454,26 @@ void SquidProtocol::requestDispatcher(const Message &message)
     }
 }
 
-void SquidProtocol::responseDispatcher(const Message &response)
+void SquidProtocol::responseDispatcher(const Message &message)
 {
-    if (response.opcode != Opcode::RESPONSE) return;
+    if (message.opcode != Opcode::RESPONSE)
+    {
+        requestDispatcher(message);
+        return;
+    }
 
-    bool ack = response.isAck();
+    bool ack = message.isAck();
 
     if (!ack)
-        std::cerr << nodeType_ + ": Error in response " + response.toString() << std::endl;
+        std::cerr << nodeType_ + ": Error in response " + message.toString() << std::endl;
     else
         std::cout << nodeType_ + ": Operation performed" << std::endl;
 
-    if (response.opcode == Opcode::HEARTBEAT)
-    {
-        alive_ = ack;
-        if (!ack) std::cerr << nodeType_ + ": Heartbeat error" << std::endl;
-        else      std::cout << nodeType_ + ": Received heartbeat successfully from server" << std::endl;
-    }
-
     if (!ack) return;
 
-    if (response.findField(FieldID::IS_LOCKED))
+    if (message.findField(FieldID::IS_LOCKED))
     {
-        if (!response.getBool(FieldID::IS_LOCKED))
+        if (!message.getBool(FieldID::IS_LOCKED))
             std::cerr << nodeType_ + ": Lock refused" << std::endl;
         else
             std::cout << nodeType_ + ": Acquired lock successfully" << std::endl;

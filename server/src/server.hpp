@@ -48,7 +48,7 @@ public:
   void rebalanceFileReplication(string filePath,
                                 map<string, SquidProtocol> fileHoldersMap);
 
-  void getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
+  bool getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
   void propagateCreateFile(string filePath, SquidProtocol clientProtocol);
   void propagateCreateFile(string filePath, int version,
                            SquidProtocol clientProtocol);

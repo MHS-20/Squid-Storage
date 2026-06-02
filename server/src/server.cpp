@@ -409,8 +409,10 @@ void Server::handleConnection(SquidProtocol clientProtocol)
         FileManager::getInstance().deleteFileAndVersion(filePath);
         break;
     case Opcode::READ_FILE:
-        getFileFromDataNode(filePath, clientProtocol);
-        clientProtocol.requestDispatcher(mex);
+        if (getFileFromDataNode(filePath, clientProtocol))
+            clientProtocol.requestDispatcher(mex);
+        else
+            clientProtocol.response(false);
         FileManager::getInstance().deleteFileAndVersion(filePath);
         break;
     case Opcode::UPDATE_FILE:
@@ -551,13 +553,13 @@ void Server::buildFileLockMap()
     cout << "[SERVER]: File map built successfully" << endl;
 }
 
-void Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
+bool Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
 {
     cout << "retriving file " + filePath << endl;
     if (dataNodeReplicationMap.find(filePath) == dataNodeReplicationMap.end())
     {
         cout << "[SERVER]: File not found in datanode replication map" << endl;
-        return;
+        return false;
     }
 
     cout << "file found on datanode" << endl;
@@ -579,14 +581,20 @@ void Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
     if (!check)
     {
         cerr << "No datanode is alive for: " + filePath;
-        return;
+        return false;
     }
 
     Message mex = dataNodeHolderProtocol.readFile(filePath);
     if (!mex.isAck())
+    {
         cerr << "Error while retriving file from datanode";
+        return false;
+    }
     else
+    {
         cout << "Retrived file from datanode holder" << endl;
+        return true;
+    }
 }
 
 map<string, int> Server::getFileVersionMap()
