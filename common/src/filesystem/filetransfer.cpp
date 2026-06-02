@@ -1,33 +1,30 @@
 #include "filetransfer.hpp"
-#include <cerrno>
 using namespace std;
 
-static ssize_t sendAll(int sock, const void *buf, size_t len)
+static ssize_t sendAll(INetworkChannel &channel, const void *buf, size_t len)
 {
     size_t total = 0;
     const uint8_t *p = static_cast<const uint8_t *>(buf);
     while (total < len)
     {
-        ssize_t n = send(sock, p + total, len - total, 0);
+        ssize_t n = channel.writeBytes(p + total, len - total);
         if (n > 0) { total += static_cast<size_t>(n); continue; }
-        if (n == 0) return 0; // connection closed
-        if (errno == EINTR) continue;
-        return -1; // error
+        if (n == 0) return 0;
+        return -1;
     }
     return static_cast<ssize_t>(total);
 }
 
-static ssize_t recvAll(int sock, void *buf, size_t len)
+static ssize_t recvAll(INetworkChannel &channel, void *buf, size_t len)
 {
     size_t total = 0;
     uint8_t *p = static_cast<uint8_t *>(buf);
     while (total < len)
     {
-        ssize_t n = recv(sock, p + total, len - total, 0);
+        ssize_t n = channel.readBytes(p + total, len - total);
         if (n > 0) { total += static_cast<size_t>(n); continue; }
-        if (n == 0) return 0; // connection closed
-        if (errno == EINTR) continue;
-        return -1; // error
+        if (n == 0) return 0;
+        return -1;
     }
     return static_cast<ssize_t>(total);
 }
@@ -35,7 +32,7 @@ static ssize_t recvAll(int sock, void *buf, size_t len)
 FileTransfer::FileTransfer(){}
 FileTransfer::~FileTransfer() {}
 
-bool FileTransfer::sendFile(int socket, const string &rolename, const string &filepath)
+bool FileTransfer::sendFile(INetworkChannel &channel, const string &rolename, const string &filepath)
 {
     ifstream file(filepath, ios::binary | ios::ate);
     if (!file)
@@ -71,7 +68,7 @@ bool FileTransfer::sendFile(int socket, const string &rolename, const string &fi
     }
 
     // send size
-    ssize_t bytes = sendAll(socket, sizebuf, sizeof(sizebuf));
+    ssize_t bytes = sendAll(channel, sizebuf, sizeof(sizebuf));
     if(!handleErrors(bytes))
     {
         file.close();
@@ -82,7 +79,7 @@ bool FileTransfer::sendFile(int socket, const string &rolename, const string &fi
     while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0)
     {
         streamsize toSend = file.gcount();
-        ssize_t s = sendAll(socket, buffer, static_cast<size_t>(toSend));
+        ssize_t s = sendAll(channel, buffer, static_cast<size_t>(toSend));
         if(!handleErrors(s))
         {
             file.close();
@@ -94,7 +91,7 @@ bool FileTransfer::sendFile(int socket, const string &rolename, const string &fi
     return true;
 }
 
-bool FileTransfer::receiveFile(int socket, const string &rolename, const string &outputpath)
+bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename, const string &outputpath)
 {
     ofstream outfile(outputpath, ios::binary);
     if (!outfile)
@@ -104,7 +101,7 @@ bool FileTransfer::receiveFile(int socket, const string &rolename, const string 
     }
 
     uint8_t sizebuf[8];
-    ssize_t bytes = recvAll(socket, sizebuf, sizeof(sizebuf));
+    ssize_t bytes = recvAll(channel, sizebuf, sizeof(sizebuf));
     if (!handleErrors(bytes))
     {
         // delete file
@@ -131,7 +128,7 @@ bool FileTransfer::receiveFile(int socket, const string &rolename, const string 
     while (remaining > 0)
     {
         size_t chunk = (remaining > BUFFER_SIZE) ? BUFFER_SIZE : static_cast<size_t>(remaining);
-        ssize_t r = recvAll(socket, buffer, chunk);
+        ssize_t r = recvAll(channel, buffer, chunk);
         if (!handleErrors(r))
         {
             // delete file

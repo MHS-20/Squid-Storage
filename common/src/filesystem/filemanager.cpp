@@ -20,16 +20,22 @@ std::map<std::string, FileLock> FileManager::getFileMap() { return fileMap; }
 std::vector<std::string> FileManager::getFiles(std::string path) {
   std::vector<std::string> files;
 
-  for (const auto &entry : fs::directory_iterator(path))
+  for (const auto &entry : fs::directory_iterator(path)) {
+    if (!entry.is_regular_file())
+      continue;
     files.push_back(entry.path().filename().string());
+  }
 
   return files;
 }
 
 std::vector<fs::directory_entry> FileManager::getFileEntries(std::string path) {
   std::vector<fs::directory_entry> entries;
-  for (const auto &entry : fs::directory_iterator(path))
+  for (const auto &entry : fs::directory_iterator(path)) {
+    if (!entry.is_regular_file())
+      continue;
     entries.push_back(entry);
+  }
 
   return entries;
 }
@@ -43,7 +49,7 @@ FileManager::getFilesLastWrite(std::string path) {
         file == "SquidStorageServer" || file == "imgui.ini" ||
         file == "DataNode" || file == ".fileVersion.txt")
       continue;
-    filesLastWrite[file] = fs::last_write_time(file);
+    filesLastWrite[file] = fs::last_write_time(fs::path(path) / file);
   }
   return filesLastWrite;
 }

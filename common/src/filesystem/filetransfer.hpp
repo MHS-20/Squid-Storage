@@ -6,6 +6,8 @@
 #include <fstream>
 #include <cstdint>
 
+#include "../networking/INetworkChannel.hpp"
+
 using namespace std;
 #define BUFFER_SIZE 1024
 // Maximum allowed file size to receive (1 GiB)
@@ -17,6 +19,6 @@ public:
     FileTransfer();
     ~FileTransfer();
     bool handleErrors(ssize_t bytes);
-    bool sendFile(int socket, const string &rolename, const string &filepath);
-    bool receiveFile(int socket, const string &rolename, const string &outputpath);
+    bool sendFile(INetworkChannel &channel, const string &rolename, const string &filepath);
+    bool receiveFile(INetworkChannel &channel, const string &rolename, const string &outputpath);
 };

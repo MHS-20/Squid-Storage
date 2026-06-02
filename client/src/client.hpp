@@ -1,14 +1,13 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <thread>
 #include <atomic>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 
 #include "squidprotocol.hpp"
+#include "networking/TCPConnectorChannel.hpp"
+#include "networking/TCPListenerChannel.hpp"
 
 #define MOCK_CLIENT_SERVER_IP   "127.0.0.1"
 #define MOCK_CLIENT_SERVER_PORT 12345
@@ -44,9 +43,7 @@ private:
     int         secondaryPort_;
     std::string processName_;
 
-    int primaryFd_   = -1;
-    int secondaryFd_ = -1;
-    int listenFd_    = -1;
+    std::unique_ptr<TCPListenerChannel> secondaryListener_;
 
     SquidProtocol primaryProtocol_;
     SquidProtocol secondaryProtocol_;

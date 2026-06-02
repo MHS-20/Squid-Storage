@@ -5,8 +5,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
-#include <netinet/in.h>
-#include <sys/socket.h>
+#include <memory>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -14,6 +13,7 @@
 #include "filelock.hpp"
 #include "filemanager.hpp"
 #include "filetransfer.hpp"
+#include "networking/TCPListenerChannel.hpp"
 #include "squidprotocol.hpp"
 
 #define DEFAULT_PORT 12345
@@ -37,48 +37,40 @@ public:
   bool releaseLock(string path);
   bool acquireLock(string path);
 
-  void handleConnection(SquidProtocol clientProtocol);
-  void handleAccept(int new_socket, sockaddr_in peer_addr);
+  void handleConnection(SquidProtocol &clientProtocol);
+  void handleAccept(AcceptedConnection accepted);
 
   void sendHeartbeats();
   void checkFileLockExpiration();
   void eraseFromReplicationMap(vector<string> datanodeNames);
   void eraseFromReplicationMap(string datanodeName);
-  void checkCloseConnetions(fd_set &master_set, int max_sd);
   void rebalanceFileReplication(string filePath,
                                 map<string, SquidProtocol> fileHoldersMap);
 
   bool getFileFromDataNode(string filePath, SquidProtocol clientProtocol);
-  void propagateCreateFile(string filePath, SquidProtocol clientProtocol);
+  void propagateCreateFile(string filePath, const string &originProcessName);
   void propagateCreateFile(string filePath, int version,
-                           SquidProtocol clientProtocol);
-  void propagateUpdateFile(string filePath, SquidProtocol clientProtocol);
+                           const string &originProcessName);
+  void propagateUpdateFile(string filePath, const string &originProcessName);
   void propagateUpdateFile(string filePath, int version,
-                           SquidProtocol clientProtocol);
-  void propagateDeleteFile(string filePath, SquidProtocol clientProtocol);
+                           const string &originProcessName);
+  void propagateDeleteFile(string filePath, const string &originProcessName);
 
 private:
   int port;
-  int opt = 1;
-  char buffer[BUFFER_SIZE] = {0};
 
   int replicationFactor;
-  int server_fd, new_socket;
-  struct sockaddr_in address, peer_addr;
-  socklen_t addrlen = sizeof(address);
+  std::unique_ptr<TCPListenerChannel> listener_;
 
   string filename = "fileTimeMap";
   FileTransfer fileTransfer;
 
-  mutex mapMutex;
+  recursive_mutex mapMutex;
   map<string, FileLock> fileLockMap;
   map<string, long long> fileTimeMap;
 
   map<string, SquidProtocol> dataNodeEndpointMap;
   map<string, pair<SquidProtocol, SquidProtocol>> clientEndpointMap;
-
-  map<int, SquidProtocol> primarySocketMap;
-  // map<int, SquidProtocol> secondarySocketMap;
 
   // maps filename to datanode holding that file (datanode, socket)
   map<string, map<string, SquidProtocol>> dataNodeReplicationMap;

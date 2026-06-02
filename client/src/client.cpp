@@ -1,6 +1,4 @@
 #include "client.hpp"
-#include <cerrno>
-#include <cstring>
 #include <iostream>
 #include <stdexcept>
 
@@ -12,43 +10,27 @@ MockClient::MockClient(const char *serverIp, int serverPort, int secondaryPort,
 
 MockClient::~MockClient() {
   stopPushListener();
-  if (primaryFd_ >= 0)
-    ::close(primaryFd_);
-  if (secondaryFd_ >= 0)
-    ::close(secondaryFd_);
-  if (listenFd_ >= 0)
-    ::close(listenFd_);
+  if (secondaryProtocol_.isAlive())
+    secondaryProtocol_.closeConn();
+  if (primaryProtocol_.isAlive())
+    primaryProtocol_.closeConn();
+  if (secondaryListener_)
+    secondaryListener_->close();
 }
 
 void MockClient::openSecondaryListener() {
-  listenFd_ = ::socket(AF_INET, SOCK_STREAM, 0);
-  if (listenFd_ < 0)
-    throw std::runtime_error("MockClient: secondary listen socket failed");
-
-  int opt = 1;
-  setsockopt(listenFd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-  sockaddr_in addr{};
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = INADDR_ANY;
-  addr.sin_port = htons(static_cast<uint16_t>(secondaryPort_));
-
-  if (::bind(listenFd_, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
-    throw std::runtime_error(std::string("MockClient: bind secondary port: ") +
-                             std::strerror(errno));
-
-  if (::listen(listenFd_, 1) < 0)
-    throw std::runtime_error("MockClient: listen secondary failed");
+  secondaryListener_ = std::make_unique<TCPListenerChannel>(secondaryPort_, 1);
 }
 
 void MockClient::acceptSecondaryConnection() {
-  sockaddr_in peer{};
-  socklen_t len = sizeof(peer);
-  secondaryFd_ = ::accept(listenFd_, reinterpret_cast<sockaddr *>(&peer), &len);
-  if (secondaryFd_ < 0)
+  if (!secondaryListener_)
+    throw std::runtime_error("MockClient: secondary listener not ready");
+
+  AcceptedConnection accepted = secondaryListener_->acceptConnection();
+  if (!accepted.channel)
     throw std::runtime_error("MockClient: accept secondary failed");
 
-  secondaryProtocol_ = SquidProtocol(secondaryFd_, "CLIENT", processName_);
+  secondaryProtocol_ = SquidProtocol(accepted.channel, "CLIENT", processName_);
   std::cout << "[MockClient]: Secondary connection accepted" << std::endl;
 }
 
@@ -79,35 +61,25 @@ void MockClient::doHandshake() {
 }
 
 void MockClient::connect() {
-  primaryFd_ = ::socket(AF_INET, SOCK_STREAM, 0);
-  if (primaryFd_ < 0)
-    throw std::runtime_error("MockClient: socket failed");
-
-  sockaddr_in addr{};
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(static_cast<uint16_t>(serverPort_));
-  if (inet_pton(AF_INET, serverIp_, &addr.sin_addr) <= 0)
-    throw std::runtime_error("MockClient: invalid server IP");
-
-  while (::connect(primaryFd_, reinterpret_cast<sockaddr *>(&addr),
-                   sizeof(addr)) < 0) {
-    std::cerr << "[MockClient]: connect failed, retrying..." << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-  }
+  auto primaryChannel = std::make_shared<TCPConnectorChannel>(serverIp_, serverPort_, 60, 2);
   std::cout << "[MockClient]: Primary connection established" << std::endl;
 
-  primaryProtocol_ = SquidProtocol(primaryFd_, "CLIENT", processName_);
+  primaryProtocol_ = SquidProtocol(primaryChannel, "CLIENT", processName_);
 
   openSecondaryListener();
   doHandshake();
 
-  ::close(listenFd_);
-  listenFd_ = -1;
+  if (secondaryListener_)
+    secondaryListener_->close();
 }
 
 void MockClient::disconnect() {
   stopPushListener();
   primaryProtocol_.closeConn();
+  if (secondaryProtocol_.isAlive())
+    secondaryProtocol_.closeConn();
+  if (secondaryListener_)
+    secondaryListener_->close();
 }
 
 Message MockClient::createFile(const std::string &filePath, int version) {
@@ -151,7 +123,7 @@ void MockClient::runPushListener() {
 
       std::cout << "[MockClient]: Push received: " << msg.toString()
                 << std::endl;
-      secondaryProtocol_.requestDispatcher(msg);
+      secondaryProtocol_.responseDispatcher(msg);
     }
     std::cout << "[MockClient]: Push listener stopped" << std::endl;
   });

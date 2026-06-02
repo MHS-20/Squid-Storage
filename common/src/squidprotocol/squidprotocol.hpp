@@ -8,9 +8,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <signal.h>
+#include <memory>
 
 #include "../filesystem/filetransfer.hpp"
 #include "../filesystem/filemanager.hpp"
+#include "../networking/INetworkChannel.hpp"
 #include "squidProtocolFormatter.hpp"
 
 namespace fs = std::filesystem;
@@ -22,12 +24,13 @@ class SquidProtocol
 public:
     SquidProtocol();
     SquidProtocol(int socket_fd, std::string nodeType, std::string processName);
+    SquidProtocol(std::shared_ptr<INetworkChannel> channel, std::string nodeType, std::string processName);
     virtual ~SquidProtocol();
 
     virtual bool        isAlive()        const { return alive_; }
     virtual void        setIsAlive(bool v)     { alive_ = v; }
-    virtual int         getSocket()      const { return socket_fd_; }
-    virtual void        setSocket(int fd)      { socket_fd_ = fd; }
+    virtual void        setSocket(int fd);
+    virtual void        setChannel(std::shared_ptr<INetworkChannel> channel);
     virtual std::string getProcessName() const { return processName_; }
     virtual std::string getNodeType()    const { return nodeType_; }
     virtual std::string toString()       const;
@@ -65,10 +68,10 @@ public:
     virtual void responseDispatcher(const Message &response);
 
 protected:
-    int         socket_fd_   = -1;
     bool        alive_       = false;
     std::string processName_;
     std::string nodeType_;
+    std::shared_ptr<INetworkChannel> channel_;
 
     FileTransfer           fileTransfer_;
     SquidProtocolFormatter formatter_;

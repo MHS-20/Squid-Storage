@@ -1,21 +1,36 @@
 #include "squidprotocol.hpp"
+#include "../networking/TCPSquidChannel.hpp"
 #include <iostream>
 #include <cerrno>
 
 SquidProtocol::SquidProtocol() {}
 
 SquidProtocol::SquidProtocol(int socket_fd, std::string nodeType, std::string processName)
-    : socket_fd_(socket_fd),
-      alive_(true),
+    : SquidProtocol(std::make_shared<TCPSquidChannel>(socket_fd), std::move(nodeType), std::move(processName))
+{
+}
+
+SquidProtocol::SquidProtocol(std::shared_ptr<INetworkChannel> channel, std::string nodeType, std::string processName)
+    : alive_(true),
       processName_(std::move(processName)),
       nodeType_(std::move(nodeType)),
+      channel_(std::move(channel)),
       formatter_(nodeType_)
 {
     signal(SIGPIPE, SIG_IGN);
-    fileTransfer_ = FileTransfer();
 }
 
 SquidProtocol::~SquidProtocol() {}
+
+void SquidProtocol::setChannel(std::shared_ptr<INetworkChannel> channel)
+{
+    channel_ = std::move(channel);
+}
+
+void SquidProtocol::setSocket(int fd)
+{
+    channel_ = std::make_shared<TCPSquidChannel>(fd);
+}
 
 std::string SquidProtocol::toString() const
 {
@@ -27,7 +42,8 @@ bool SquidProtocol::recvExact(uint8_t *buf, size_t n)
     size_t total = 0;
     while (total < n)
     {
-        ssize_t r = recv(socket_fd_, buf + total, n - total, 0);
+        if (!channel_) return false;
+        ssize_t r = channel_->readBytes(buf + total, n - total);
         if (!handleRecvError(r)) return false;
         total += static_cast<size_t>(r);
     }
@@ -57,7 +73,13 @@ void SquidProtocol::sendFrame(const std::vector<uint8_t> &frame)
     size_t total = 0;
     while (total < frame.size())
     {
-        ssize_t sent = send(socket_fd_, frame.data() + total, frame.size() - total, 0);
+        if (!channel_)
+        {
+            alive_ = false;
+            return;
+        }
+
+        ssize_t sent = channel_->writeBytes(frame.data() + total, frame.size() - total);
         if (sent <= 0)
         {
             alive_ = false;
@@ -152,7 +174,10 @@ bool SquidProtocol::sendFileAfterAck(const std::string &filePath, const Message 
         return false;
     }
 
-    return fileTransfer_.sendFile(socket_fd_, processName_, filePath);
+    if (!channel_)
+        return false;
+
+    return fileTransfer_.sendFile(*channel_, processName_, filePath);
 }
 
 Message SquidProtocol::identify()
@@ -277,7 +302,7 @@ Message SquidProtocol::readFile(const std::string &filePath)
     if (!waitForAck(ack, "read file"))
         return ack;
 
-    if (!fileTransfer_.receiveFile(socket_fd_, processName_, filePath))
+    if (!channel_ || !fileTransfer_.receiveFile(*channel_, processName_, filePath))
         return formatter_.makeNack();
 
     return waitForTransferResult("read file");
@@ -382,7 +407,7 @@ void SquidProtocol::requestDispatcher(const Message &message)
         std::cout << nodeType_ + ": received create file request\n";
         response(true);
         std::cout << nodeType_ + ": Receiving file" << std::endl;
-        if (fileTransfer_.receiveFile(socket_fd_, processName_, path))
+        if (channel_ && fileTransfer_.receiveFile(*channel_, processName_, path))
         {
             FileManager::getInstance().setFileVersion(path, version);
             response(true);
@@ -396,13 +421,13 @@ void SquidProtocol::requestDispatcher(const Message &message)
     case Opcode::READ_FILE:
         std::cout << nodeType_ + ": received read file request\n";
         response(true);
-        response(fileTransfer_.sendFile(socket_fd_, processName_, path));
+        response(channel_ && fileTransfer_.sendFile(*channel_, processName_, path));
         break;
 
     case Opcode::UPDATE_FILE:
         std::cout << nodeType_ + ": received update file request\n";
         response(true);
-        if (fileTransfer_.receiveFile(socket_fd_, processName_, path))
+        if (channel_ && fileTransfer_.receiveFile(*channel_, processName_, path))
         {
             FileManager::getInstance().setFileVersion(path, version);
             response(true);
@@ -441,12 +466,12 @@ void SquidProtocol::requestDispatcher(const Message &message)
         alive_ = false;
         break;
 
-    case Opcode::CLOSE:
-        response(true);
-        close(socket_fd_);
-        alive_ = false;
-        std::cout << nodeType_ + ": Connection closed" << std::endl;
-        break;
+        case Opcode::CLOSE:
+            response(true);
+            if (channel_) channel_->close();
+            alive_ = false;
+            std::cout << nodeType_ + ": Connection closed" << std::endl;
+            break;
 
     default:
         std::cerr << nodeType_ + ": Unknown request: " + message.toString() << std::endl;

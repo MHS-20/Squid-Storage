@@ -13,6 +13,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/common/src/squidprotocol
     ${CMAKE_SOURCE_DIR}/common/src/filesystem
     ${CMAKE_SOURCE_DIR}/common/src/peer
+    ${CMAKE_SOURCE_DIR}/common/src/networking
     ${CMAKE_SOURCE_DIR}/server/src
     ${CMAKE_SOURCE_DIR}/client/src
     ${CMAKE_SOURCE_DIR}/datanode/src
@@ -26,6 +27,9 @@ set(COMMON_SOURCES
     common/src/filesystem/filelock.cpp
     common/src/peer/peer.cpp
     common/src/filesystem/filetransfer.cpp
+    common/src/networking/TCPConnectorChannel.cpp
+    common/src/networking/TCPListenerChannel.cpp
+    common/src/networking/TCPSquidChannel.cpp
 )
 
 link_directories(/usr/local/lib)

@@ -1,5 +1,7 @@
 #include "server.hpp"
+#include "networking/TCPConnectorChannel.hpp"
 #include <algorithm>
+#include <utility>
 using namespace std;
 
 Server::Server() : Server(DEFAULT_PORT, DEFAULT_REPLICATION_FACTOR) {}
@@ -12,53 +14,13 @@ Server::Server(int port, int replicationFactor, int timeoutSeconds)
 {
     this->port = port;
     this->replicationFactor = replicationFactor;
-    this->server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    cout << "[SERVER]: Initializing..." + server_fd << endl;
-    if (server_fd < 0)
-    {
-        perror("[SERVER]: Socket failed");
-        exit(EXIT_FAILURE);
-    }
-
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
-    {
-        perror("[SERVER]: setsockopt failed (SO_REUSEADDR)");
-        exit(EXIT_FAILURE);
-    }
-
-#ifdef SO_REUSEPORT
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0)
-    {
-        perror("[SERVER]: setsockopt failed (SO_REUSEPORT)");
-        exit(EXIT_FAILURE);
-    }
-#endif
-
-    struct timeval timeout;
-    timeout.tv_sec = timeoutSeconds;
-    timeout.tv_usec = 0;
-
-    if (setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
-    {
-        perror("[SERVER]: setsockopt failed (SO_RCVTIMEO)");
-        exit(EXIT_FAILURE);
-    }
-    if (setsockopt(server_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
-    {
-        perror("[SERVER]: setsockopt failed (SO_SNDTIMEO)");
-        exit(EXIT_FAILURE);
-    }
-
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(port);
+    listener_ = std::make_unique<TCPListenerChannel>(port, 3);
 
     fileTransfer = FileTransfer();
     fileLockMap = map<string, FileLock>();
     // fileTimeMap = map<string, long long>();
     // loadMapFromFile();
 
-    primarySocketMap = map<int, SquidProtocol>();
     clientEndpointMap = map<string, pair<SquidProtocol, SquidProtocol>>();
     dataNodeEndpointMap = map<string, SquidProtocol>();
     dataNodeReplicationMap = map<string, map<string, SquidProtocol>>();
@@ -67,72 +29,26 @@ Server::Server(int port, int replicationFactor, int timeoutSeconds)
 
 Server::~Server()
 {
-    close(server_fd);
+    if (listener_)
+        listener_->close();
 }
 
 void Server::run()
 {
     cout << "[SERVER]: Server Starting..." << endl;
-    if (::bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
-    {
-        perror("bind failed");
-        return;
-    }
-
-    listen(server_fd, 3);
     cout << "[SERVER]: Server listening on " << this->port << "...\n";
-
-    int max_sd = server_fd;
 
     while (true)
     {
-        // wait with select
-        fd_set master_set, readfds;
-        FD_ZERO(&master_set);
-        FD_SET(server_fd, &master_set);
-
-        // add all primary sockets to the set
-        for (auto &client : primarySocketMap)
+        if (!listener_)
         {
-            int sd = client.second.getSocket();
-            if (sd > 0)
-                FD_SET(sd, &master_set);
-            if (sd > max_sd)
-                max_sd = sd;
+            cerr << "[SERVER]: Listener not available" << endl;
+            return;
         }
 
-        readfds = master_set;
-
-        struct timeval timeout;
-        timeout.tv_sec = 1; // 1 second timeout
-        timeout.tv_usec = 0;
-        if (select(max_sd + 1, &readfds, NULL, NULL, &timeout) < 0)
-        {
-            cerr << "[SERVER]: Select failed" << endl;
-            checkCloseConnetions(master_set, max_sd);
-        }
-        else
-            for (int i = 0; i <= max_sd; i++)
-            {
-                if (FD_ISSET(i, &readfds))
-                {
-                    if (i == server_fd)
-                    {
-                        // new connection
-                        new_socket = accept(server_fd, (struct sockaddr *)&peer_addr, &addrlen);
-                        cout << "Accepted connection: " << new_socket << "...\n";
-                        max_sd = max(max_sd, new_socket);
-                        handleAccept(new_socket, peer_addr);
-                    }
-                    else
-                    {
-                        // handle the connection
-                        auto client = primarySocketMap.find(i);
-                        if (client != primarySocketMap.end())
-                            handleConnection(client->second);
-                    }
-                }
-            }
+        auto accepted = listener_->waitForConnection(1);
+        if (accepted)
+            std::thread(&Server::handleAccept, this, std::move(*accepted)).detach();
         sendHeartbeats(); // datanodes only
         // saveMapToFile(); // save file time map
         checkFileLockExpiration();
@@ -144,6 +60,7 @@ void Server::run()
 
 void Server::checkFileLockExpiration()
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     auto now = chrono::system_clock::now();
     for (auto it = fileLockMap.begin(); it != fileLockMap.end();)
     {
@@ -162,31 +79,9 @@ void Server::checkFileLockExpiration()
     }
 }
 
-void Server::checkCloseConnetions(fd_set &master_set, int max_sd)
-{
-    std::cout << "[DEBUG]: Checking file descriptors in fd_set..." << std::endl;
-    for (int fd = 0; fd <= max_sd; ++fd)
-    {
-        if (FD_ISSET(fd, &master_set))
-        {
-            // Check if the file descriptor is valid
-            if (fcntl(fd, F_GETFD) == -1)
-            {
-                FD_CLR(fd, &master_set);
-                primarySocketMap[fd].setIsAlive(false);
-                clientEndpointMap.erase(primarySocketMap[fd].getProcessName());
-                primarySocketMap.erase(fd);
-            }
-            else
-            {
-                cout << "[INFO]: Valid file descriptor: " << fd << std::endl;
-            }
-        }
-    }
-}
-
 void Server::sendHeartbeats()
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     vector<string> erasable = vector<string>();
     for (auto &datanode : dataNodeEndpointMap)
     {
@@ -218,6 +113,7 @@ void Server::sendHeartbeats()
 
 void Server::eraseFromReplicationMap(vector<string> datanodeNames)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     for (auto &datanodeName : datanodeNames)
     {
         cout << "[SERVER]: Erasing datanode: " + datanodeName + " from replication map" << endl;
@@ -227,6 +123,7 @@ void Server::eraseFromReplicationMap(vector<string> datanodeNames)
 
 void Server::eraseFromReplicationMap(string datanodeName)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     for (auto it = dataNodeReplicationMap.begin(); it != dataNodeReplicationMap.end();)
     {
         cout << "[SERVER]: Checking file: " + it->first << endl;
@@ -255,6 +152,7 @@ void Server::eraseFromReplicationMap(string datanodeName)
 
 void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol> fileHoldersMap)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     cout << "[SERVER]: Rebalancing datanodes for file: " << filePath << endl;
 
     // retrive file from datanode that already holds the file
@@ -326,9 +224,14 @@ void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol
 // ------------------------------
 // --- COMMUNICATION HANDLING ---
 // ------------------------------
-void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
+void Server::handleAccept(AcceptedConnection accepted)
 {
-    SquidProtocol primaryProtocol = SquidProtocol(new_socket, "[SERVER_PRIMARY]", "SERVER_PRIMARY");
+    auto primaryChannel = accepted.channel;
+    auto peerIp = accepted.peerIp;
+    if (!primaryChannel)
+        return;
+
+    SquidProtocol primaryProtocol(primaryChannel, "[SERVER_PRIMARY]", "SERVER_PRIMARY");
     Message mex = primaryProtocol.identify();
     string peerProcessName = mex.getString(FieldID::PROCESS_NAME);
     string peerNodeType    = mex.getString(FieldID::NODE_TYPE);
@@ -336,8 +239,11 @@ void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
 
     if (peerNodeType == "DATANODE")
     {
+        {
+            lock_guard<recursive_mutex> lock(mapMutex);
         dataNodeEndpointMap[peerProcessName] = primaryProtocol;
         printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
+        }
 
         cout << "[SERVER]: Building file map..." << endl;
         buildFileLockMap();
@@ -362,87 +268,81 @@ void Server::handleAccept(int new_socket, sockaddr_in peer_addr)
     }
     cout << "[SERVER]: Client port: " << secondaryPort << endl;
 
-    // Create second connection
-    int second_fd = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in second_addr{};
-    second_addr.sin_family = AF_INET;
-    second_addr.sin_port = htons(secondaryPort);
-    second_addr.sin_addr = peer_addr.sin_addr;
+    auto secondaryChannel = std::make_shared<TCPConnectorChannel>(peerIp, secondaryPort, 60, 2);
+    cout << "[SERVER]: Connected to client..." << endl;
+    SquidProtocol secondaryProtocol(secondaryChannel, "[SERVER_SECONDARY]", "SERVER_SECONDARY");
+    {
+        lock_guard<recursive_mutex> lock(mapMutex);
+        clientEndpointMap[peerProcessName] = pair(primaryProtocol, secondaryProtocol);
+    }
 
-    if (connect(second_fd, (struct sockaddr *)&second_addr, sizeof(second_addr)) < 0)
-        cerr << "Second connection failed" << endl;
-    else
-        cout << "[SERVER]: Connected to client..." << endl;
-
-    SquidProtocol secondaryProtocol = SquidProtocol(second_fd, "[SERVER_SECONDARY]", "SERVER_SECONDARY");
-    clientEndpointMap[peerProcessName] = pair(primaryProtocol, secondaryProtocol);
-    primarySocketMap[new_socket] = primaryProtocol;
+    handleConnection(clientEndpointMap[peerProcessName].first);
 }
 
-void Server::handleConnection(SquidProtocol clientProtocol)
+void Server::handleConnection(SquidProtocol &clientProtocol)
 {
     Message mex;
-    if (clientProtocol.getSocket() < 0)
+    while (clientProtocol.isAlive())
     {
-        cout << "[SERVER]: Closing & Terminating" << endl;
-        return;
-    }
+        try
+        {
+            mex = clientProtocol.receiveAndParse();
+            if (!clientProtocol.isAlive())
+                break;
+            cout << "[SERVER]: Received message: " + opcodeToString(mex.opcode) << endl;
+        }
+        catch (exception &e)
+        {
+            cerr << "[SERVER]: Error receiving message: " << e.what() << endl;
+            break;
+        }
 
-    try
-    {
-        mex = clientProtocol.receiveAndParse();
-        cout << "[SERVER]: Received message: " + opcodeToString(mex.opcode) << endl;
-    }
-    catch (exception &e)
-    {
-        cerr << "[SERVER]: Error receiving message: " << e.what() << endl;
-    }
+        string filePath = mex.getString(FieldID::FILE_PATH);
+        int fileVersion = static_cast<int>(mex.getUint32(FieldID::FILE_VERSION, 0));
 
-    string filePath = mex.getString(FieldID::FILE_PATH);
-    int fileVersion = static_cast<int>(mex.getUint32(FieldID::FILE_VERSION, 0));
-
-    switch (mex.opcode)
-    {
-    case Opcode::CREATE_FILE:
-        clientProtocol.requestDispatcher(mex);
-        propagateCreateFile(filePath, fileVersion, clientProtocol);
-        FileManager::getInstance().deleteFileAndVersion(filePath);
-        break;
-    case Opcode::READ_FILE:
-        if (getFileFromDataNode(filePath, clientProtocol))
+        switch (mex.opcode)
+        {
+        case Opcode::CREATE_FILE:
             clientProtocol.requestDispatcher(mex);
-        else
-            clientProtocol.response(false);
-        FileManager::getInstance().deleteFileAndVersion(filePath);
-        break;
-    case Opcode::UPDATE_FILE:
-        clientProtocol.requestDispatcher(mex);
-        propagateUpdateFile(filePath, fileVersion, clientProtocol);
-        FileManager::getInstance().deleteFileAndVersion(filePath);
-        break;
-    case Opcode::DELETE_FILE:
-        clientProtocol.requestDispatcher(mex);
-        propagateDeleteFile(filePath, clientProtocol);
-        dataNodeReplicationMap.erase(filePath);
-        FileManager::getInstance().deleteFileAndVersion(filePath);
-        break;
-    case Opcode::SYNC_STATUS:
-        cout << "SERVER: received sync status request\n";
-        clientProtocol.response(getFileVersionMap());
-        break;
-    case Opcode::ACQUIRE_LOCK:
-        cout << "[SERVER]: received acquire lock request for " << filePath << endl;
-        clientProtocol.response(this->acquireLock(filePath));
-        break;
-    case Opcode::RELEASE_LOCK:
-        this->releaseLock(filePath);
-        clientProtocol.response(true);
-        break;
-    default:
-        clientProtocol.requestDispatcher(mex);
-    }
+            propagateCreateFile(filePath, fileVersion, clientProtocol.getProcessName());
+            FileManager::getInstance().deleteFileAndVersion(filePath);
+            break;
+        case Opcode::READ_FILE:
+            if (getFileFromDataNode(filePath, clientProtocol))
+                clientProtocol.requestDispatcher(mex);
+            else
+                clientProtocol.response(false);
+            FileManager::getInstance().deleteFileAndVersion(filePath);
+            break;
+        case Opcode::UPDATE_FILE:
+            clientProtocol.requestDispatcher(mex);
+            propagateUpdateFile(filePath, fileVersion, clientProtocol.getProcessName());
+            FileManager::getInstance().deleteFileAndVersion(filePath);
+            break;
+        case Opcode::DELETE_FILE:
+            clientProtocol.requestDispatcher(mex);
+            propagateDeleteFile(filePath, clientProtocol.getProcessName());
+            dataNodeReplicationMap.erase(filePath);
+            FileManager::getInstance().deleteFileAndVersion(filePath);
+            break;
+        case Opcode::SYNC_STATUS:
+            cout << "SERVER: received sync status request\n";
+            clientProtocol.response(getFileVersionMap());
+            break;
+        case Opcode::ACQUIRE_LOCK:
+            cout << "[SERVER]: received acquire lock request for " << filePath << endl;
+            clientProtocol.response(this->acquireLock(filePath));
+            break;
+        case Opcode::RELEASE_LOCK:
+            this->releaseLock(filePath);
+            clientProtocol.response(true);
+            break;
+        default:
+            clientProtocol.requestDispatcher(mex);
+        }
 
-    cout << "[SERVER]: Request dispatched" << endl;
+        cout << "[SERVER]: Request dispatched" << endl;
+    }
     // printMap(fileLockMap, "File Lock Map");
     //  printMap(fileTimeMap, "File Time Map");
     //  printMap(FileManager::getInstance().getFileVersionMap(), "File Version Map");
@@ -456,6 +356,7 @@ void Server::handleConnection(SquidProtocol clientProtocol)
 
 bool Server::acquireLock(string path)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     if (fileLockMap.find(path) == fileLockMap.end())
     {
         cout << "[SERVER]: File not found in file map... updating file map" << endl;
@@ -482,6 +383,7 @@ bool Server::acquireLock(string path)
 
 bool Server::releaseLock(string path)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     if (fileLockMap.find(path) == fileLockMap.end())
     {
         cout << "[SERVER]: File not found in file map... updating file map" << endl;
@@ -506,6 +408,7 @@ bool Server::releaseLock(string path)
 
 void Server::buildFileLockMap()
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     cout << "[SERVER]: Building file map..." << endl;
     for (auto &datanodeEndpoint : dataNodeEndpointMap)
     {
@@ -555,6 +458,7 @@ void Server::buildFileLockMap()
 
 bool Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     cout << "retriving file " + filePath << endl;
     if (dataNodeReplicationMap.find(filePath) == dataNodeReplicationMap.end())
     {
@@ -599,6 +503,7 @@ bool Server::getFileFromDataNode(string filePath, SquidProtocol clientProtocol)
 
 map<string, int> Server::getFileVersionMap()
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     map<string, int> fileVersionMap;
     for (auto &datanode : dataNodeEndpointMap)
     {
@@ -617,12 +522,13 @@ map<string, int> Server::getFileVersionMap()
 }
 
 // deprecated
-void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
+void Server::propagateUpdateFile(string filePath, const string &originProcessName)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
 
     for (auto &client : clientEndpointMap)
     {
-        if (client.second.first.getSocket() != clientProtocol.getSocket())
+        if (client.first != originProcessName)
             client.second.second.updateFile(filePath); // second channel
     }
 
@@ -632,12 +538,13 @@ void Server::propagateUpdateFile(string filePath, SquidProtocol clientProtocol)
     // fileTimeMap[filePath] = chrono::system_clock::now().time_since_epoch().count();
 }
 
-void Server::propagateUpdateFile(string filePath, int version, SquidProtocol clientProtocol)
+void Server::propagateUpdateFile(string filePath, int version, const string &originProcessName)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
 
     for (auto &client : clientEndpointMap)
     {
-        if (client.second.first.getSocket() != clientProtocol.getSocket())
+        if (client.first != originProcessName)
             client.second.second.updateFile(filePath, version); // second channel
     }
 
@@ -645,11 +552,12 @@ void Server::propagateUpdateFile(string filePath, int version, SquidProtocol cli
         datanode.second.updateFile(filePath, version);
 }
 
-void Server::propagateDeleteFile(string filePath, SquidProtocol clientProtocol)
+void Server::propagateDeleteFile(string filePath, const string &originProcessName)
 {
+    lock_guard<recursive_mutex> lock(mapMutex);
     for (auto &client : clientEndpointMap)
     {
-        if (client.second.first.getSocket() != clientProtocol.getSocket())
+        if (client.first != originProcessName)
             client.second.second.deleteFile(filePath); // second channel
     }
 
@@ -662,9 +570,9 @@ void Server::propagateDeleteFile(string filePath, SquidProtocol clientProtocol)
 }
 
 // deprecated
-void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
+void Server::propagateCreateFile(string filePath, const string &originProcessName)
 { // round robin replication
-    lock_guard<mutex> lock(mapMutex);
+    lock_guard<recursive_mutex> lock(mapMutex);
     auto fileHoldersMap = map<string, SquidProtocol>();
 
     if (dataNodeEndpointMap.empty())
@@ -692,14 +600,14 @@ void Server::propagateCreateFile(string filePath, SquidProtocol clientProtocol)
 
     for (auto &client : clientEndpointMap)
     {
-        if (client.second.first.getSocket() != clientProtocol.getSocket())
+        if (client.first != originProcessName)
             client.second.second.createFile(filePath); // second channel
     }
 }
 
-void Server::propagateCreateFile(string filePath, int version, SquidProtocol clientProtocol)
+void Server::propagateCreateFile(string filePath, int version, const string &originProcessName)
 { // round robin replication
-    lock_guard<mutex> lock(mapMutex);
+    lock_guard<recursive_mutex> lock(mapMutex);
     auto fileHoldersMap = map<string, SquidProtocol>();
 
     if (dataNodeEndpointMap.empty())
@@ -726,7 +634,7 @@ void Server::propagateCreateFile(string filePath, int version, SquidProtocol cli
 
     for (auto &client : clientEndpointMap)
     {
-        if (client.second.first.getSocket() != clientProtocol.getSocket())
+        if (client.first != originProcessName)
             client.second.second.createFile(filePath, version); // second channel
     }
 }

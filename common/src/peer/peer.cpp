@@ -1,4 +1,5 @@
 #include "peer.hpp"
+#include <memory>
 
 Peer::Peer() {};
 
@@ -13,80 +14,25 @@ Peer::Peer(const char *server_ip, int port, std::string nodeType, std::string pr
     this->port = port;
 
     this->fileTransfer = FileTransfer();
-    this->squidProtocol = SquidProtocol(socket_fd, nodeType, processName);
+    this->squidProtocol = SquidProtocol();
 }
 
 Peer::~Peer()
 {
-    close(socket_fd);
-}
-
-int Peer::getSocket()
-{
-    return socket_fd;
 }
 
 void Peer::connectToServer()
 {
-    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0)
-    {
-        perror("[Peer]: Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
-
-    struct timeval timeout;
-    timeout.tv_sec = timeoutSeconds;
-    timeout.tv_usec = 0;
-
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
-    {
-        perror("[Peer]: setsockopt failed (SO_RCVTIMEO)");
-        exit(EXIT_FAILURE);
-    }
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
-    {
-        perror("[Peer]: setsockopt failed (SO_SNDTIMEO)");
-        exit(EXIT_FAILURE);
-    }
-
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-
-    if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0)
-    {
-        perror("[Peer]: Invalid address");
-        exit(EXIT_FAILURE);
-    }
-
-    while (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        std::cerr << nodeType + ": connection to server failed, retrying..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-    }
+    auto channel = std::make_shared<TCPConnectorChannel>(server_ip, port, timeoutSeconds, 3);
     std::cout << nodeType + ": Connected to server...\n";
-    squidProtocol.setSocket(socket_fd);
-    squidProtocol.setIsAlive(true);
+    squidProtocol = SquidProtocol(channel, nodeType, processName);
 }
 
 void Peer::reconnect()
 {
-    close(socket_fd);
-    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0)
-    {
-        perror("[Peer]: Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
-
-    while (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        std::cerr << nodeType + ": connection to server failed, retrying..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-    }
+    auto channel = std::make_shared<TCPConnectorChannel>(server_ip, port, timeoutSeconds, 3);
     std::cout << nodeType + ": Reconnected to server...\n";
-    squidProtocol.setSocket(socket_fd);
-    squidProtocol.setIsAlive(true);
+    squidProtocol = SquidProtocol(channel, nodeType, processName);
 }
 
 void Peer::handleRequest(const Message &msg)

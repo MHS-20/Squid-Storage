@@ -1,4 +1,5 @@
 #include "squidprotocol.hpp"
+#include <utility>
 
 class SquidProtocolServer : public SquidProtocol
 {
@@ -19,18 +20,16 @@ public:
         this->dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
     }
 
-    SquidProtocolServer(int socket_fd, int replicationFactor,
+    SquidProtocolServer(std::shared_ptr<INetworkChannel> channel, int replicationFactor,
                         std::string nodeType, std::string processName,
                         std::map<std::string, SquidProtocolServer> *clientEndpointMap,
                         std::map<std::string, SquidProtocolServer> *dataNodeEndpointMap)
     {
-        this->socket_fd_      = socket_fd;
+        this->setChannel(std::move(channel));
         this->replicationFactor = replicationFactor;
         this->processName_    = processName;
         this->nodeType_       = nodeType;
         this->alive_          = true;
-        this->fileTransfer_   = FileTransfer();
-        this->formatter_      = SquidProtocolFormatter(nodeType);
         this->clientEndpointMap   = clientEndpointMap;
         this->dataNodeEndpointMap = dataNodeEndpointMap;
         this->dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
@@ -69,7 +68,7 @@ public:
         {
         case Opcode::CREATE_FILE:
             response(true);
-            if (fileTransfer_.receiveFile(socket_fd_, processName_, path))
+            if (fileTransfer_.receiveFile(*channel_, processName_, path))
             {
                 FileManager::getInstance().setFileVersion(path, version);
                 response(true);
@@ -88,12 +87,12 @@ public:
         case Opcode::READ_FILE:
             response(true);
             getFileFromDataNode(path);
-            response(fileTransfer_.sendFile(socket_fd_, processName_, path));
+            response(fileTransfer_.sendFile(*channel_, processName_, path));
             break;
 
         case Opcode::UPDATE_FILE:
             response(true);
-            if (fileTransfer_.receiveFile(socket_fd_, processName_, path))
+            if (fileTransfer_.receiveFile(*channel_, processName_, path))
             {
                 FileManager::getInstance().setFileVersion(path, version);
                 response(true);
@@ -137,8 +136,7 @@ public:
 
         case Opcode::CLOSE:
             response(true);
-            close(socket_fd_);
-            socket_fd_ = -1;
+            if (channel_) channel_->close();
             alive_ = false;
             std::cout << nodeType_ + ": Connection closed" << std::endl;
             break;
