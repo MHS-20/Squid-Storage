@@ -5,8 +5,7 @@ namespace {
 bool isRuntimeFile(const fs::path &path)
 {
   static const std::vector<std::string> ignoredFiles = {
-      ".DS_Store", ".fileVersion.txt", "README.md", "CMakeLists.txt",
-      "docker-compose.yaml", ".gitignore"};
+  ".squid"};
 
   const auto name = path.filename().string();
   return std::find(ignoredFiles.begin(), ignoredFiles.end(), name) ==
@@ -134,6 +133,7 @@ bool FileManager::deleteFile(std::string path) { return fs::remove(resolvePath(p
 
 bool FileManager::deleteFileAndVersion(std::string path) {
   if (deleteFile(path)) {
+    fs::create_directories(versionFilePath().parent_path());
     std::ifstream versionFile(versionFilePath());
     std::string line;
     std::vector<std::string> lines;
@@ -232,6 +232,7 @@ int FileManager::getFileVersion(std::string path) {
 }
 
 bool FileManager::setFileVersion(std::string path, int version) {
+  fs::create_directories(versionFilePath().parent_path());
   std::ifstream versionFile(versionFilePath());
   std::string line;
   std::vector<std::string> lines;
@@ -276,7 +277,7 @@ void FileManager::updateFileMap() {
 }
 
 void FileManager::createFileVersionFile() {
-  fs::create_directories(storageRoot());
+  fs::create_directories(versionFilePath().parent_path());
   std::ifstream versionFile(versionFilePath());
   if (!versionFile) {
     std::ofstream newFile(versionFilePath());

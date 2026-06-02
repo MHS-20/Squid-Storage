@@ -35,7 +35,7 @@ public:
 
     static fs::path versionFilePath()
     {
-        return storageRoot() / ".fileVersion.txt";
+        return storageRoot() / ".squid" / "fileVersions.txt";
     }
 
     static fs::path resolvePath(const std::string &path)
