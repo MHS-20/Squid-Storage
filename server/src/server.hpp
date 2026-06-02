@@ -4,9 +4,16 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <condition_variable>
+#include <deque>
+#include <functional>
+#include <future>
+#include <atomic>
+#include <shared_mutex>
 #include <mutex>
 #include <memory>
 #include <thread>
+#include <type_traits>
 #include <unistd.h>
 #include <vector>
 
@@ -15,6 +22,7 @@
 #include "filetransfer.hpp"
 #include "networking/TCPListenerChannel.hpp"
 #include "squidprotocol.hpp"
+#include "server_runtime.hpp"
 
 #define DEFAULT_PORT 12345
 #define BUFFER_SIZE 1024
@@ -33,6 +41,7 @@ public:
   ~Server();
 
   void run();
+  void handleClientRequest(ConnectionSession &clientSession, const Message &message);
   void buildFileLockMap();
   bool releaseLock(string path);
   bool acquireLock(string path);
@@ -45,7 +54,7 @@ public:
   void eraseFromReplicationMap(vector<string> datanodeNames);
   void eraseFromReplicationMap(string datanodeName);
   void rebalanceFileReplication(string filePath,
-                                map<string, SquidProtocol> fileHoldersMap);
+                                map<string, std::shared_ptr<ConnectionSession>> fileHoldersMap);
 
   bool getFileFromDataNode(string filePath, std::vector<uint8_t> &fileData);
   void propagateCreateFile(string filePath, const string &originProcessName);
@@ -67,28 +76,38 @@ private:
 
   int replicationFactor;
   std::unique_ptr<TCPListenerChannel> listener_;
+  ThreadPool requestPool_;
+  std::atomic<bool> running_{false};
+  std::thread acceptThread_;
+  std::thread heartbeatThread_;
+  std::thread lockExpiryThread_;
 
   string filename = "fileTimeMap";
   FileTransfer fileTransfer;
 
-  recursive_mutex mapMutex;
+  mutable std::shared_mutex stateMutex;
   map<string, FileLock> fileLockMap;
   map<string, long long> fileTimeMap;
 
-  map<string, SquidProtocol> dataNodeEndpointMap;
-  map<string, pair<SquidProtocol, SquidProtocol>> clientEndpointMap;
+  map<string, std::shared_ptr<ConnectionSession>> dataNodeEndpointMap;
+  map<string, pair<std::shared_ptr<ConnectionSession>, std::shared_ptr<ConnectionSession>>> clientEndpointMap;
 
   // maps filename to datanode holding that file (datanode, socket)
-  map<string, map<string, SquidProtocol>> dataNodeReplicationMap;
+  map<string, map<string, std::shared_ptr<ConnectionSession>>> dataNodeReplicationMap;
 
   // iterators for round robin redundancy
-  map<string, SquidProtocol>::iterator endpointIterator;
+  size_t roundRobinCursor = 0;
 
   map<string, int> getFileVersionMap();
   void printMap(map<string, long long> &map, string name);
-  void printMap(map<string, SquidProtocol> &map, string name);
+  void printMap(map<string, std::shared_ptr<ConnectionSession>> &map, string name);
   void printMap(map<string, FileLock> &map, string name);
-  void printMap(map<string, map<string, SquidProtocol>> &map, string name);
-  void printMap(map<string, pair<SquidProtocol, SquidProtocol>> &map,
+  void printMap(map<string, map<string, std::shared_ptr<ConnectionSession>>> &map, string name);
+  void printMap(map<string, pair<std::shared_ptr<ConnectionSession>, std::shared_ptr<ConnectionSession>>> &map,
                 string name);
+
+  std::vector<std::string> pickDataNodesLocked(size_t count);
+  std::shared_ptr<ConnectionSession> getDataNodeSessionLocked(const std::string &name);
+  std::shared_ptr<ConnectionSession> getClientPrimarySessionLocked(const std::string &name);
+  std::shared_ptr<ConnectionSession> getClientSecondarySessionLocked(const std::string &name);
 };

@@ -1,7 +1,10 @@
 #include "server.hpp"
 #include "networking/TCPConnectorChannel.hpp"
+
 #include <algorithm>
+#include <chrono>
 #include <utility>
+
 using namespace std;
 
 Server::Server() : Server(DEFAULT_PORT, DEFAULT_REPLICATION_FACTOR) {}
@@ -15,22 +18,45 @@ Server::Server(int port, int replicationFactor, int timeoutSeconds)
     this->port = port;
     this->replicationFactor = replicationFactor;
     listener_ = std::make_unique<TCPListenerChannel>(port, 3);
+    (void)timeoutSeconds;
 
     fileTransfer = FileTransfer();
     fileLockMap = map<string, FileLock>();
-    // fileTimeMap = map<string, long long>();
-    // loadMapFromFile();
-
-    clientEndpointMap = map<string, pair<SquidProtocol, SquidProtocol>>();
-    dataNodeEndpointMap = map<string, SquidProtocol>();
-    dataNodeReplicationMap = map<string, map<string, SquidProtocol>>();
-    endpointIterator = dataNodeEndpointMap.begin();
+    fileTimeMap = map<string, long long>();
+    clientEndpointMap = map<string, pair<shared_ptr<ConnectionSession>, shared_ptr<ConnectionSession>>>();
+    dataNodeEndpointMap = map<string, shared_ptr<ConnectionSession>>();
+    dataNodeReplicationMap = map<string, map<string, shared_ptr<ConnectionSession>>>();
 }
 
 Server::~Server()
 {
+    running_ = false;
     if (listener_)
         listener_->close();
+
+    {
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        for (auto &entry : dataNodeEndpointMap)
+        {
+            if (entry.second)
+                entry.second->stop();
+        }
+
+        for (auto &entry : clientEndpointMap)
+        {
+            if (entry.second.first)
+                entry.second.first->stop();
+            if (entry.second.second)
+                entry.second.second->stop();
+        }
+    }
+
+    if (acceptThread_.joinable())
+        acceptThread_.join();
+    if (heartbeatThread_.joinable())
+        heartbeatThread_.join();
+    if (lockExpiryThread_.joinable())
+        lockExpiryThread_.join();
 }
 
 void Server::run()
@@ -38,187 +64,146 @@ void Server::run()
     cout << "[SERVER]: Server Starting..." << endl;
     cout << "[SERVER]: Server listening on " << this->port << "...\n";
 
-    while (true)
-    {
-        if (!listener_)
+    running_ = true;
+
+    acceptThread_ = std::thread([this]() {
+        while (running_)
         {
-            cerr << "[SERVER]: Listener not available" << endl;
-            return;
-        }
-
-        auto accepted = listener_->waitForConnection(1);
-        if (accepted)
-            std::thread(&Server::handleAccept, this, std::move(*accepted)).detach();
-        sendHeartbeats(); // datanodes only
-        // saveMapToFile(); // save file time map
-        checkFileLockExpiration();
-
-        // printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
-        // printMap(dataNodeReplicationMap, "DataNode Replication Map");
-    }
-}
-
-void Server::checkFileLockExpiration()
-{
-    lock_guard<recursive_mutex> lock(mapMutex);
-    auto now = chrono::system_clock::now();
-    for (auto it = fileLockMap.begin(); it != fileLockMap.end();)
-    {
-        if (it->second.isLocked() && it->second.getExpiration() < now)
-        {
-            cout << "[SERVER]: Lock expired for file: " + it->first << endl;
-
-            string clientHolder = it->second.getClientHolder();
-            clientEndpointMap.find(clientHolder)->second.second.releaseLock(it->first);
-            it->second.setIsLocked(false);
-        }
-        else
-        {
-            ++it;
-        }
-    }
-}
-
-void Server::sendHeartbeats()
-{
-    lock_guard<recursive_mutex> lock(mapMutex);
-    vector<string> erasable = vector<string>();
-    for (auto &datanode : dataNodeEndpointMap)
-    {
-        cout << "sending hearbeat to:" + datanode.first << endl;
-        Message heartbeat = datanode.second.heartbeat();
-        if (!heartbeat.isAck())
-        {
-            cout << "[SERVER]: Heartbeat failed for datanode: " + datanode.first << endl;
-            datanode.second.setIsAlive(false);
-            datanode.second.closeConn();
-            erasable.push_back(datanode.first);
-            // dataNodeEndpointMap.erase(datanode.first);
-            // eraseFromReplicationMap(datanode.first);
-            cout << "[SERVER]: Datanode removed from replication map: " + datanode.first << endl;
-        }
-    }
-
-    for (auto &datanode : erasable)
-    {
-        dataNodeEndpointMap.erase(datanode);
-        cout << "[SERVER]: Datanode removed from endpoint map: " + datanode << endl;
-    }
-
-    // erase all datanodes that are not alive
-    eraseFromReplicationMap(erasable);
-
-    // cout << "[SERVER]: Heartbeat sent to all datanodes" << endl;
-}
-
-void Server::eraseFromReplicationMap(vector<string> datanodeNames)
-{
-    lock_guard<recursive_mutex> lock(mapMutex);
-    for (auto &datanodeName : datanodeNames)
-    {
-        cout << "[SERVER]: Erasing datanode: " + datanodeName + " from replication map" << endl;
-        eraseFromReplicationMap(datanodeName);
-    }
-}
-
-void Server::eraseFromReplicationMap(string datanodeName)
-{
-    lock_guard<recursive_mutex> lock(mapMutex);
-    for (auto it = dataNodeReplicationMap.begin(); it != dataNodeReplicationMap.end();)
-    {
-        cout << "[SERVER]: Checking file: " + it->first << endl;
-        // printMap(it->second, "Datanode holding the file");
-        //  for each file check if the datanode endpoint holds the file
-        auto datanodeEndpoint = it->second.find(datanodeName);
-        if (datanodeEndpoint != it->second.end())
-        {
-            it->second.erase(datanodeEndpoint->first); // erase from internal map
-            cout << "[SERVER]: Datanode " + datanodeName + " removed from replication map of file: " + it->first << endl;
-
-            // check that internal map is not below threshold
-            if (it->second.size() < (replicationFactor / 2) + 1)
+            if (!listener_)
             {
-                cout << "[SERVER]: Datanodes hodling the file: " + it->first + " are below threshold" << endl;
-                rebalanceFileReplication(it->first, it->second);
+                cerr << "[SERVER]: Listener not available" << endl;
+                running_ = false;
+                return;
             }
+
+            auto accepted = listener_->waitForConnection(1);
+            if (accepted)
+                handleAccept(std::move(*accepted));
         }
-        else
+    });
+
+    heartbeatThread_ = std::thread([this]() {
+        while (running_)
         {
-            cout << "[SERVER]: Datanode: " + datanodeName + " not found for file: " + it->first << endl;
+            sendHeartbeats();
+            std::this_thread::sleep_for(std::chrono::seconds(2));
         }
-        ++it;
-    }
+    });
+
+    lockExpiryThread_ = std::thread([this]() {
+        while (running_)
+        {
+            checkFileLockExpiration();
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
+
+    if (acceptThread_.joinable())
+        acceptThread_.join();
+
+    running_ = false;
+
+    if (heartbeatThread_.joinable())
+        heartbeatThread_.join();
+    if (lockExpiryThread_.joinable())
+        lockExpiryThread_.join();
 }
 
-void Server::rebalanceFileReplication(string filePath, map<string, SquidProtocol> fileHoldersMap)
+void Server::handleClientRequest(ConnectionSession &clientSession, const Message &mex)
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
-    cout << "[SERVER]: Rebalancing datanodes for file: " << filePath << endl;
+    string filePath = mex.getString(FieldID::FILE_PATH);
+    int fileVersion = static_cast<int>(mex.getUint32(FieldID::FILE_VERSION, 0));
 
-    vector<uint8_t> fileData;
-    cout << "[SERVER]: Retrieving file from datanode: " << fileHoldersMap.begin()->first << endl;
-    if (!getFileFromDataNode(filePath, fileData))
+    switch (mex.opcode)
     {
-        cerr << "[SERVER]: Unable to retrieve file for rebalancing: " << filePath << endl;
-        return;
-    }
-
-    auto endpointIterator = dataNodeEndpointMap.begin();
-
-    // Assign new datanodes until the replication factor is met
-    for (int i = 0; i < dataNodeEndpointMap.size(); i++)
+    case Opcode::CREATE_FILE:
     {
-        if (endpointIterator == dataNodeEndpointMap.end())
-            endpointIterator = dataNodeEndpointMap.begin();
-
-        const string &datanodeName = endpointIterator->first;
-
-        // Skip datanodes that are already holding the file
-        if (fileHoldersMap.find(datanodeName) != fileHoldersMap.end())
+        clientSession.response(true);
+        vector<uint8_t> fileData;
+        if (!clientSession.receiveFileData(fileData))
         {
-            endpointIterator++;
-            continue;
+            clientSession.response(false);
+            break;
         }
 
-        // Assign the file to a new datanode
-        fileHoldersMap[datanodeName] = endpointIterator->second;
+        bool ok = requestPool_.submit([this, filePath, fileVersion, origin = clientSession.getProcessName(), fileData]() {
+            return propagateCreateFile(filePath, fileVersion, origin, fileData);
+        }).get();
 
-        // Send the file to the newly assigned datanode
-        cout << "[SERVER]: Sending file " << filePath << " to datanode: " << datanodeName << endl;
-        Message response = endpointIterator->second.createFile(filePath, FileManager::getInstance().getFileVersion(filePath), fileData);
-        endpointIterator++;
+        clientSession.response(ok);
+        break;
+    }
+    case Opcode::READ_FILE:
+    {
+        auto result = requestPool_.submit([this, filePath]() {
+            vector<uint8_t> fileData;
+            bool ok = getFileFromDataNode(filePath, fileData);
+            return std::make_pair(ok, fileData);
+        }).get();
 
-        // Check if the file transfer was successful
-        if (!response.isAck())
+        if (result.first)
         {
-            cerr << "[SERVER]: Failed to send file " << filePath << " to datanode: " << datanodeName << endl;
-            fileHoldersMap.erase(datanodeName); // Remove the datanode from the map if the transfer failed
+            clientSession.response(true);
+            if (clientSession.sendFileData(result.second))
+                clientSession.response(true);
+            else
+                clientSession.response(false);
         }
         else
         {
-            cout << "[SERVER]: File " << filePath << " successfully sent to datanode: " << datanodeName << endl;
-            if (fileHoldersMap.size() >= replicationFactor)
-            {
-                cout << "[SERVER]: Replication factor met for file: " << filePath << endl;
-                break; // Stop if the replication factor is met
-            }
+            clientSession.response(false);
         }
+        break;
     }
+    case Opcode::UPDATE_FILE:
+    {
+        clientSession.response(true);
+        vector<uint8_t> fileData;
+        if (!clientSession.receiveFileData(fileData))
+        {
+            clientSession.response(false);
+            break;
+        }
 
-    // Final check to ensure the replication factor is met
-    if (fileHoldersMap.size() < replicationFactor)
-    {
-        cerr << "[SERVER]: Unable to meet replication factor for file: " << filePath << endl;
+        bool ok = requestPool_.submit([this, filePath, fileVersion, origin = clientSession.getProcessName(), fileData]() {
+            return propagateUpdateFile(filePath, fileVersion, origin, fileData);
+        }).get();
+
+        clientSession.response(ok);
+        break;
     }
-    else
+    case Opcode::DELETE_FILE:
     {
-        cout << "[SERVER]: Replication factor met for file: " << filePath << endl;
+        bool ok = requestPool_.submit([this, filePath, origin = clientSession.getProcessName()]() {
+            propagateDeleteFile(filePath, origin);
+            return true;
+        }).get();
+        clientSession.response(ok);
+        break;
+    }
+    case Opcode::SYNC_STATUS:
+        clientSession.response(requestPool_.submit([this]() { return getFileVersionMap(); }).get());
+        break;
+    case Opcode::ACQUIRE_LOCK:
+        clientSession.response(requestPool_.submit([this, filePath]() { return acquireLock(filePath); }).get());
+        break;
+    case Opcode::RELEASE_LOCK:
+        clientSession.response(requestPool_.submit([this, filePath]() { return releaseLock(filePath); }).get());
+        break;
+    case Opcode::HEARTBEAT:
+        clientSession.response(true);
+        break;
+    case Opcode::CLOSE:
+        clientSession.response(true);
+        clientSession.closeConn();
+        clientSession.setIsAlive(false);
+        break;
+    default:
+        clientSession.response(false);
+        break;
     }
 }
 
-// ------------------------------
-// --- COMMUNICATION HANDLING ---
-// ------------------------------
 void Server::handleAccept(AcceptedConnection accepted)
 {
     auto primaryChannel = accepted.channel;
@@ -229,22 +214,25 @@ void Server::handleAccept(AcceptedConnection accepted)
     SquidProtocol primaryProtocol(primaryChannel, "[SERVER_PRIMARY]", "SERVER_PRIMARY");
     Message mex = primaryProtocol.identify();
     string peerProcessName = mex.getString(FieldID::PROCESS_NAME);
-    string peerNodeType    = mex.getString(FieldID::NODE_TYPE);
+    string peerNodeType = mex.getString(FieldID::NODE_TYPE);
     cout << "[SERVER]: Identity received from peer: " + peerProcessName << endl;
 
     if (peerNodeType == "DATANODE")
     {
+        auto datanodeSession = std::make_shared<ConnectionSession>(primaryChannel, "DATANODE", peerProcessName);
+        datanodeSession->start(false);
+
         {
-            lock_guard<recursive_mutex> lock(mapMutex);
-        dataNodeEndpointMap[peerProcessName] = primaryProtocol;
-        printMap(dataNodeEndpointMap, "DataNode Endpoint Map");
+            std::unique_lock<std::shared_mutex> lock(stateMutex);
+            dataNodeEndpointMap[peerProcessName] = datanodeSession;
         }
 
         cout << "[SERVER]: Building file map..." << endl;
         buildFileLockMap();
         return;
     }
-    else if (peerNodeType != "CLIENT")
+
+    if (peerNodeType != "CLIENT")
     {
         cout << "[SERVER]: Unknown node type\n";
         return;
@@ -261,17 +249,24 @@ void Server::handleAccept(AcceptedConnection accepted)
         cerr << "[SERVER]: Port not found in connect response" << endl;
         return;
     }
-    cout << "[SERVER]: Client port: " << secondaryPort << endl;
 
+    cout << "[SERVER]: Client port: " << secondaryPort << endl;
     auto secondaryChannel = std::make_shared<TCPConnectorChannel>(peerIp, secondaryPort, 60, 2);
     cout << "[SERVER]: Connected to client..." << endl;
-    SquidProtocol secondaryProtocol(secondaryChannel, "[SERVER_SECONDARY]", "SERVER_SECONDARY");
+
+    auto primarySession = std::make_shared<ConnectionSession>(primaryChannel, "CLIENT", peerProcessName,
+        [this](ConnectionSession &session, const Message &message) {
+            handleClientRequest(session, message);
+        });
+    auto secondarySession = std::make_shared<ConnectionSession>(secondaryChannel, "CLIENT_SECONDARY", peerProcessName);
+
     {
-        lock_guard<recursive_mutex> lock(mapMutex);
-        clientEndpointMap[peerProcessName] = pair(primaryProtocol, secondaryProtocol);
+        std::unique_lock<std::shared_mutex> lock(stateMutex);
+        clientEndpointMap[peerProcessName] = {primarySession, secondarySession};
     }
 
-    handleConnection(clientEndpointMap[peerProcessName].first);
+    secondarySession->start(false);
+    primarySession->start(true);
 }
 
 void Server::handleConnection(SquidProtocol &clientProtocol)
@@ -284,7 +279,6 @@ void Server::handleConnection(SquidProtocol &clientProtocol)
             mex = clientProtocol.receiveAndParse();
             if (!clientProtocol.isAlive())
                 break;
-            cout << "[SERVER]: Received message: " + opcodeToString(mex.opcode) << endl;
         }
         catch (exception &e)
         {
@@ -349,17 +343,13 @@ void Server::handleConnection(SquidProtocol &clientProtocol)
         case Opcode::DELETE_FILE:
         {
             propagateDeleteFile(filePath, clientProtocol.getProcessName());
-            dataNodeReplicationMap.erase(filePath);
-            FileManager::getInstance().deleteFileAndVersion(filePath);
             clientProtocol.response(true);
             break;
         }
         case Opcode::SYNC_STATUS:
-            cout << "SERVER: received sync status request\n";
             clientProtocol.response(getFileVersionMap());
             break;
         case Opcode::ACQUIRE_LOCK:
-            cout << "[SERVER]: received acquire lock request for " << filePath << endl;
             clientProtocol.response(this->acquireLock(filePath));
             break;
         case Opcode::RELEASE_LOCK:
@@ -369,32 +359,19 @@ void Server::handleConnection(SquidProtocol &clientProtocol)
         default:
             clientProtocol.requestDispatcher(mex);
         }
-
-        cout << "[SERVER]: Request dispatched" << endl;
     }
-    // printMap(fileLockMap, "File Lock Map");
-    //  printMap(fileTimeMap, "File Time Map");
-    //  printMap(FileManager::getInstance().getFileVersionMap(), "File Version Map");
-    // printMap(dataNodeReplicationMap, "DataNode Replication Map");
-    // printMap(clientEndpointMap, "Client Endpoint Map");
-};
-
-// -----------------------
-// ---- FILE LOCKING -----
-// -----------------------
+}
 
 bool Server::acquireLock(string path)
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
+    std::unique_lock<std::shared_mutex> lock(stateMutex);
     if (fileLockMap.find(path) == fileLockMap.end())
     {
-        cout << "[SERVER]: File not found in file map... updating file map" << endl;
+        lock.unlock();
         buildFileLockMap();
+        lock.lock();
         if (fileLockMap.find(path) == fileLockMap.end())
-        {
-            cout << "[SERVER]: File not found" << endl;
             return false;
-        }
         return false;
     }
 
@@ -404,142 +381,103 @@ bool Server::acquireLock(string path)
         fileLockMap[path].setExpiration(chrono::system_clock::now() + chrono::minutes(DEFAULT_LOCK_INTERVAL));
         return true;
     }
-    else
-    {
-        return false;
-    }
+
+    return false;
 }
 
 bool Server::releaseLock(string path)
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
+    std::unique_lock<std::shared_mutex> lock(stateMutex);
     if (fileLockMap.find(path) == fileLockMap.end())
     {
-        cout << "[SERVER]: File not found in file map... updating file map" << endl;
+        lock.unlock();
         buildFileLockMap();
+        lock.lock();
         if (fileLockMap.find(path) == fileLockMap.end())
-        {
-            cout << "[SERVER]: File not found" << endl;
             return false;
-        }
         return false;
     }
-    else
-    {
-        fileLockMap[path].setIsLocked(false);
-        return true;
-    }
-}
 
-// -----------------------------
-// ---- PROPAGATING EVENTS -----
-// -----------------------------
+    fileLockMap[path].setIsLocked(false);
+    return true;
+}
 
 void Server::buildFileLockMap()
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
-    cout << "[SERVER]: Building file map..." << endl;
-    for (auto &datanodeEndpoint : dataNodeEndpointMap)
+    vector<std::shared_ptr<ConnectionSession>> datanodes;
     {
-        cout << "[SERVER]: Building file map from datanode: " + datanodeEndpoint.first << endl;
-        Message files = datanodeEndpoint.second.listFiles();
-        if (!files.isResponse())
-        {
-            cout << "[SERVER]: NACK for: " + datanodeEndpoint.first << endl;
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        for (auto &entry : dataNodeEndpointMap)
+            datanodes.push_back(entry.second);
+    }
+
+    for (auto &datanodeSession : datanodes)
+    {
+        if (!datanodeSession || !datanodeSession->isAlive())
             continue;
-        }
+
+        Message files = datanodeSession->listFiles();
+        if (!files.isResponse())
+            continue;
+
         map<string, int> fileMap = files.getFileVersionMap();
+        std::unique_lock<std::shared_mutex> lock(stateMutex);
         for (auto &file : fileMap)
         {
             if (fileLockMap.find(file.first) == fileLockMap.end())
-            {
-                cout << "raw version -> " << file.second << "\n";
                 fileLockMap[file.first] = FileLock(file.first);
-                FileManager::getInstance().setFileVersion(file.first, file.second);
-            }
-            else if (FileManager::getInstance().getFileVersion(file.first) > file.second)
-            {
-                cout << "updating datanode file version\n";
-                auto fileHoldersMap = dataNodeReplicationMap[file.first];
-                vector<uint8_t> fileData;
-                for (auto it = fileHoldersMap.begin(); it != fileHoldersMap.end(); ++it)
-                {
-                    if (it->first != datanodeEndpoint.first)
-                    {
-                        cout << "retriving file from datanode: " + it->first << endl;
-                        if (getFileFromDataNode(file.first, fileData))
-                        {
-                            datanodeEndpoint.second.updateFile(file.first, FileManager::getInstance().getFileVersion(file.first), fileData);
-                        }
-                        break;
-                    }
-                }
-            }
-            else if (FileManager::getInstance().getFileVersion(file.first) < file.second)
-            {
-                cout << "updating server file version\n";
-                FileManager::getInstance().setFileVersion(file.first, file.second);
-            }
 
-            dataNodeReplicationMap[file.first].insert(datanodeEndpoint);
-            cout << "[SERVER]: File: " + file.first + " added to datanode: " + datanodeEndpoint.first << endl;
+            int localVersion = FileManager::getInstance().getFileVersion(file.first);
+            if (localVersion < file.second)
+                FileManager::getInstance().setFileVersion(file.first, file.second);
+
+            dataNodeReplicationMap[file.first][datanodeSession->getProcessName()] = datanodeSession;
         }
     }
-    cout << "[SERVER]: File map built successfully" << endl;
 }
 
 bool Server::getFileFromDataNode(string filePath, vector<uint8_t> &fileData)
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
-    cout << "retriving file " + filePath << endl;
-    if (dataNodeReplicationMap.find(filePath) == dataNodeReplicationMap.end())
+    std::shared_ptr<ConnectionSession> dataNodeHolder;
     {
-        cout << "[SERVER]: File not found in datanode replication map" << endl;
-        return false;
-    }
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        auto it = dataNodeReplicationMap.find(filePath);
+        if (it == dataNodeReplicationMap.end())
+            return false;
 
-    cout << "file found on datanode" << endl;
-    auto &fileHoldersMap = dataNodeReplicationMap[filePath];
-
-    bool check = false;
-    SquidProtocol dataNodeHolderProtocol;
-
-    for (auto &datanode : fileHoldersMap)
-    {
-        if (datanode.second.isAlive())
+        for (auto &datanode : it->second)
         {
-            dataNodeHolderProtocol = datanode.second;
-            check = true;
-            break;
+            if (datanode.second && datanode.second->isAlive())
+            {
+                dataNodeHolder = datanode.second;
+                break;
+            }
         }
     }
 
-    if (!check)
-    {
-        cerr << "No datanode is alive for: " + filePath;
+    if (!dataNodeHolder)
         return false;
-    }
 
-    Message mex = dataNodeHolderProtocol.readFile(filePath, fileData);
-    if (!mex.isAck())
-    {
-        cerr << "Error while retriving file from datanode";
-        return false;
-    }
-    else
-    {
-        cout << "Retrived file from datanode holder" << endl;
-        return true;
-    }
+    Message mex = dataNodeHolder->readFile(filePath, fileData);
+    return mex.isAck();
 }
 
 map<string, int> Server::getFileVersionMap()
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
     map<string, int> fileVersionMap;
-    for (auto &datanode : dataNodeEndpointMap)
+    vector<std::shared_ptr<ConnectionSession>> datanodes;
     {
-        Message mex = datanode.second.listFiles();
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        for (auto &entry : dataNodeEndpointMap)
+            datanodes.push_back(entry.second);
+    }
+
+    for (auto &datanode : datanodes)
+    {
+        if (!datanode || !datanode->isAlive())
+            continue;
+
+        Message mex = datanode->listFiles();
         map<string, int> datanodeMap = mex.getFileVersionMap();
         for (auto &file : datanodeMap)
         {
@@ -550,268 +488,419 @@ map<string, int> Server::getFileVersionMap()
                 it->second = max(it->second, file.second);
         }
     }
+
     return fileVersionMap;
 }
 
-// deprecated
-void Server::propagateUpdateFile(string filePath, const string &originProcessName)
+void Server::sendHeartbeats()
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
-
-    for (auto &client : clientEndpointMap)
+    vector<pair<string, std::shared_ptr<ConnectionSession>>> datanodes;
     {
-        if (client.first != originProcessName)
-            client.second.second.updateFile(filePath); // second channel
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        for (auto &entry : dataNodeEndpointMap)
+            datanodes.push_back(entry);
     }
 
-    for (auto &datanode : dataNodeReplicationMap[filePath])
-        datanode.second.updateFile(filePath);
+    vector<string> deadNodes;
+    vector<std::future<Message>> futures;
+    futures.reserve(datanodes.size());
 
-    // fileTimeMap[filePath] = chrono::system_clock::now().time_since_epoch().count();
-}
-
-void Server::propagateUpdateFile(string filePath, int version, const string &originProcessName)
-{
-    lock_guard<recursive_mutex> lock(mapMutex);
-
-    for (auto &client : clientEndpointMap)
+    for (auto &entry : datanodes)
     {
-        if (client.first != originProcessName)
-            client.second.second.updateFile(filePath, version); // second channel
+        if (!entry.second)
+            continue;
+        futures.push_back(requestPool_.submit([session = entry.second]() { return session->heartbeat(); }));
     }
 
-    for (auto &datanode : dataNodeReplicationMap[filePath])
-        datanode.second.updateFile(filePath, version);
-}
-
-void Server::propagateDeleteFile(string filePath, const string &originProcessName)
-{
-    lock_guard<recursive_mutex> lock(mapMutex);
-    for (auto &client : clientEndpointMap)
+    for (size_t i = 0; i < datanodes.size(); ++i)
     {
-        if (client.first != originProcessName)
-            client.second.second.deleteFile(filePath); // second channel
+        auto &entry = datanodes[i];
+        if (!entry.second)
+            continue;
+
+        Message heartbeat = futures[i].get();
+        if (!heartbeat.isAck())
+        {
+            entry.second->setIsAlive(false);
+            deadNodes.push_back(entry.first);
+        }
     }
 
-    for (auto &datanode : dataNodeReplicationMap[filePath])
-        datanode.second.deleteFile(filePath);
+    if (!deadNodes.empty())
+    {
+        std::unique_lock<std::shared_mutex> lock(stateMutex);
+        for (auto &name : deadNodes)
+            dataNodeEndpointMap.erase(name);
+    }
 
-    fileLockMap.erase(filePath);
-    // fileTimeMap.erase(filePath);
-    dataNodeReplicationMap.erase(filePath);
+    eraseFromReplicationMap(deadNodes);
 }
 
-// deprecated
-void Server::propagateCreateFile(string filePath, const string &originProcessName)
-{ // round robin replication
-    lock_guard<recursive_mutex> lock(mapMutex);
-    auto fileHoldersMap = map<string, SquidProtocol>();
+void Server::checkFileLockExpiration()
+{
+    vector<pair<string, string>> expiredLocks;
+    {
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        auto now = chrono::system_clock::now();
+        for (auto &entry : fileLockMap)
+        {
+            if (entry.second.isLocked() && entry.second.getExpiration() < now)
+                expiredLocks.emplace_back(entry.first, entry.second.getClientHolder());
+        }
+    }
 
-    if (dataNodeEndpointMap.empty())
+    for (auto &expired : expiredLocks)
+    {
+        auto clientSession = getClientSecondarySessionLocked(expired.second);
+        if (clientSession)
+            clientSession->post([expiredFile = expired.first](SquidProtocol &protocol) {
+                protocol.releaseLock(expiredFile);
+            });
+
+        std::unique_lock<std::shared_mutex> lock(stateMutex);
+        auto it = fileLockMap.find(expired.first);
+        if (it != fileLockMap.end())
+            it->second.setIsLocked(false);
+    }
+}
+
+void Server::eraseFromReplicationMap(vector<string> datanodeNames)
+{
+    for (auto &datanodeName : datanodeNames)
+        eraseFromReplicationMap(datanodeName);
+}
+
+void Server::eraseFromReplicationMap(string datanodeName)
+{
+    vector<std::pair<string, map<string, std::shared_ptr<ConnectionSession>>>> rebalanceTargets;
+    {
+        std::unique_lock<std::shared_mutex> lock(stateMutex);
+        for (auto it = dataNodeReplicationMap.begin(); it != dataNodeReplicationMap.end(); ++it)
+        {
+            auto datanodeEndpoint = it->second.find(datanodeName);
+            if (datanodeEndpoint == it->second.end())
+                continue;
+
+            it->second.erase(datanodeEndpoint->first);
+            if (it->second.size() < (replicationFactor / 2) + 1)
+                rebalanceTargets.push_back({it->first, it->second});
+        }
+    }
+
+    for (auto &target : rebalanceTargets)
+        rebalanceFileReplication(target.first, target.second);
+}
+
+void Server::rebalanceFileReplication(string filePath, map<string, std::shared_ptr<ConnectionSession>> fileHoldersMap)
+{
+    vector<uint8_t> fileData;
+    if (fileHoldersMap.empty())
         return;
 
-    for (int i = 0; i < replicationFactor; i++)
-    {
-        if (endpointIterator == dataNodeEndpointMap.end())
-            endpointIterator = dataNodeEndpointMap.begin();
-
-        fileHoldersMap.insert({endpointIterator->first, endpointIterator->second});
-        endpointIterator++;
-    }
-
-    cout << "iterated" << endl;
-    dataNodeReplicationMap.insert({filePath, fileHoldersMap});
-
-    for (auto &datanode : dataNodeReplicationMap[filePath])
-        datanode.second.createFile(filePath);
-
-    fileLockMap.insert({filePath, FileLock(filePath)});
-    // fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
-
-    printMap(fileLockMap, "File Lock Map");
-
-    for (auto &client : clientEndpointMap)
-    {
-        if (client.first != originProcessName)
-            client.second.second.createFile(filePath); // second channel
-    }
-}
-
-void Server::propagateCreateFile(string filePath, int version, const string &originProcessName)
-{ // round robin replication
-    lock_guard<recursive_mutex> lock(mapMutex);
-    auto fileHoldersMap = map<string, SquidProtocol>();
-
-    if (dataNodeEndpointMap.empty())
+    auto sourceSession = fileHoldersMap.begin()->second;
+    if (!sourceSession)
         return;
 
-    for (int i = 0; i < replicationFactor; i++)
-    {
-        if (endpointIterator == dataNodeEndpointMap.end())
-            endpointIterator = dataNodeEndpointMap.begin();
+    Message sourceMessage = sourceSession->readFile(filePath, fileData);
+    if (!sourceMessage.isAck())
+        return;
 
-        fileHoldersMap.insert({endpointIterator->first, endpointIterator->second});
-        endpointIterator++;
+    vector<pair<string, std::shared_ptr<ConnectionSession>>> candidates;
+    {
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        for (auto &entry : dataNodeEndpointMap)
+        {
+            if (fileHoldersMap.find(entry.first) == fileHoldersMap.end() && entry.second && entry.second->isAlive())
+                candidates.push_back(entry);
+        }
     }
 
-    cout << "iterated" << endl;
-    dataNodeReplicationMap.insert({filePath, fileHoldersMap});
-
-    for (auto &datanode : dataNodeReplicationMap[filePath])
-        datanode.second.createFile(filePath, version);
-
-    fileLockMap.insert({filePath, FileLock(filePath)});
-    fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
-    printMap(fileLockMap, "File Lock Map");
-
-    for (auto &client : clientEndpointMap)
+    for (auto &candidate : candidates)
     {
-        if (client.first != originProcessName)
-            client.second.second.createFile(filePath, version); // second channel
+        Message response = candidate.second->createFile(filePath, FileManager::getInstance().getFileVersion(filePath), fileData);
+        if (response.isAck())
+        {
+            fileHoldersMap[candidate.first] = candidate.second;
+            if (fileHoldersMap.size() >= static_cast<size_t>(replicationFactor))
+                break;
+        }
+    }
+
+    if (fileHoldersMap.size() >= static_cast<size_t>(replicationFactor))
+    {
+        std::unique_lock<std::shared_mutex> lock(stateMutex);
+        dataNodeReplicationMap[filePath] = std::move(fileHoldersMap);
     }
 }
 
 bool Server::propagateCreateFile(string filePath, int version, const string &originProcessName, const vector<uint8_t> &fileData)
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
-    auto fileHoldersMap = map<string, SquidProtocol>();
+    vector<pair<string, std::shared_ptr<ConnectionSession>>> datanodes;
+    vector<pair<string, std::shared_ptr<ConnectionSession>>> clients;
 
-    if (dataNodeEndpointMap.empty())
-        return false;
-
-    for (int i = 0; i < replicationFactor; i++)
     {
-        if (endpointIterator == dataNodeEndpointMap.end())
-            endpointIterator = dataNodeEndpointMap.begin();
-
-        fileHoldersMap.insert({endpointIterator->first, endpointIterator->second});
-        endpointIterator++;
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        for (auto &entry : dataNodeEndpointMap)
+            datanodes.push_back(entry);
+        for (auto &entry : clientEndpointMap)
+            clients.push_back({entry.first, entry.second.second});
     }
 
-    cout << "iterated" << endl;
-    dataNodeReplicationMap.insert({filePath, fileHoldersMap});
-
     bool ok = true;
-    for (auto &datanode : dataNodeReplicationMap[filePath])
+    vector<future<Message>> futures;
+    futures.reserve(datanodes.size());
+
+    for (auto &datanode : datanodes)
     {
-        Message response = datanode.second.createFile(filePath, version, fileData);
+        if (!datanode.second || !datanode.second->isAlive())
+            continue;
+
+        futures.push_back(requestPool_.submit([session = datanode.second, filePath, version, fileData]() {
+            return session->createFile(filePath, version, fileData);
+        }));
+    }
+
+    size_t futureIndex = 0;
+    for (auto &datanode : datanodes)
+    {
+        if (!datanode.second || !datanode.second->isAlive())
+            continue;
+
+        Message response = futures[futureIndex++].get();
         if (!response.isAck())
-        {
             ok = false;
-            cerr << "[SERVER]: Failed to send file " << filePath << " to datanode: " << datanode.first << endl;
+
+        if (response.isAck())
+        {
+            std::unique_lock<std::shared_mutex> lock(stateMutex);
+            dataNodeReplicationMap[filePath][datanode.first] = datanode.second;
         }
     }
 
     if (ok)
     {
+        std::unique_lock<std::shared_mutex> lock(stateMutex);
         fileLockMap.insert({filePath, FileLock(filePath)});
-        fileTimeMap.insert({filePath, chrono::system_clock::now().time_since_epoch().count()});
-        printMap(fileLockMap, "File Lock Map");
+        fileTimeMap[filePath] = chrono::system_clock::now().time_since_epoch().count();
     }
+
+    for (auto &client : clients)
+    {
+        if (!client.second || client.first == originProcessName)
+            continue;
+        client.second->post([filePath, version](SquidProtocol &protocol) {
+            protocol.createFile(filePath, version);
+        });
+    }
+
+    if (ok)
+        FileManager::getInstance().setFileVersion(filePath, version);
 
     return ok;
 }
 
 bool Server::propagateUpdateFile(string filePath, int version, const string &originProcessName, const vector<uint8_t> &fileData)
 {
-    lock_guard<recursive_mutex> lock(mapMutex);
+    vector<pair<string, std::shared_ptr<ConnectionSession>>> datanodes;
+    vector<pair<string, std::shared_ptr<ConnectionSession>>> clients;
+
+    {
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        auto it = dataNodeReplicationMap.find(filePath);
+        if (it != dataNodeReplicationMap.end())
+        {
+            for (auto &entry : it->second)
+                datanodes.push_back(entry);
+        }
+        for (auto &entry : clientEndpointMap)
+            clients.push_back({entry.first, entry.second.second});
+    }
 
     bool ok = true;
-    for (auto &datanode : dataNodeReplicationMap[filePath])
+    vector<future<Message>> futures;
+    futures.reserve(datanodes.size());
+
+    for (auto &datanode : datanodes)
     {
-        Message response = datanode.second.updateFile(filePath, version, fileData);
-        if (!response.isAck())
-        {
-            ok = false;
-            cerr << "[SERVER]: Failed to update file " << filePath << " on datanode: " << datanode.first << endl;
-        }
+        if (!datanode.second || !datanode.second->isAlive())
+            continue;
+
+        futures.push_back(requestPool_.submit([session = datanode.second, filePath, version, fileData]() {
+            return session->updateFile(filePath, version, fileData);
+        }));
     }
+
+    size_t futureIndex = 0;
+    for (auto &datanode : datanodes)
+    {
+        if (!datanode.second || !datanode.second->isAlive())
+            continue;
+
+        Message response = futures[futureIndex++].get();
+        if (!response.isAck())
+            ok = false;
+    }
+
+    for (auto &client : clients)
+    {
+        if (!client.second || client.first == originProcessName)
+            continue;
+        client.second->post([filePath, version](SquidProtocol &protocol) {
+            protocol.updateFile(filePath, version);
+        });
+    }
+
+    if (ok)
+        FileManager::getInstance().setFileVersion(filePath, version);
 
     return ok;
 }
-// -----------------------
-// ------ PERSISTANCE ----
-// -----------------------
-/*
-void Server::saveMapToFile()
+
+void Server::propagateDeleteFile(string filePath, const string &originProcessName)
 {
-    ofstream outFile(filename);
-    for (const auto [key, value] : fileTimeMap)
-    {
-        outFile << key << ' ' << value << '\n';
-    }
-    cout << "[SERVER]: File time map saved to file" << endl;
-}
+    vector<pair<string, std::shared_ptr<ConnectionSession>>> datanodes;
+    vector<pair<string, std::shared_ptr<ConnectionSession>>> clients;
 
-void Server::loadMapFromFile()
-{
-    if (!fs::exists(filename))
     {
-        return;
-    }
-
-    string key;
-    long long value;
-    ifstream inFile(filename);
-
-    while (inFile >> key >> value)
-    {
-        fileTimeMap[key] = value;
-    }
-    inFile.close();
-    cout << "[SERVER]: File time map loaded from file" << endl;
-}
-*/
-// -----------------------
-// ------ PRINT MAPS -----
-// -----------------------
-
-void Server::printMap(map<string, SquidProtocol> &map, string name)
-{
-    cout << "[SERVER]: " << name << endl;
-    for (auto &pair : map)
-    {
-        cout << pair.first << " => " << pair.second.toString() << endl;
-    }
-}
-
-void Server::printMap(map<string, FileLock> &map, string name)
-{
-    cout << "[SERVER]: " << name << endl;
-    for (auto &pair : map)
-    {
-        cout << pair.first << " => " << pair.second.getFilePath() << " : " << pair.second.isLocked() << endl;
-    }
-}
-
-void Server::printMap(map<string, map<string, SquidProtocol>> &map, string name)
-{
-    cout << "[SERVER]: " << name << endl;
-    for (auto &pair : map)
-    {
-        cout << pair.first << " => ";
-        for (auto &innerPair : pair.second)
+        std::shared_lock<std::shared_mutex> lock(stateMutex);
+        auto it = dataNodeReplicationMap.find(filePath);
+        if (it != dataNodeReplicationMap.end())
         {
-            cout << innerPair.first << " : " << innerPair.second.toString() << ", ";
+            for (auto &entry : it->second)
+                datanodes.push_back(entry);
         }
-        cout << endl;
+        for (auto &entry : clientEndpointMap)
+            clients.push_back({entry.first, entry.second.second});
     }
+
+    for (auto &datanode : datanodes)
+    {
+        if (datanode.second && datanode.second->isAlive())
+            requestPool_.submit([session = datanode.second, filePath]() { return session->deleteFile(filePath); });
+    }
+
+    for (auto &client : clients)
+    {
+        if (!client.second || client.first == originProcessName)
+            continue;
+        client.second->post([filePath](SquidProtocol &protocol) {
+            protocol.deleteFile(filePath);
+        });
+    }
+
+    {
+        std::unique_lock<std::shared_mutex> lock(stateMutex);
+        fileLockMap.erase(filePath);
+        dataNodeReplicationMap.erase(filePath);
+    }
+
+    FileManager::getInstance().deleteFileAndVersion(filePath);
+}
+
+void Server::propagateCreateFile(string filePath, const string &originProcessName)
+{
+    (void)propagateCreateFile(filePath, FileManager::getInstance().getFileVersion(filePath), originProcessName, {});
+}
+
+void Server::propagateCreateFile(string filePath, int version, const string &originProcessName)
+{
+    (void)propagateCreateFile(filePath, version, originProcessName, {});
+}
+
+void Server::propagateUpdateFile(string filePath, const string &originProcessName)
+{
+    (void)originProcessName;
+    (void)filePath;
+}
+
+void Server::propagateUpdateFile(string filePath, int version, const string &originProcessName)
+{
+    (void)originProcessName;
+    (void)version;
+    (void)filePath;
 }
 
 void Server::printMap(map<string, long long> &map, string name)
 {
     cout << "[SERVER]: " << name << endl;
     for (auto &pair : map)
-    {
         cout << pair.first << " => " << pair.second << endl;
-    }
 }
 
-void Server::printMap(map<string, pair<SquidProtocol, SquidProtocol>> &map, string name)
+void Server::printMap(map<string, std::shared_ptr<ConnectionSession>> &map, string name)
+{
+    cout << "[SERVER]: " << name << endl;
+    for (auto &pair : map)
+        cout << pair.first << " => " << (pair.second ? pair.second->toString() : "<null>") << endl;
+}
+
+void Server::printMap(map<string, FileLock> &map, string name)
+{
+    cout << "[SERVER]: " << name << endl;
+    for (auto &pair : map)
+        cout << pair.first << " => " << pair.second.getFilePath() << " : " << pair.second.isLocked() << endl;
+}
+
+void Server::printMap(map<string, map<string, std::shared_ptr<ConnectionSession>>> &map, string name)
 {
     cout << "[SERVER]: " << name << endl;
     for (auto &pair : map)
     {
-        cout << pair.first << " => " << pair.second.first.toString() << " : " << pair.second.second.toString() << endl;
+        cout << pair.first << " => ";
+        for (auto &innerPair : pair.second)
+            cout << innerPair.first << " : " << (innerPair.second ? innerPair.second->toString() : "<null>") << ", ";
+        cout << endl;
     }
+}
+
+void Server::printMap(map<string, pair<std::shared_ptr<ConnectionSession>, std::shared_ptr<ConnectionSession>>> &map, string name)
+{
+    cout << "[SERVER]: " << name << endl;
+    for (auto &pair : map)
+    {
+        cout << pair.first << " => "
+             << (pair.second.first ? pair.second.first->toString() : "<null>") << " : "
+             << (pair.second.second ? pair.second.second->toString() : "<null>") << endl;
+    }
+}
+
+std::vector<std::string> Server::pickDataNodesLocked(size_t count)
+{
+    std::shared_lock<std::shared_mutex> lock(stateMutex);
+    std::vector<std::string> nodes;
+    nodes.reserve(dataNodeEndpointMap.size());
+    for (auto &entry : dataNodeEndpointMap)
+        nodes.push_back(entry.first);
+
+    std::vector<std::string> selected;
+    if (nodes.empty())
+        return selected;
+
+    roundRobinCursor %= nodes.size();
+    for (size_t i = 0; i < count && i < nodes.size(); ++i)
+        selected.push_back(nodes[(roundRobinCursor + i) % nodes.size()]);
+
+    roundRobinCursor = (roundRobinCursor + count) % nodes.size();
+    return selected;
+}
+
+std::shared_ptr<ConnectionSession> Server::getDataNodeSessionLocked(const std::string &name)
+{
+    std::shared_lock<std::shared_mutex> lock(stateMutex);
+    auto it = dataNodeEndpointMap.find(name);
+    return it == dataNodeEndpointMap.end() ? nullptr : it->second;
+}
+
+std::shared_ptr<ConnectionSession> Server::getClientPrimarySessionLocked(const std::string &name)
+{
+    std::shared_lock<std::shared_mutex> lock(stateMutex);
+    auto it = clientEndpointMap.find(name);
+    return it == clientEndpointMap.end() ? nullptr : it->second.first;
+}
+
+std::shared_ptr<ConnectionSession> Server::getClientSecondarySessionLocked(const std::string &name)
+{
+    std::shared_lock<std::shared_mutex> lock(stateMutex);
+    auto it = clientEndpointMap.find(name);
+    return it == clientEndpointMap.end() ? nullptr : it->second.second;
 }

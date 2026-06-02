@@ -34,6 +34,7 @@ public:
     virtual std::string getProcessName() const { return processName_; }
     virtual std::string getNodeType()    const { return nodeType_; }
     virtual std::string toString()       const;
+    virtual int         socketFd()       const { return channel_ ? channel_->getSocket() : -1; }
 
     void sendFrame(const std::vector<uint8_t> &frame);
     std::vector<uint8_t> receiveFrame();
