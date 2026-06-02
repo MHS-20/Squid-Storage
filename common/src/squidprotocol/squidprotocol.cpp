@@ -125,12 +125,34 @@ Message SquidProtocol::receiveAndParse()
     }
 }
 
-void SquidProtocol::sendFileAfterAck(const std::string &filePath, const Message &ackMsg)
+bool SquidProtocol::waitForAck(Message &ackMsg, const std::string &operation)
 {
-    if (ackMsg.isAck())
-        fileTransfer_.sendFile(socket_fd_, processName_.c_str(), filePath.c_str());
-    else
+    ackMsg = receiveAndParse();
+    if (!ackMsg.isAck())
+    {
+        std::cerr << nodeType_ + ": " + operation + " was not acknowledged" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+Message SquidProtocol::waitForTransferResult(const std::string &operation)
+{
+    Message result = receiveAndParse();
+    if (!result.isAck())
+        std::cerr << nodeType_ + ": " + operation + " failed: " + result.toString() << std::endl;
+    return result;
+}
+
+bool SquidProtocol::sendFileAfterAck(const std::string &filePath, const Message &ackMsg)
+{
+    if (!ackMsg.isAck())
+    {
         std::cerr << nodeType_ + ": Error while transferring file: " + filePath << std::endl;
+        return false;
+    }
+
+    return fileTransfer_.sendFile(socket_fd_, processName_, filePath);
 }
 
 Message SquidProtocol::identify()
@@ -220,10 +242,15 @@ Message SquidProtocol::createFile(const std::string &filePath)
 {
     std::cout << "file name: " + filePath << std::endl;
     sendFrame(formatter_.createFileFormat(filePath));
-    Message ack = receiveAndParse();
+    Message ack;
+    if (!waitForAck(ack, "create file"))
+        return ack;
+
     std::cout << nodeType_ + ": received create file response" << std::endl;
-    sendFileAfterAck(filePath, ack);
-    return receiveAndParse();
+    if (!sendFileAfterAck(filePath, ack))
+        return formatter_.makeNack();
+
+    return waitForTransferResult("create file");
 }
 
 Message SquidProtocol::createFile(const std::string &filePath, int version)
@@ -231,36 +258,55 @@ Message SquidProtocol::createFile(const std::string &filePath, int version)
     std::cout << "file name: " + filePath << std::endl;
     sendFrame(formatter_.createFileFormat(filePath, version));
     std::cout << nodeType_ + ": sent create file request" << std::endl;
-    Message ack = receiveAndParse();
+    Message ack;
+    if (!waitForAck(ack, "create file"))
+        return ack;
+
     std::cout << nodeType_ + ": received create file response" << std::endl;
-    sendFileAfterAck(filePath, ack);
-    return receiveAndParse();
+    if (!sendFileAfterAck(filePath, ack))
+        return formatter_.makeNack();
+
+    return waitForTransferResult("create file");
 }
 
 Message SquidProtocol::readFile(const std::string &filePath)
 {
     std::cout << nodeType_ + ": sending read file request" << std::endl;
     sendFrame(formatter_.readFileFormat(filePath));
-    Message ack = receiveAndParse();
-    if (ack.isAck())
-        fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), filePath.c_str());
-    return receiveAndParse();
+    Message ack;
+    if (!waitForAck(ack, "read file"))
+        return ack;
+
+    if (!fileTransfer_.receiveFile(socket_fd_, processName_, filePath))
+        return formatter_.makeNack();
+
+    return waitForTransferResult("read file");
 }
 
 Message SquidProtocol::updateFile(const std::string &filePath)
 {
     sendFrame(formatter_.updateFileFormat(filePath));
-    Message ack = receiveAndParse();
-    sendFileAfterAck(filePath, ack);
-    return receiveAndParse();
+    Message ack;
+    if (!waitForAck(ack, "update file"))
+        return ack;
+
+    if (!sendFileAfterAck(filePath, ack))
+        return formatter_.makeNack();
+
+    return waitForTransferResult("update file");
 }
 
 Message SquidProtocol::updateFile(const std::string &filePath, int version)
 {
     sendFrame(formatter_.updateFileFormat(filePath, version));
-    Message ack = receiveAndParse();
-    sendFileAfterAck(filePath, ack);
-    return receiveAndParse();
+    Message ack;
+    if (!waitForAck(ack, "update file"))
+        return ack;
+
+    if (!sendFileAfterAck(filePath, ack))
+        return formatter_.makeNack();
+
+    return waitForTransferResult("update file");
 }
 
 Message SquidProtocol::deleteFile(const std::string &filePath)
@@ -336,30 +382,35 @@ void SquidProtocol::requestDispatcher(const Message &message)
         std::cout << nodeType_ + ": received create file request\n";
         response(true);
         std::cout << nodeType_ + ": Receiving file" << std::endl;
-        fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), path.c_str());
-        FileManager::getInstance().setFileVersion(path, version);
-        response(true);
-        break;
-
-    case Opcode::TRANSFER_FILE:
-        response(true);
-        fileTransfer_.sendFile(socket_fd_, processName_.c_str(), path.c_str());
-        response(true);
+        if (fileTransfer_.receiveFile(socket_fd_, processName_, path))
+        {
+            FileManager::getInstance().setFileVersion(path, version);
+            response(true);
+        }
+        else
+        {
+            response(false);
+        }
         break;
 
     case Opcode::READ_FILE:
         std::cout << nodeType_ + ": received read file request\n";
         response(true);
-        fileTransfer_.sendFile(socket_fd_, processName_.c_str(), path.c_str());
-        response(true);
+        response(fileTransfer_.sendFile(socket_fd_, processName_, path));
         break;
 
     case Opcode::UPDATE_FILE:
         std::cout << nodeType_ + ": received update file request\n";
         response(true);
-        fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), path.c_str());
-        FileManager::getInstance().setFileVersion(path, version);
-        response(true);
+        if (fileTransfer_.receiveFile(socket_fd_, processName_, path))
+        {
+            FileManager::getInstance().setFileVersion(path, version);
+            response(true);
+        }
+        else
+        {
+            response(false);
+        }
         break;
 
     case Opcode::DELETE_FILE:

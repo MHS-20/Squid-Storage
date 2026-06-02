@@ -4,9 +4,12 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <fstream>
+#include <cstdint>
 
 using namespace std;
 #define BUFFER_SIZE 1024
+// Maximum allowed file size to receive (1 GiB)
+#define FILETRANSFER_MAX_SIZE ((uint64_t)1 << 30)
 
 class FileTransfer
 {
@@ -14,6 +17,6 @@ public:
     FileTransfer();
     ~FileTransfer();
     bool handleErrors(ssize_t bytes);
-    void sendFile(int socket, string rolename, string filepath);
-    void receiveFile(int socket, string rolename, string outputpath);
+    bool sendFile(int socket, const string &rolename, const string &filepath);
+    bool receiveFile(int socket, const string &rolename, const string &outputpath);
 };

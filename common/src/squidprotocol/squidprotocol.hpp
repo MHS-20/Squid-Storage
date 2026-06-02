@@ -75,5 +75,7 @@ protected:
 
     bool recvExact(uint8_t *buf, size_t n);
     bool handleRecvError(ssize_t bytes);
-    void sendFileAfterAck(const std::string &filePath, const Message &ackMsg);
+    bool waitForAck(Message &ackMsg, const std::string &operation);
+    Message waitForTransferResult(const std::string &operation);
+    bool sendFileAfterAck(const std::string &filePath, const Message &ackMsg);
 };

@@ -1,7 +1,16 @@
 *.o
 main
 test_txt/
-mockfiles/
+mockfiles/*
+!mockfiles/README.md
+!mockfiles/client/
+!mockfiles/client/**
+!mockfiles/server/
+!mockfiles/server/**
+!mockfiles/datanode_alpha/
+!mockfiles/datanode_alpha/**
+!mockfiles/datanode_beta/
+!mockfiles/datanode_beta/**
 
 vcpkg_installed/
 .vcpkg/

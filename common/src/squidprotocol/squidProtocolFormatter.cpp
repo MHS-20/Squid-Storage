@@ -45,7 +45,6 @@ std::string opcodeToString(Opcode op)
     case Opcode::HEARTBEAT:     return "HEARTBEAT";
     case Opcode::SYNC_STATUS:   return "SYNC_STATUS";
     case Opcode::CREATE_FILE:   return "CREATE_FILE";
-    case Opcode::TRANSFER_FILE: return "TRANSFER_FILE";
     case Opcode::READ_FILE:     return "READ_FILE";
     case Opcode::UPDATE_FILE:   return "UPDATE_FILE";
     case Opcode::DELETE_FILE:   return "DELETE_FILE";
@@ -157,11 +156,6 @@ std::vector<uint8_t> SquidProtocolFormatter::createFileFormat(const std::string 
     return buildFrame(Opcode::CREATE_FILE, 0,
         { fieldString(FieldID::FILE_PATH, filePath),
           fieldUint32(FieldID::FILE_VERSION, static_cast<uint32_t>(version)) });
-}
-
-std::vector<uint8_t> SquidProtocolFormatter::transferFileFormat(const std::string &filePath) const
-{
-    return buildFrame(Opcode::TRANSFER_FILE, 0, { fieldString(FieldID::FILE_PATH, filePath) });
 }
 
 std::vector<uint8_t> SquidProtocolFormatter::readFileFormat(const std::string &filePath) const

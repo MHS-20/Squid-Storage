@@ -56,8 +56,8 @@ int main(int argc, char **argv) {
   checkResponse("heartbeat", client.heartbeat());
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  checkResponse("deleteFile", client.deleteFile(TEST_FILE));
-  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  //checkResponse("deleteFile", client.deleteFile(TEST_FILE));
+  // std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
   client.disconnect();
   return 0;

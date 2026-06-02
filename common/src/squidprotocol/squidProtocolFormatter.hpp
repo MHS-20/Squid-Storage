@@ -21,7 +21,6 @@ enum class Opcode : uint8_t
     HEARTBEAT     = 0x04,
     SYNC_STATUS   = 0x05,
     CREATE_FILE   = 0x10,
-    TRANSFER_FILE = 0x11,
     READ_FILE     = 0x12,
     UPDATE_FILE   = 0x13,
     DELETE_FILE   = 0x14,
@@ -87,7 +86,6 @@ public:
 
     std::vector<uint8_t> createFileFormat(const std::string &filePath)               const;
     std::vector<uint8_t> createFileFormat(const std::string &filePath, int version)  const;
-    std::vector<uint8_t> transferFileFormat(const std::string &filePath)             const;
     std::vector<uint8_t> readFileFormat(const std::string &filePath)                 const;
     std::vector<uint8_t> updateFileFormat(const std::string &filePath)               const;
     std::vector<uint8_t> updateFileFormat(const std::string &filePath, int version)  const;

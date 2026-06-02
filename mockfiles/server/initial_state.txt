@@ -1,0 +1,2 @@
+Server workspace starts here.
+Any replicated files should appear alongside this file.

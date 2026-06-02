@@ -69,9 +69,15 @@ public:
         {
         case Opcode::CREATE_FILE:
             response(true);
-            fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), path.c_str());
-            FileManager::getInstance().setFileVersion(path, version);
-            response(true);
+            if (fileTransfer_.receiveFile(socket_fd_, processName_, path))
+            {
+                FileManager::getInstance().setFileVersion(path, version);
+                response(true);
+            }
+            else
+            {
+                response(false);
+            }
             for (auto &client : *clientEndpointMap)
                 client.second.createFile(path);
             createFileReplication(path);
@@ -79,25 +85,23 @@ public:
                 datanode.second.createFile(path);
             break;
 
-        case Opcode::TRANSFER_FILE:
-            response(true);
-            getFileFromDataNode(path);
-            fileTransfer_.sendFile(socket_fd_, processName_.c_str(), path.c_str());
-            response(true);
-            break;
-
         case Opcode::READ_FILE:
             response(true);
             getFileFromDataNode(path);
-            fileTransfer_.sendFile(socket_fd_, processName_.c_str(), path.c_str());
-            response(true);
+            response(fileTransfer_.sendFile(socket_fd_, processName_, path));
             break;
 
         case Opcode::UPDATE_FILE:
             response(true);
-            fileTransfer_.receiveFile(socket_fd_, processName_.c_str(), path.c_str());
-            FileManager::getInstance().setFileVersion(path, version);
-            response(true);
+            if (fileTransfer_.receiveFile(socket_fd_, processName_, path))
+            {
+                FileManager::getInstance().setFileVersion(path, version);
+                response(true);
+            }
+            else
+            {
+                response(false);
+            }
             for (auto &client : *clientEndpointMap)
                 client.second.updateFile(path);
             for (auto &datanode : dataNodeReplicationMap[path])
