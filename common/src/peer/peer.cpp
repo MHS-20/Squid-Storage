@@ -25,14 +25,14 @@ void Peer::connectToServer()
 {
     auto channel = std::make_shared<TCPConnectorChannel>(server_ip, port, timeoutSeconds, 3);
     std::cout << nodeType + ": Connected to server...\n";
-    squidProtocol = SquidProtocol(channel, nodeType, processName);
+    squidProtocol = SquidProtocol(fileManager, channel, nodeType, processName);
 }
 
 void Peer::reconnect()
 {
     auto channel = std::make_shared<TCPConnectorChannel>(server_ip, port, timeoutSeconds, 3);
     std::cout << nodeType + ": Reconnected to server...\n";
-    squidProtocol = SquidProtocol(channel, nodeType, processName);
+    squidProtocol = SquidProtocol(fileManager, channel, nodeType, processName);
 }
 
 void Peer::handleRequest(const Message &msg)

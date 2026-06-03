@@ -7,6 +7,7 @@
 #include "filetransfer.hpp"
 #include "squidprotocol.hpp"
 #include "../networking/TCPConnectorChannel.hpp"
+#include "../filesystem/filemanager.hpp"
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 12345
@@ -35,6 +36,7 @@ protected:
     std::string nodeType;
     std::string processName;
 
+    FileManager fileManager;
     FileLock file_lock;
     FileTransfer fileTransfer;
     SquidProtocol squidProtocol;

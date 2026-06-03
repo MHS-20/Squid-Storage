@@ -4,216 +4,186 @@
 #include <stdexcept>
 
 #include "filesystem/syncplanner.hpp"
-#include "filesystem/filemanager.hpp"
 
-Client::Client(const std::string &serverIp, int serverPort, const std::string &processName)
-    : serverIp_(serverIp), serverPort_(serverPort), processName_(processName)
-{
+Client::Client(const std::string &serverIp, int serverPort,
+               const std::string &processName)
+    : serverIp_(serverIp), serverPort_(serverPort), processName_(processName) {}
+
+Client::~Client() { disconnect(); }
+
+void Client::setPushHandler(PushHandler handler) {
+  pushHandler_ = std::move(handler);
 }
 
-Client::~Client()
-{
-    disconnect();
+void Client::doHandshake(SquidProtocol &proto) {
+  Message identify = proto.receiveAndParse();
+  if (identify.opcode != Opcode::IDENTIFY)
+    throw std::runtime_error("Client: expected IDENTIFY, got " +
+                             identify.toString());
+
+  proto.response(std::string("CLIENT"), processName_);
+
+  Message ack = proto.receiveAndParse();
+  if (!ack.isAck())
+    throw std::runtime_error("Client: handshake ACK not received");
+
+  std::cout << "[Client]: Handshake complete with server" << std::endl;
 }
 
-void Client::setPushHandler(PushHandler handler)
-{
-    pushHandler_ = std::move(handler);
+void Client::connect() {
+  auto channel =
+      std::make_shared<TCPConnectorChannel>(serverIp_, serverPort_, 60, 2);
+  std::cout << "[Client]: Connected to server" << std::endl;
+
+  SquidProtocol proto(fileManager_, channel, "CLIENT", processName_);
+  doHandshake(proto);
+
+  session_ = std::make_shared<ConnectionSession>(
+      fileManager_, channel, "CLIENT", processName_,
+      [this](ConnectionSession &s, const Message &m) { handlePush(s, m); });
+
+  session_->start(true);
 }
 
-void Client::doHandshake(SquidProtocol &proto)
-{
-    Message identify = proto.receiveAndParse();
-    if (identify.opcode != Opcode::IDENTIFY)
-        throw std::runtime_error("Client: expected IDENTIFY, got " + identify.toString());
+void Client::disconnect() {
+  if (!session_)
+    return;
 
-    proto.response(std::string("CLIENT"), processName_);
+  if (session_->isAlive()) {
+    session_->call([](SquidProtocol &proto) { return proto.closeConn(); });
+  }
 
-    Message ack = proto.receiveAndParse();
-    if (!ack.isAck())
-        throw std::runtime_error("Client: handshake ACK not received");
-
-    std::cout << "[Client]: Handshake complete with server" << std::endl;
+  session_->stop();
+  session_.reset();
 }
 
-void Client::connect()
-{
-    auto channel = std::make_shared<TCPConnectorChannel>(serverIp_, serverPort_, 60, 2);
-    std::cout << "[Client]: Connected to server" << std::endl;
+bool Client::isAlive() const { return session_ && session_->isAlive(); }
 
-    SquidProtocol proto(channel, "CLIENT", processName_);
-    doHandshake(proto);
+void Client::handlePush(ConnectionSession &session, const Message &message) {
+  if (message.isResponse())
+    return;
 
-    session_ = std::make_shared<ConnectionSession>(
-        channel, "CLIENT", processName_,
-        [this](ConnectionSession &s, const Message &m) { handlePush(s, m); });
-
-    session_->start(true);
+  switch (message.opcode) {
+  case Opcode::CREATE_FILE:
+  case Opcode::UPDATE_FILE:
+  case Opcode::DELETE_FILE:
+  case Opcode::RELEASE_LOCK:
+    if (pushHandler_)
+      pushHandler_(message);
+    break;
+  case Opcode::CLOSE:
+    session.setIsAlive(false);
+    break;
+  case Opcode::HEARTBEAT:
+    session.post([](SquidProtocol &proto) { proto.response(true); });
+    break;
+  default:
+    std::cerr << "[Client]: Unexpected push opcode: " << message.toString()
+              << std::endl;
+    break;
+  }
 }
 
-void Client::disconnect()
-{
-    if (!session_)
-        return;
+Message Client::createFile(const std::string &filePath,
+                           const std::vector<uint8_t> &data, int version) {
+  if (!session_ || !session_->isAlive())
+    return {};
 
-    if (session_->isAlive())
-    {
-        session_->call([](SquidProtocol &proto) {
-            return proto.closeConn();
-        });
-    }
-
-    session_->stop();
-    session_.reset();
+  return session_->call([&](SquidProtocol &proto) {
+    return proto.createFile(filePath, version, data);
+  });
 }
 
-bool Client::isAlive() const
-{
-    return session_ && session_->isAlive();
+Message Client::readFile(const std::string &filePath,
+                         std::vector<uint8_t> &dataOut) {
+  if (!session_ || !session_->isAlive())
+    return {};
+
+  return session_->call(
+      [&](SquidProtocol &proto) { return proto.readFile(filePath, dataOut); });
 }
 
-void Client::handlePush(ConnectionSession &session, const Message &message)
-{
-    if (message.isResponse())
-        return;
+Message Client::updateFile(const std::string &filePath,
+                           const std::vector<uint8_t> &data, int version) {
+  if (!session_ || !session_->isAlive())
+    return {};
 
-    switch (message.opcode)
-    {
-    case Opcode::CREATE_FILE:
-    case Opcode::UPDATE_FILE:
-    case Opcode::DELETE_FILE:
-    case Opcode::RELEASE_LOCK:
-        if (pushHandler_)
-            pushHandler_(message);
-        break;
-    case Opcode::CLOSE:
-        session.setIsAlive(false);
-        break;
-    case Opcode::HEARTBEAT:
-        session.post([](SquidProtocol &proto) { proto.response(true); });
-        break;
-    default:
-        std::cerr << "[Client]: Unexpected push opcode: " << message.toString() << std::endl;
-        break;
-    }
+  return session_->call([&](SquidProtocol &proto) {
+    return proto.updateFile(filePath, version, data);
+  });
 }
 
-Message Client::createFile(const std::string &filePath, const std::vector<uint8_t> &data, int version)
-{
-    if (!session_ || !session_->isAlive())
-        return {};
+Message Client::deleteFile(const std::string &filePath) {
+  if (!session_ || !session_->isAlive())
+    return {};
 
-    return session_->call([&](SquidProtocol &proto) {
-        return proto.createFile(filePath, version, data);
-    });
+  return session_->call(
+      [&](SquidProtocol &proto) { return proto.deleteFile(filePath); });
 }
 
-Message Client::readFile(const std::string &filePath, std::vector<uint8_t> &dataOut)
-{
-    if (!session_ || !session_->isAlive())
-        return {};
+Message Client::acquireLock(const std::string &filePath) {
+  if (!session_ || !session_->isAlive())
+    return {};
 
-    return session_->call([&](SquidProtocol &proto) {
-        return proto.readFile(filePath, dataOut);
-    });
+  return session_->call(
+      [&](SquidProtocol &proto) { return proto.acquireLock(filePath); });
 }
 
-Message Client::updateFile(const std::string &filePath, const std::vector<uint8_t> &data, int version)
-{
-    if (!session_ || !session_->isAlive())
-        return {};
+Message Client::releaseLock(const std::string &filePath) {
+  if (!session_ || !session_->isAlive())
+    return {};
 
-    return session_->call([&](SquidProtocol &proto) {
-        return proto.updateFile(filePath, version, data);
-    });
+  return session_->call(
+      [&](SquidProtocol &proto) { return proto.releaseLock(filePath); });
 }
 
-Message Client::deleteFile(const std::string &filePath)
-{
-    if (!session_ || !session_->isAlive())
-        return {};
+Message Client::syncStatus() {
+  if (!session_ || !session_->isAlive())
+    return {};
 
-    return session_->call([&](SquidProtocol &proto) {
-        return proto.deleteFile(filePath);
-    });
-}
+  Message response =
+      session_->call([](SquidProtocol &proto) { return proto.syncStatus(); });
 
-Message Client::acquireLock(const std::string &filePath)
-{
-    if (!session_ || !session_->isAlive())
-        return {};
-
-    return session_->call([&](SquidProtocol &proto) {
-        return proto.acquireLock(filePath);
-    });
-}
-
-Message Client::releaseLock(const std::string &filePath)
-{
-    if (!session_ || !session_->isAlive())
-        return {};
-
-    return session_->call([&](SquidProtocol &proto) {
-        return proto.releaseLock(filePath);
-    });
-}
-
-Message Client::syncStatus()
-{
-    if (!session_ || !session_->isAlive())
-        return {};
-
-    Message response = session_->call([](SquidProtocol &proto) {
-        return proto.syncStatus();
-    });
-
-    if (!response.isResponse() || response.isAck())
-        return response;
-
-    auto remoteMap = response.getFileVersionMap();
-    auto localMap  = FileManager::getInstance().getFileVersionMap(FileManager::storageRoot().string());
-    auto ops       = planSync(localMap, remoteMap);
-
-    for (const auto &op : ops)
-    {
-        switch (op.action)
-        {
-        case SyncAction::UPLOAD:
-        {
-            std::vector<uint8_t> data;
-            session_->call([&](SquidProtocol &proto) {
-                return proto.updateFile(op.filePath, op.version);
-            });
-            break;
-        }
-        case SyncAction::CREATE_REMOTE:
-        {
-            session_->call([&](SquidProtocol &proto) {
-                return proto.createFile(op.filePath, op.version);
-            });
-            break;
-        }
-        case SyncAction::DOWNLOAD:
-        {
-            session_->call([&](SquidProtocol &proto) {
-                Message r = proto.readFile(op.filePath);
-                return r;
-            });
-            FileManager::getInstance().setFileVersion(op.filePath, op.version);
-            break;
-        }
-        }
-    }
-
+  if (!response.isResponse() || response.isAck())
     return response;
+
+  auto remoteMap = response.getFileVersionMap();
+  auto localMap =
+      fileManager_.getFileVersionMap(FileManager::storageRoot().string());
+  auto ops = planSync(localMap, remoteMap);
+
+  for (const auto &op : ops) {
+    switch (op.action) {
+    case SyncAction::UPLOAD: {
+      std::vector<uint8_t> data;
+      session_->call([&](SquidProtocol &proto) {
+        return proto.updateFile(op.filePath, op.version);
+      });
+      break;
+    }
+    case SyncAction::CREATE_REMOTE: {
+      session_->call([&](SquidProtocol &proto) {
+        return proto.createFile(op.filePath, op.version);
+      });
+      break;
+    }
+    case SyncAction::DOWNLOAD: {
+      session_->call([&](SquidProtocol &proto) {
+        Message r = proto.readFile(op.filePath);
+        return r;
+      });
+      fileManager_.setFileVersion(op.filePath, op.version);
+      break;
+    }
+    }
+  }
+
+  return response;
 }
 
-Message Client::heartbeat()
-{
-    if (!session_ || !session_->isAlive())
-        return {};
+Message Client::heartbeat() {
+  if (!session_ || !session_->isAlive())
+    return {};
 
-    return session_->call([](SquidProtocol &proto) {
-        return proto.heartbeat();
-    });
+  return session_->call([](SquidProtocol &proto) { return proto.heartbeat(); });
 }

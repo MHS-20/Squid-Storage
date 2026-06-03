@@ -20,11 +20,13 @@ public:
         this->dataNodeReplicationMap = std::map<std::string, std::map<std::string, SquidProtocolServer>>();
     }
 
-    SquidProtocolServer(std::shared_ptr<INetworkChannel> channel, int replicationFactor,
+    SquidProtocolServer(FileManager &fileManager,
+                        std::shared_ptr<INetworkChannel> channel, int replicationFactor,
                         std::string nodeType, std::string processName,
                         std::map<std::string, SquidProtocolServer> *clientEndpointMap,
                         std::map<std::string, SquidProtocolServer> *dataNodeEndpointMap)
     {
+        this->fileManager_    = &fileManager;
         this->setChannel(std::move(channel));
         this->replicationFactor = replicationFactor;
         this->processName_    = processName;
@@ -70,7 +72,7 @@ public:
             response(true);
             if (fileTransfer_.receiveFile(*channel_, processName_, path))
             {
-                FileManager::getInstance().setFileVersion(path, version);
+                (*fileManager_).setFileVersion(path, version);
                 response(true);
             }
             else
@@ -94,7 +96,7 @@ public:
             response(true);
             if (fileTransfer_.receiveFile(*channel_, processName_, path))
             {
-                FileManager::getInstance().setFileVersion(path, version);
+                (*fileManager_).setFileVersion(path, version);
                 response(true);
             }
             else
@@ -108,7 +110,7 @@ public:
             break;
 
         case Opcode::DELETE_FILE:
-            FileManager::getInstance().deleteFile(path);
+            (*fileManager_).deleteFile(path);
             response(true);
             for (auto &client : *clientEndpointMap)
                 client.second.deleteFile(path);
@@ -118,11 +120,11 @@ public:
             break;
 
         case Opcode::ACQUIRE_LOCK:
-            response(FileManager::getInstance().acquireLock(path));
+            response((*fileManager_).acquireLock(path));
             break;
 
         case Opcode::RELEASE_LOCK:
-            FileManager::getInstance().releaseLock(path);
+            (*fileManager_).releaseLock(path);
             response(true);
             break;
 
@@ -131,7 +133,7 @@ public:
             break;
 
         case Opcode::SYNC_STATUS:
-            response(FileManager::getInstance().getFileVersionMap(FileManager::storageRoot().string()));
+            response((*fileManager_).getFileVersionMap(FileManager::storageRoot().string()));
             break;
 
         case Opcode::CLOSE:

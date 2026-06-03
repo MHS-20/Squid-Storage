@@ -93,12 +93,13 @@ class ConnectionSession : public std::enable_shared_from_this<ConnectionSession>
 public:
     using RequestHandler = std::function<void(ConnectionSession &, const Message &)>;
 
-    ConnectionSession(std::shared_ptr<INetworkChannel> channel,
+    ConnectionSession(FileManager &fileManager,
+                      std::shared_ptr<INetworkChannel> channel,
                       std::string nodeType,
                       std::string processName,
                       RequestHandler requestHandler = {})
         : channel_(std::move(channel)),
-          protocol_(channel_, std::move(nodeType), std::move(processName)),
+          protocol_(fileManager, channel_, std::move(nodeType), std::move(processName)),
           requestHandler_(std::move(requestHandler))
     {
     }

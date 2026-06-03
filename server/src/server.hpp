@@ -1,17 +1,17 @@
+#include <atomic>
 #include <cerrno>
+#include <condition_variable>
 #include <cstring>
+#include <deque>
 #include <fcntl.h>
 #include <fstream>
-#include <iostream>
-#include <map>
-#include <condition_variable>
-#include <deque>
 #include <functional>
 #include <future>
-#include <atomic>
-#include <shared_mutex>
-#include <mutex>
+#include <iostream>
+#include <map>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <thread>
 #include <type_traits>
 #include <unistd.h>
@@ -21,8 +21,8 @@
 #include "filemanager.hpp"
 #include "filetransfer.hpp"
 #include "networking/TCPListenerChannel.hpp"
-#include "squidprotocol.hpp"
 #include "server_runtime.hpp"
+#include "squidprotocol.hpp"
 
 #define DEFAULT_PORT 12345
 #define BUFFER_SIZE 1024
@@ -41,7 +41,8 @@ public:
   ~Server();
 
   void run();
-  void handleClientRequest(ConnectionSession &clientSession, const Message &message);
+  void handleClientRequest(ConnectionSession &clientSession,
+                           const Message &message);
   void buildFileLockMap();
   bool releaseLock(string path);
   bool acquireLock(string path);
@@ -53,8 +54,9 @@ public:
   void checkFileLockExpiration();
   void eraseFromReplicationMap(vector<string> datanodeNames);
   void eraseFromReplicationMap(string datanodeName);
-  void rebalanceFileReplication(string filePath,
-                                map<string, std::shared_ptr<ConnectionSession>> fileHoldersMap);
+  void rebalanceFileReplication(
+      string filePath,
+      map<string, std::shared_ptr<ConnectionSession>> fileHoldersMap);
 
   bool getFileFromDataNode(string filePath, std::vector<uint8_t> &fileData);
   void propagateCreateFile(string filePath, const string &originProcessName);
@@ -84,6 +86,7 @@ private:
 
   string filename = "fileTimeMap";
   FileTransfer fileTransfer;
+  FileManager fileManager_;
 
   mutable std::shared_mutex stateMutex;
   map<string, FileLock> fileLockMap;
@@ -92,17 +95,23 @@ private:
   map<string, std::shared_ptr<ConnectionSession>> dataNodeEndpointMap;
   map<string, std::shared_ptr<ConnectionSession>> clientEndpointMap;
 
-  map<string, map<string, std::shared_ptr<ConnectionSession>>> dataNodeReplicationMap;
+  map<string, map<string, std::shared_ptr<ConnectionSession>>>
+      dataNodeReplicationMap;
 
   size_t roundRobinCursor = 0;
 
   map<string, int> getFileVersionMap();
   void printMap(map<string, long long> &map, string name);
-  void printMap(map<string, std::shared_ptr<ConnectionSession>> &map, string name);
+  void printMap(map<string, std::shared_ptr<ConnectionSession>> &map,
+                string name);
   void printMap(map<string, FileLock> &map, string name);
-  void printMap(map<string, map<string, std::shared_ptr<ConnectionSession>>> &map, string name);
+  void
+  printMap(map<string, map<string, std::shared_ptr<ConnectionSession>>> &map,
+           string name);
 
   std::vector<std::string> pickDataNodesLocked(size_t count);
-  std::shared_ptr<ConnectionSession> getDataNodeSessionLocked(const std::string &name);
-  std::shared_ptr<ConnectionSession> getClientSessionLocked(const std::string &name);
+  std::shared_ptr<ConnectionSession>
+  getDataNodeSessionLocked(const std::string &name);
+  std::shared_ptr<ConnectionSession>
+  getClientSessionLocked(const std::string &name);
 };

@@ -11,16 +11,11 @@
 
 namespace fs = std::filesystem;
 
-// Singleton class: private constructor and prevent copying
-
 class FileManager
 {
 public:
-    static FileManager &getInstance()
-    {
-        static FileManager instance;
-        return instance;
-    }
+    FileManager();
+    ~FileManager() {};
 
     static fs::path storageRoot()
     {
@@ -78,7 +73,7 @@ public:
     std::string formatFileList(std::vector<std::string> files);
     int getFileVersion(std::string path);
     bool setFileVersion(std::string path, int version);
-    
+
     void setFileLock(FileLock fileLock);
     FileLock& getFileLock();
 
@@ -86,14 +81,12 @@ public:
     bool releaseLock(std::string path);
 
 private:
-    FileManager();
-    ~FileManager() {};
-
-    // Prevent copying and assignment
-    void updateFileMap();
     FileManager(const FileManager &) = delete;
     FileManager &operator=(const FileManager &) = delete;
-    std::map<std::string, FileLock> fileMap;
+
+    void updateFileMap();
     void createFileVersionFile();
+
+    std::map<std::string, FileLock> fileMap;
     FileLock fileLock;
 };

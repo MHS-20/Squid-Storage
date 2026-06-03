@@ -12,6 +12,7 @@
 #include "networking/TCPConnectorChannel.hpp"
 #include "server_runtime.hpp"
 #include "squidprotocol.hpp"
+#include "filesystem/filemanager.hpp"
 
 #define DEFAULT_SERVER_IP   "127.0.0.1"
 #define DEFAULT_SERVER_PORT 12345
@@ -44,6 +45,7 @@ private:
     int serverPort_;
     std::string processName_;
 
+    FileManager fileManager_;
     PushHandler pushHandler_;
 
     std::shared_ptr<ConnectionSession> session_;

@@ -17,14 +17,12 @@
 
 namespace fs = std::filesystem;
 
-#define DEFAULT_FOLDER_PATH FileManager::storageRoot().string()
-
 class SquidProtocol
 {
 public:
     SquidProtocol();
-    SquidProtocol(int socket_fd, std::string nodeType, std::string processName);
-    SquidProtocol(std::shared_ptr<INetworkChannel> channel, std::string nodeType, std::string processName);
+    SquidProtocol(FileManager &fileManager, int socket_fd, std::string nodeType, std::string processName);
+    SquidProtocol(FileManager &fileManager, std::shared_ptr<INetworkChannel> channel, std::string nodeType, std::string processName);
     virtual ~SquidProtocol();
 
     virtual bool        isAlive()        const { return alive_; }
@@ -80,6 +78,7 @@ protected:
     std::string nodeType_;
     std::shared_ptr<INetworkChannel> channel_;
 
+    FileManager           *fileManager_ = nullptr;
     FileTransfer           fileTransfer_;
     SquidProtocolFormatter formatter_;
 

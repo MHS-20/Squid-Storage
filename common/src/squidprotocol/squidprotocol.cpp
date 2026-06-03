@@ -5,16 +5,17 @@
 
 SquidProtocol::SquidProtocol() {}
 
-SquidProtocol::SquidProtocol(int socket_fd, std::string nodeType, std::string processName)
-    : SquidProtocol(std::make_shared<TCPSquidChannel>(socket_fd), std::move(nodeType), std::move(processName))
+SquidProtocol::SquidProtocol(FileManager &fileManager, int socket_fd, std::string nodeType, std::string processName)
+    : SquidProtocol(fileManager, std::make_shared<TCPSquidChannel>(socket_fd), std::move(nodeType), std::move(processName))
 {
 }
 
-SquidProtocol::SquidProtocol(std::shared_ptr<INetworkChannel> channel, std::string nodeType, std::string processName)
+SquidProtocol::SquidProtocol(FileManager &fileManager, std::shared_ptr<INetworkChannel> channel, std::string nodeType, std::string processName)
     : alive_(true),
       processName_(std::move(processName)),
       nodeType_(std::move(nodeType)),
       channel_(std::move(channel)),
+      fileManager_(&fileManager),
       formatter_(nodeType_)
 {
     signal(SIGPIPE, SIG_IGN);
@@ -452,7 +453,7 @@ void SquidProtocol::requestDispatcher(const Message &message)
         std::cout << nodeType_ + ": Receiving file" << std::endl;
         if (channel_ && fileTransfer_.receiveFile(*channel_, processName_, path))
         {
-            FileManager::getInstance().setFileVersion(path, version);
+            (*fileManager_).setFileVersion(path, version);
             response(true);
         }
         else
@@ -472,7 +473,7 @@ void SquidProtocol::requestDispatcher(const Message &message)
         response(true);
         if (channel_ && fileTransfer_.receiveFile(*channel_, processName_, path))
         {
-            FileManager::getInstance().setFileVersion(path, version);
+            (*fileManager_).setFileVersion(path, version);
             response(true);
         }
         else
@@ -483,7 +484,7 @@ void SquidProtocol::requestDispatcher(const Message &message)
 
     case Opcode::DELETE_FILE:
         std::cout << nodeType_ + ": received delete file request\n";
-        FileManager::getInstance().deleteFileAndVersion(path);
+        (*fileManager_).deleteFileAndVersion(path);
         response(true);
         break;
 
@@ -497,7 +498,7 @@ void SquidProtocol::requestDispatcher(const Message &message)
 
     case Opcode::SYNC_STATUS:
         std::cout << nodeType_ + ": received sync status request\n";
-        this->response(FileManager::getInstance().getFileVersionMap(FileManager::storageRoot().string()));
+        this->response((*fileManager_).getFileVersionMap(FileManager::storageRoot().string()));
         break;
 
     case Opcode::IDENTIFY:
