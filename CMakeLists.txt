@@ -30,6 +30,7 @@ set(COMMON_SOURCES
     common/src/networking/TCPConnectorChannel.cpp
     common/src/networking/TCPListenerChannel.cpp
     common/src/networking/TCPSquidChannel.cpp
+    common/src/networking/ConnectionSession.hpp
 )
 
 link_directories(/usr/local/lib)
@@ -45,6 +46,9 @@ add_executable(SquidStorageClient
 add_executable(SquidStorageServer
     server/src/main.cpp
     server/src/server.cpp
+    server/src/lock_manager.cpp
+    server/src/replication_manager.cpp
+    server/src/heartbeat_manager.cpp
     ${COMMON_SOURCES}
 )
 

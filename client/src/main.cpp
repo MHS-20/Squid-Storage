@@ -25,13 +25,14 @@ int main(int argc, char **argv)
 
     Client client(serverIp, serverPort, processName);
 
-    client.setPushHandler([](const Message &msg) {
-        std::cout << "[main]: push received: " << msg.toString() << std::endl;
+    client.setPushHandler([](const Message &msg, const std::vector<uint8_t> &data) {
+        std::cout << "[main]: push received: " << msg.toString()
+                  << " (" << data.size() << " bytes)" << std::endl;
     });
 
-    client.connect();
+    client.connectToServer();
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     std::vector<uint8_t> fileData = {'h', 'e', 'l', 'l', 'o'};
 
@@ -39,24 +40,24 @@ int main(int argc, char **argv)
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     checkResponse("acquireLock", client.acquireLock(TEST_FILE));
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     std::vector<uint8_t> updateData = {'w', 'o', 'r', 'l', 'd'};
     checkResponse("updateFile", client.updateFile(TEST_FILE, updateData, 2));
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     checkResponse("releaseLock", client.releaseLock(TEST_FILE));
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     std::vector<uint8_t> readBuf;
     checkResponse("readFile", client.readFile(TEST_FILE, readBuf));
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     checkResponse("syncStatus", client.syncStatus());
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     checkResponse("heartbeat", client.heartbeat());
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     client.disconnect();
     return 0;

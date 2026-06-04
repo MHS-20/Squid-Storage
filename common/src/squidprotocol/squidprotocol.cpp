@@ -1,5 +1,5 @@
 #include "squidprotocol.hpp"
-#include "../networking/TCPSquidChannel.hpp"
+#include "TCPSquidChannel.hpp"
 #include <iostream>
 #include <cerrno>
 
@@ -376,6 +376,22 @@ bool SquidProtocol::sendFileData(const std::vector<uint8_t> &fileData)
         return false;
 
     return fileTransfer_.sendFile(*channel_, processName_, fileData);
+}
+
+void SquidProtocol::pushCreateFile(const std::string &filePath, int version,
+                                   const std::vector<uint8_t> &fileData)
+{
+    // Send header only — no ACK wait. The receiving client calls
+    // receiveFileData() immediately after seeing the CREATE_FILE opcode.
+    sendFrame(formatter_.createFileFormat(filePath, version));
+    sendFileData(fileData);
+}
+
+void SquidProtocol::pushUpdateFile(const std::string &filePath, int version,
+                                   const std::vector<uint8_t> &fileData)
+{
+    sendFrame(formatter_.updateFileFormat(filePath, version));
+    sendFileData(fileData);
 }
 
 Message SquidProtocol::deleteFile(const std::string &filePath)

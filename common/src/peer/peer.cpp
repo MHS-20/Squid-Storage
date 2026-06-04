@@ -1,49 +1,49 @@
 #include "peer.hpp"
-#include <memory>
 
-Peer::Peer() {};
+Peer::Peer() {}
 
-Peer::Peer(std::string nodeType, std::string processName) : Peer(SERVER_IP, SERVER_PORT, nodeType, processName) {}
-Peer::Peer(int port, std::string nodeType, std::string processName) : Peer(SERVER_IP, port, nodeType, processName) {}
+Peer::Peer(std::string nodeType, std::string processName)
+    : Peer(SERVER_IP, SERVER_PORT, std::move(nodeType), std::move(processName)) {}
 
-Peer::Peer(const char *server_ip, int port, std::string nodeType, std::string processName)
-{
-    this->nodeType = nodeType;
-    this->processName = processName;
-    this->server_ip = server_ip;
-    this->port = port;
+Peer::Peer(int port, std::string nodeType, std::string processName)
+    : Peer(SERVER_IP, port, std::move(nodeType), std::move(processName)) {}
 
-    this->fileTransfer = FileTransfer();
-    this->squidProtocol = SquidProtocol();
+Peer::Peer(std::string server_ip, int port, std::string nodeType,
+           std::string processName)
+    : port(port), server_ip(server_ip),
+      nodeType_(std::move(nodeType)), processName_(std::move(processName)) {}
+
+Peer::~Peer() { disconnect(); }
+
+void Peer::connectToServer() {
+  auto channel = std::make_shared<TCPConnectorChannel>(
+      server_ip.c_str(), port, timeoutSeconds, 3);
+  std::cout << nodeType_ << ": Connected to server\n";
+
+  SquidProtocol proto(fileManager_, channel, nodeType_, processName_);
+  Message identify = proto.receiveAndParse();
+  if (identify.opcode != Opcode::IDENTIFY)
+    throw std::runtime_error(nodeType_ + ": handshake failed");
+
+  proto.response(nodeType_, processName_);
+
+  session_ = std::make_shared<ConnectionSession>(
+      fileManager_, channel, nodeType_, processName_, makeRequestHandler());
+  session_->start(true);
+  onConnected();
 }
 
-Peer::~Peer()
-{
+void Peer::reconnect() {
+  disconnect();
+  connectToServer();
 }
 
-void Peer::connectToServer()
-{
-    auto channel = std::make_shared<TCPConnectorChannel>(server_ip, port, timeoutSeconds, 3);
-    std::cout << nodeType + ": Connected to server...\n";
-    squidProtocol = SquidProtocol(fileManager, channel, nodeType, processName);
+void Peer::disconnect() {
+  if (!session_) return;
+  if (session_->isAlive())
+    session_->call([](SquidProtocol &p) { return p.closeConn(); });
+  session_->stop();
+  session_.reset();
 }
 
-void Peer::reconnect()
-{
-    auto channel = std::make_shared<TCPConnectorChannel>(server_ip, port, timeoutSeconds, 3);
-    std::cout << nodeType + ": Reconnected to server...\n";
-    squidProtocol = SquidProtocol(fileManager, channel, nodeType, processName);
-}
-
-void Peer::handleRequest(const Message &msg)
-{
-    try
-    {
-        std::cout << nodeType << ": Received message: " << msg.toString() << std::endl;
-        squidProtocol.responseDispatcher(msg);
-    }
-    catch (const std::exception &e)
-    {
-        std::cerr << nodeType + ": Error handling message: " << e.what() << std::endl;
-    }
-}
+bool Peer::isAlive() const { return session_ && session_->isAlive(); }

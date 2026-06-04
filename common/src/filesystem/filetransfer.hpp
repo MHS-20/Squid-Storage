@@ -7,7 +7,7 @@
 #include <fstream>
 #include <cstdint>
 
-#include "../networking/INetworkChannel.hpp"
+#include "INetworkChannel.hpp"
 
 using namespace std;
 #define BUFFER_SIZE 1024

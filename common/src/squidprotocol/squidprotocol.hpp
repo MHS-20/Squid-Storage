@@ -10,9 +10,9 @@
 #include <signal.h>
 #include <memory>
 
-#include "../filesystem/filetransfer.hpp"
-#include "../filesystem/filemanager.hpp"
-#include "../networking/INetworkChannel.hpp"
+#include "filetransfer.hpp"
+#include "filemanager.hpp"
+#include "INetworkChannel.hpp"
 #include "squidProtocolFormatter.hpp"
 
 namespace fs = std::filesystem;
@@ -56,6 +56,14 @@ public:
 
     bool receiveFileData(std::vector<uint8_t> &fileData);
     bool sendFileData(const std::vector<uint8_t> &fileData);
+
+    // Push helpers: send a header frame + file bytes with no ACK handshake.
+    // Use these when the server pushes a file to a passive receiver (client),
+    // as opposed to the request/response overloads above which expect ACKs.
+    void pushCreateFile(const std::string &filePath, int version,
+                        const std::vector<uint8_t> &fileData);
+    void pushUpdateFile(const std::string &filePath, int version,
+                        const std::vector<uint8_t> &fileData);
 
     virtual Message acquireLock(const std::string &filePath);
     virtual Message releaseLock(const std::string &filePath);

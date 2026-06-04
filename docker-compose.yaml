@@ -56,7 +56,7 @@ services:
       - ./mockfiles/client:/root/SquidStorage
       - ./build:/app/bin:ro
     working_dir: /root/SquidStorage
-    command: /app/bin/SquidStorageClient 172.20.0.10 12345 12346 MOCK_CLIENT_CONTAINER
+    command: /app/bin/SquidStorageClient 172.20.0.10 12345 MOCK_CLIENT_CONTAINER
     depends_on:
       - datanode1
       - datanode2
