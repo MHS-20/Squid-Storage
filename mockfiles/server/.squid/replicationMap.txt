@@ -1,0 +1,3 @@
+alpha_state.txt DATANODE_ALPHA
+beta_state.txt DATANODE_BETA
+testfile.txt DATANODE_ALPHA,DATANODE_BETA
