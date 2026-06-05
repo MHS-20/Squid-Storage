@@ -73,6 +73,7 @@ public:
     virtual Message heartbeat();
 
     virtual void response(bool isAck);
+    virtual void response(bool isAck, int version);  // ACK + FILE_VERSION in one frame
     virtual void response(int port);
     virtual void response(const std::string &ack);
     virtual void response(const std::string &nodeType, const std::string &processName);

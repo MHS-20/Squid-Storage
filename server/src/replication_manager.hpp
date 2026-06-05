@@ -57,9 +57,10 @@ public:
                            const std::vector<uint8_t> &fileData,
                            LockManager &lockManager);
 
-  bool propagateUpdateFile(const std::string &filePath, int version,
-                           const std::string &originProcessName,
-                           const std::vector<uint8_t> &fileData);
+  // Returns the new committed version, or -1 if quorum was not met.
+  int propagateUpdateFile(const std::string &filePath, int clientSeenVersion,
+                          const std::string &originProcessName,
+                          const std::vector<uint8_t> &fileData);
 
   void propagateDeleteFile(const std::string &filePath,
                            const std::string &originProcessName,
@@ -72,6 +73,9 @@ public:
 
   // Return the highest known version for every file across all live datanodes.
   std::map<std::string, int> getFileVersionMap();
+
+  // Return the server's current known version for a single file (-1 if unknown).
+  int getKnownVersion(const std::string &filePath);
 
 private:
   int replicationFactor_;

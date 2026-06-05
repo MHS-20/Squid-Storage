@@ -107,6 +107,7 @@ public:
     std::vector<uint8_t> pushDeleteFileFormat(const std::string &filePath)               const;
 
     std::vector<uint8_t> responseAck(bool isAck)                                        const;
+    std::vector<uint8_t> responseAckWithVersion(bool isAck, int version)                const;
     std::vector<uint8_t> responsePort(int port)                                         const;
     std::vector<uint8_t> responseIdentity(const std::string &nodeType,
                                            const std::string &processName)              const;

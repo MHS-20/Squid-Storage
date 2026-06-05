@@ -209,6 +209,12 @@ public:
       return 0;
     });
   }
+  void response(bool isAck, int version) {
+    call([isAck, version](SquidProtocol &protocol) {
+      protocol.response(isAck, version);
+      return 0;
+    });
+  }
   void response(int port) {
     call([port](SquidProtocol &protocol) {
       protocol.response(port);

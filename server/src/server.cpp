@@ -217,8 +217,9 @@ void Server::handleClientRequest(ConnectionSession &clientSession,
     vector<uint8_t> fileData;
     bool ok = replicationManager_.getFileFromDataNode(filePath, fileData);
     if (ok) {
+      int ver = replicationManager_.getKnownVersion(filePath);
       clientSession.response(true);
-      clientSession.response(clientSession.sendFileData(fileData));
+      clientSession.response(clientSession.sendFileData(fileData), ver);
     } else {
       clientSession.response(false);
     }
@@ -232,11 +233,14 @@ void Server::handleClientRequest(ConnectionSession &clientSession,
       clientSession.response(false);
       break;
     }
-    // propagateUpdateFile fans out via ConnectionSession::call() on each
-    // datanode's session thread — no additional pool thread needed.
-    bool ok = replicationManager_.propagateUpdateFile(
+    // propagateUpdateFile returns the new committed version, or -1 on failure.
+    // The new version is sent back so the client can update its local map.
+    int newVersion = replicationManager_.propagateUpdateFile(
         filePath, fileVersion, clientSession.getProcessName(), fileData);
-    clientSession.response(ok);
+    if (newVersion >= 0)
+      clientSession.response(true, newVersion);
+    else
+      clientSession.response(false);
     break;
   }
 

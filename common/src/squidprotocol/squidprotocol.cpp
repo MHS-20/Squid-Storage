@@ -424,6 +424,13 @@ void SquidProtocol::response(bool isAck)
     sendFrame(formatter_.responseAck(isAck));
 }
 
+void SquidProtocol::response(bool isAck, int version)
+{
+    std::cout << nodeType_ + ": Sending response: " << isAck
+              << " version=" << version << std::endl;
+    sendFrame(formatter_.responseAckWithVersion(isAck, version));
+}
+
 void SquidProtocol::response(int port)
 {
     sendFrame(formatter_.responsePort(port));
@@ -484,7 +491,10 @@ void SquidProtocol::requestDispatcher(const Message &message)
     case Opcode::READ_FILE:
         std::cout << nodeType_ + ": received read file request\n";
         response(true);
-        response(channel_ && fileTransfer_.sendFile(*channel_, processName_, path));
+        if (channel_ && fileTransfer_.sendFile(*channel_, processName_, path))
+            response(true, (*fileManager_).getFileVersion(path));
+        else
+            response(false);
         break;
 
     case Opcode::UPDATE_FILE:
@@ -493,7 +503,7 @@ void SquidProtocol::requestDispatcher(const Message &message)
         if (channel_ && fileTransfer_.receiveFile(*channel_, processName_, path))
         {
             (*fileManager_).setFileVersion(path, version);
-            response(true);
+            response(true, version);
         }
         else
         {

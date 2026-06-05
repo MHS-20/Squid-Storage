@@ -218,6 +218,13 @@ std::vector<uint8_t> SquidProtocolFormatter::responseAck(bool isAck) const
     return buildFrame(Opcode::RESPONSE, FLAG_RESPONSE, { fieldBool(FieldID::ACK, isAck) });
 }
 
+std::vector<uint8_t> SquidProtocolFormatter::responseAckWithVersion(bool isAck, int version) const
+{
+    return buildFrame(Opcode::RESPONSE, FLAG_RESPONSE,
+        { fieldBool  (FieldID::ACK,          isAck),
+          fieldUint32(FieldID::FILE_VERSION,  static_cast<uint32_t>(version)) });
+}
+
 std::vector<uint8_t> SquidProtocolFormatter::responseFormat(const std::string &ack) const
 {
     return responseAck(ack == "ACK");

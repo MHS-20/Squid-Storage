@@ -108,58 +108,38 @@ bool ReplicationManager::getFileFromDataNode(const string &filePath,
   if (holders.empty())
     return false;
 
-  // Fast path: ask the first holder what version it has via syncStatus().
-  // If it matches (or we have no expectation), read from it directly.
-  auto holderVersionOf = [&](shared_ptr<ConnectionSession> &session) -> int {
-    Message statusMsg = session->syncStatus();
-    auto vmap = statusMsg.getFileVersionMap();
-    auto it = vmap.find(filePath);
-    return (it != vmap.end()) ? it->second : -1;
-  };
-
-  int firstVersion = holderVersionOf(holders[0]);
-  if (expectedVersion < 0 || firstVersion >= expectedVersion) {
+  // Try each holder in order.  The final ACK from READ_FILE now carries
+  // FILE_VERSION (added to requestDispatcher), so we can check staleness
+  // directly from the response without an extra syncStatus() round-trip.
+  for (size_t i = 0; i < holders.size(); ++i) {
     vector<uint8_t> candidate;
-    Message mex = holders[0]->readFile(filePath, candidate);
-    if (mex.isAck()) {
+    Message mex = holders[i]->readFile(filePath, candidate);
+    if (!mex.isAck())
+      continue;
+
+    int gotVersion = static_cast<int>(mex.getUint32(FieldID::FILE_VERSION, 0));
+
+    if (expectedVersion < 0 || gotVersion >= expectedVersion) {
+      // This holder is current (or we have no baseline) — use it.
       fileData = move(candidate);
       return true;
     }
-  } else {
-    cerr << "[ReplicationManager]: stale read from first holder (v"
-         << firstVersion << " < expected v" << expectedVersion
-         << ") — querying remaining holders\n";
-  }
 
-  // Quorum read: find the holder with the highest version among the rest.
-  int bestVersion = firstVersion;
-  shared_ptr<ConnectionSession> bestHolder;
-
-  for (size_t i = 1; i < holders.size(); ++i) {
-    int ver = holderVersionOf(holders[i]);
-    if (ver > bestVersion) {
-      bestVersion = ver;
-      bestHolder = holders[i];
+    // Stale holder.  If there are more holders to try, do so.
+    if (i + 1 < holders.size()) {
+      cerr << "[ReplicationManager]: holder " << i << " is stale for "
+           << filePath << " (v" << gotVersion << " < expected v"
+           << expectedVersion << ") — trying next holder\n";
+      continue;
     }
-    if (ver >= expectedVersion)
-      break; // good enough
-  }
 
-  if (!bestHolder && bestVersion < expectedVersion) {
+    // All holders tried and all are stale — version divergence.
     cerr << "[ReplicationManager]: read quorum failed for " << filePath
          << " — no holder has version >= " << expectedVersion << "\n";
     return false;
   }
 
-  // Use best holder found, or fall back to first holder if none was better.
-  auto &readFrom = bestHolder ? bestHolder : holders[0];
-  vector<uint8_t> candidate;
-  Message mex = readFrom->readFile(filePath, candidate);
-  if (!mex.isAck())
-    return false;
-
-  fileData = move(candidate);
-  return true;
+  return false;
 }
 
 // ── Write propagation ─────────────────────────────────────────────────────────
@@ -240,20 +220,30 @@ bool ReplicationManager::propagateCreateFile(
   return true;
 }
 
-bool ReplicationManager::propagateUpdateFile(const string &filePath,
-                                             int version,
-                                             const string &originProcessName,
-                                             const vector<uint8_t> &fileData) {
+int ReplicationManager::propagateUpdateFile(const string &filePath,
+                                            int clientSeenVersion,
+                                            const string &originProcessName,
+                                            const vector<uint8_t> &fileData) {
+  // The server is the version authority: new version = persisted version + 1.
+  // We ignore clientSeenVersion for computing the new version (it was already
+  // validated against the lock at the server layer), but we keep it as a
+  // parameter so the server can log or reject stale writes in the future.
+  int newVersion = -1;
+  {
+    shared_lock<shared_mutex> lock(stateMutex_);
+    auto it = persistedVersionMap_.find(filePath);
+    newVersion = (it != persistedVersionMap_.end() ? it->second : clientSeenVersion) + 1;
+  }
+
   vector<pair<string, shared_ptr<ConnectionSession>>> datanodes;
   vector<pair<string, shared_ptr<ConnectionSession>>> clients;
 
   {
     shared_lock<shared_mutex> lock(stateMutex_);
     auto it = dataNodeReplicationMap_.find(filePath);
-    if (it != dataNodeReplicationMap_.end()) {
+    if (it != dataNodeReplicationMap_.end())
       for (auto &entry : it->second)
         datanodes.push_back(entry);
-    }
     for (auto &entry : clientEndpointMap_)
       clients.push_back(entry);
   }
@@ -265,8 +255,8 @@ bool ReplicationManager::propagateUpdateFile(const string &filePath,
     if (!datanode.second || !datanode.second->isAlive())
       continue;
     futures.push_back(requestPool_.submit(
-        [session = datanode.second, filePath, version, fileData]() {
-          return session->updateFile(filePath, version, fileData);
+        [session = datanode.second, filePath, newVersion, fileData]() {
+          return session->updateFile(filePath, newVersion, fileData);
         }));
   }
 
@@ -284,32 +274,31 @@ bool ReplicationManager::propagateUpdateFile(const string &filePath,
   }
 
   // Write-quorum check.
-  // For update the quorum is against the holders of this file, not all nodes.
   size_t effectiveQuorum = min(quorum_, datanodes.size());
   if (ackedNodes.size() < effectiveQuorum) {
     cerr << "[ReplicationManager]: write quorum not met for UPDATE "
          << filePath << " (" << ackedNodes.size() << "/" << effectiveQuorum
          << " ACKs) — rejecting\n";
-    return false;
+    return -1;
   }
 
-  // Quorum met.
+  // Quorum met — update persisted state.
   {
     unique_lock<shared_mutex> lock(stateMutex_);
-    persistedVersionMap_[filePath] = version;
+    persistedVersionMap_[filePath] = newVersion;
   }
 
-  fileManager_.setFileVersion(filePath, version);
+  fileManager_.setFileVersion(filePath, newVersion);
   persistState();
 
-  // Push to all other clients.
+  // Push new version to all other clients.
   for (auto &client : clients) {
     if (!client.second || client.first == originProcessName)
       continue;
-    client.second->pushUpdateFile(filePath, version, fileData);
+    client.second->pushUpdateFile(filePath, newVersion, fileData);
   }
 
-  return true;
+  return newVersion;
 }
 
 void ReplicationManager::propagateDeleteFile(const string &filePath,
@@ -441,8 +430,13 @@ void ReplicationManager::rebalanceFileReplication(
 
 // ── File version map ──────────────────────────────────────────────────────────
 
-map<string, int> ReplicationManager::getFileVersionMap() {
-  // Query all live datanodes and reconcile with the persisted map
+int ReplicationManager::getKnownVersion(const string &filePath) {
+  shared_lock<shared_mutex> lock(stateMutex_);
+  auto it = persistedVersionMap_.find(filePath);
+  return (it != persistedVersionMap_.end()) ? it->second : -1;
+}
+
+map<string, int> ReplicationManager::getFileVersionMap() {  // Query all live datanodes and reconcile with the persisted map
   // (highest-version-wins as per design).
   map<string, int> fileVersionMap;
 
