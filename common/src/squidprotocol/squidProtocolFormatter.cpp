@@ -95,6 +95,11 @@ BinaryField SquidProtocolFormatter::fieldBool(FieldID id, bool v)
     return f;
 }
 
+// Header layout:
+//   [magic:2][opcode:1][flags:1][nfields:1][seq:4][payloadLen:4]  = 13 bytes
+//
+// seq is written as 0 here; SquidProtocol::sendFrame stamps the real value
+// before the frame hits the wire, keeping the formatter stateless.
 std::vector<uint8_t> SquidProtocolFormatter::buildFrame(Opcode opcode,
                                                          uint8_t flags,
                                                          const std::vector<BinaryField> &fields,
@@ -106,11 +111,12 @@ std::vector<uint8_t> SquidProtocolFormatter::buildFrame(Opcode opcode,
     std::vector<uint8_t> frame;
     frame.reserve(FRAME_HEADER_SIZE + fields.size() * 4 + 64);
 
-    pushU16(frame, SQUID_MAGIC);
-    frame.push_back(static_cast<uint8_t>(opcode));
-    frame.push_back(flags);
-    frame.push_back(static_cast<uint8_t>(fields.size()));
-    pushU32(frame, payloadLen);
+    pushU16(frame, SQUID_MAGIC);                          // [0..1]  magic
+    frame.push_back(static_cast<uint8_t>(opcode));        // [2]     opcode
+    frame.push_back(flags);                               // [3]     flags
+    frame.push_back(static_cast<uint8_t>(fields.size())); // [4]     nfields
+    pushU32(frame, 0);                                    // [5..8]  seq  (placeholder)
+    pushU32(frame, payloadLen);                           // [9..12] payloadLen
 
     for (const auto &f : fields)
     {
@@ -122,6 +128,18 @@ std::vector<uint8_t> SquidProtocolFormatter::buildFrame(Opcode opcode,
     }
 
     return frame;
+}
+
+// Patch bytes [5..8] of an already-built frame with the real seq number.
+// Must be called before sendFrame writes the frame to the wire.
+/*static*/ void SquidProtocolFormatter::stampSeq(std::vector<uint8_t> &frame, uint32_t seq)
+{
+    if (frame.size() < FRAME_HEADER_SIZE)
+        return;
+    frame[5] = static_cast<uint8_t>((seq >> 24) & 0xFF);
+    frame[6] = static_cast<uint8_t>((seq >> 16) & 0xFF);
+    frame[7] = static_cast<uint8_t>((seq >>  8) & 0xFF);
+    frame[8] = static_cast<uint8_t>( seq        & 0xFF);
 }
 
 std::vector<uint8_t> SquidProtocolFormatter::identifyFormat() const
@@ -270,6 +288,8 @@ std::vector<uint8_t> SquidProtocolFormatter::responseFormat(const std::map<std::
     return responseFileVersionMap(m);
 }
 
+// Header layout (13 bytes):
+//   [magic:2][opcode:1][flags:1][nfields:1][seq:4][payloadLen:4]
 Message SquidProtocolFormatter::parseMessage(const std::vector<uint8_t> &frame) const
 {
     if (frame.size() < FRAME_HEADER_SIZE)
@@ -285,6 +305,7 @@ Message SquidProtocolFormatter::parseMessage(const std::vector<uint8_t> &frame) 
     msg.opcode     = static_cast<Opcode>(*p++);
     msg.flags      = *p++;
     uint8_t nf     = *p++;
+    msg.seq        = readU32(p); p += 4;
     msg.payloadLen = readU32(p); p += 4;
 
     const uint8_t *end = frame.data() + frame.size();
@@ -345,14 +366,17 @@ uint32_t Message::getUint32(FieldID id, uint32_t def) const
 {
     const BinaryField *f = findField(id);
     if (!f || f->value.size() < 4) return def;
-    return readU32(f->value.data());
+    return (uint32_t(f->value[0]) << 24) | (uint32_t(f->value[1]) << 16) |
+           (uint32_t(f->value[2]) <<  8) |  uint32_t(f->value[3]);
 }
 
 uint64_t Message::getUint64(FieldID id, uint64_t def) const
 {
     const BinaryField *f = findField(id);
     if (!f || f->value.size() < 8) return def;
-    return readU64(f->value.data());
+    uint64_t v = 0;
+    for (int i = 0; i < 8; ++i) v = (v << 8) | f->value[i];
+    return v;
 }
 
 bool Message::getBool(FieldID id, bool def) const
@@ -372,7 +396,8 @@ std::map<std::string, int> Message::getFileVersionMap() const
         if (f.id == FieldID::FILE_ENTRY)
             files.push_back(std::string(f.value.begin(), f.value.end()));
         else if (f.id == FieldID::VER_ENTRY && f.value.size() >= 4)
-            versions.push_back(readU32(f.value.data()));
+            versions.push_back((uint32_t(f.value[0]) << 24) | (uint32_t(f.value[1]) << 16) |
+                               (uint32_t(f.value[2]) <<  8) |  uint32_t(f.value[3]));
     }
 
     std::map<std::string, int> result;
@@ -387,6 +412,7 @@ std::string Message::toString() const
     std::ostringstream os;
     os << "Message{opcode=" << opcodeToString(opcode)
        << ",flags=" << static_cast<int>(flags)
+       << ",seq=" << seq
        << ",payloadLen=" << payloadLen
        << ",fields=[";
     for (const auto &f : fields)

@@ -71,8 +71,14 @@ bool SquidProtocol::handleRecvError(ssize_t bytes)
 
 void SquidProtocol::sendFrame(const std::vector<uint8_t> &frame)
 {
+    // Stamp the current outbound sequence number before writing to the wire,
+    // then advance the counter. The formatter leaves bytes [5..8] as zero
+    // placeholders so we can patch them here without copying the frame.
+    std::vector<uint8_t> stamped = frame;
+    SquidProtocolFormatter::stampSeq(stamped, nextSendSeq_++);
+
     size_t total = 0;
-    while (total < frame.size())
+    while (total < stamped.size())
     {
         if (!channel_)
         {
@@ -80,7 +86,7 @@ void SquidProtocol::sendFrame(const std::vector<uint8_t> &frame)
             return;
         }
 
-        ssize_t sent = channel_->writeBytes(frame.data() + total, frame.size() - total);
+        ssize_t sent = channel_->writeBytes(stamped.data() + total, stamped.size() - total);
         if (sent <= 0)
         {
             alive_ = false;
@@ -92,6 +98,8 @@ void SquidProtocol::sendFrame(const std::vector<uint8_t> &frame)
 
 std::vector<uint8_t> SquidProtocol::receiveFrame()
 {
+    // Header layout (13 bytes):
+    //   [magic:2][opcode:1][flags:1][nfields:1][seq:4][payloadLen:4]
     uint8_t header[FRAME_HEADER_SIZE];
     if (!recvExact(header, FRAME_HEADER_SIZE))
         return {};
@@ -104,9 +112,10 @@ std::vector<uint8_t> SquidProtocol::receiveFrame()
         return {};
     }
 
-    uint8_t numFields  = header[4];
-    uint32_t payloadLen = (uint32_t(header[5]) << 24) | (uint32_t(header[6]) << 16) |
-                          (uint32_t(header[7]) <<  8) |  uint32_t(header[8]);
+    uint8_t  numFields  = header[4];
+    // bytes [5..8] = seq  (read by receiveAndParse via parseMessage)
+    uint32_t payloadLen = (uint32_t(header[9])  << 24) | (uint32_t(header[10]) << 16) |
+                          (uint32_t(header[11]) <<  8) |  uint32_t(header[12]);
 
     std::vector<uint8_t> frame(header, header + FRAME_HEADER_SIZE);
 
@@ -136,15 +145,66 @@ std::vector<uint8_t> SquidProtocol::receiveFrame()
     return frame;
 }
 
+bool SquidProtocol::popNextBuffered(std::vector<uint8_t> &frame)
+{
+    auto it = reorderBuffer_.find(expectedRecvSeq_);
+    if (it == reorderBuffer_.end())
+        return false;
+    frame = std::move(it->second);
+    reorderBuffer_.erase(it);
+    return true;
+}
+
+// receiveAndParse delivers messages strictly in sequence-number order.
+//
+// If a frame arrives with seq == expectedRecvSeq_ it is returned immediately.
+// If it arrives with seq > expectedRecvSeq_ (gap) it is stored in the reorder
+// buffer and we read the next frame from the wire, repeating until the
+// expected seq is available either from the wire or from the buffer.
+// Frames with seq < expectedRecvSeq_ are stale duplicates and are discarded.
+//
+// This is fully transparent to all callers: server, client, and datanode code
+// never see out-of-order messages and need not be changed.
 Message SquidProtocol::receiveAndParse()
 {
-    std::vector<uint8_t> raw = receiveFrame();
-    if (raw.empty()) return formatter_.makeNack();
-    try { return formatter_.parseMessage(raw); }
-    catch (const std::exception &e)
+    while (true)
     {
-        std::cerr << nodeType_ + ": parse error: " << e.what() << std::endl;
-        return formatter_.makeNack();
+        // First check if the next expected frame is already buffered.
+        std::vector<uint8_t> raw;
+        if (!popNextBuffered(raw))
+        {
+            raw = receiveFrame();
+            if (raw.empty())
+                return formatter_.makeNack();
+        }
+
+        Message msg;
+        try { msg = formatter_.parseMessage(raw); }
+        catch (const std::exception &e)
+        {
+            std::cerr << nodeType_ + ": parse error: " << e.what() << std::endl;
+            return formatter_.makeNack();
+        }
+
+        const uint32_t seq = msg.seq;
+
+        if (seq == expectedRecvSeq_)
+        {
+            // In-order delivery — the common fast path.
+            lastDeliveredSeq_ = seq;
+            ++expectedRecvSeq_;
+            return msg;
+        }
+
+        if (seq > expectedRecvSeq_)
+        {
+            // Out-of-order: buffer it and keep reading.
+            reorderBuffer_.emplace(seq, std::move(raw));
+            continue;
+        }
+
+        // seq < expectedRecvSeq_: stale duplicate, discard and try again.
+        std::cerr << nodeType_ + ": discarding duplicate frame seq=" << seq << std::endl;
     }
 }
 

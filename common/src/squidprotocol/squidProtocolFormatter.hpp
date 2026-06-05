@@ -11,7 +11,9 @@ namespace fs = std::filesystem;
 
 static constexpr uint16_t SQUID_MAGIC   = 0x5351;
 static constexpr uint8_t  FLAG_RESPONSE = 0x01;
-static constexpr size_t   FRAME_HEADER_SIZE = 9;
+// Header layout (13 bytes):
+//   [magic:2][opcode:1][flags:1][nfields:1][seq:4][payloadLen:4]
+static constexpr size_t   FRAME_HEADER_SIZE = 13;
 
 enum class Opcode : uint8_t
 {
@@ -61,6 +63,7 @@ struct Message
 {
     Opcode   opcode     = Opcode::RESPONSE;
     uint8_t  flags      = 0;
+    uint32_t seq        = 0;   // per-message sequence number (transparent)
     uint32_t payloadLen = 0;
     std::vector<BinaryField> fields;
 
@@ -123,6 +126,11 @@ public:
                                         { return responseFileVersionMap(m); }
     std::vector<uint8_t> responseFormat(const std::map<std::string, long long> &fileTimeMap)         const;
     std::vector<uint8_t> responseFormat(const std::map<std::string, fs::file_time_type> &filesLastWrite) const;
+
+    // Stamp a seq number into an already-built frame (bytes [9..12]).
+    // Called by SquidProtocol::sendFrame so that the formatter itself remains
+    // stateless — seq state lives in the protocol layer.
+    static void stampSeq(std::vector<uint8_t> &frame, uint32_t seq);
 
     Message parseMessage(const std::vector<uint8_t> &frame) const;
     Message makeNack() const;
