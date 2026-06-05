@@ -10,6 +10,8 @@ find_package(PkgConfig REQUIRED)
 include_directories(
     ${SDL2_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/common/src
+    ${CMAKE_SOURCE_DIR}/common/src/config
+    ${CMAKE_SOURCE_DIR}/common/src/utils
     ${CMAKE_SOURCE_DIR}/common/src/squidprotocol
     ${CMAKE_SOURCE_DIR}/common/src/filesystem
     ${CMAKE_SOURCE_DIR}/common/src/peer
@@ -19,13 +21,14 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/datanode/src
 )
 
-# === FILES COMUNI ===
 set(COMMON_SOURCES
     common/src/squidprotocol/squidprotocol.cpp
     common/src/squidprotocol/squidProtocolFormatter.cpp
     common/src/filesystem/filemanager.cpp
     common/src/filesystem/filelock.cpp
     common/src/peer/peer.cpp
+    common/src/config/ClusterConfig.hpp
+    common/src/utils/logger.hpp
     common/src/filesystem/filetransfer.cpp
     common/src/networking/TCPConnectorChannel.cpp
     common/src/networking/TCPListenerChannel.cpp
@@ -49,6 +52,8 @@ add_executable(SquidStorageServer
     server/src/lock_manager.cpp
     server/src/replication_manager.cpp
     server/src/heartbeat_manager.cpp
+    server/src/standby_replica_manager.cpp
+    server/src/replica_watcher.cpp
     ${COMMON_SOURCES}
 )
 

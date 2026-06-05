@@ -16,6 +16,7 @@
 #include "thread_pool.hpp"
 
 class LockManager;
+class StandbyReplicaManager;
 
 // Owns the datanode replication map and all file-propagation operations:
 // create/update/delete fan-out to datanodes and cache-invalidation to clients,
@@ -77,6 +78,13 @@ public:
   // Return the server's current known version for a single file (-1 if unknown).
   int getKnownVersion(const std::string &filePath);
 
+  // Return the current replication map in a form suitable for snapshotting.
+  std::map<std::string, std::set<std::string>> getPersistableRepMap();
+
+  // Wire in the standby fanout after construction (avoids circular dependency
+  // between ReplicationManager and StandbyReplicaManager).
+  void setStandbyReplicaManager(StandbyReplicaManager *srm) { standby_ = srm; }
+
 private:
   int replicationFactor_;
   size_t quorum_;              // (replicationFactor / 2) + 1
@@ -95,6 +103,9 @@ private:
 
   // Persisted version map (authoritative when datanodes are offline).
   std::map<std::string, int> persistedVersionMap_;
+
+  // Optional standby fanout — null when running without HA config.
+  StandbyReplicaManager *standby_ = nullptr;
 
   // Persist both state files atomically.
   void persistState();

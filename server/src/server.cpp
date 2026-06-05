@@ -8,8 +8,6 @@
 
 using namespace std;
 
-// ── Constructors ─────────────────────────────────────────────────────────────
-
 Server::Server() : Server(DEFAULT_PORT, DEFAULT_REPLICATION_FACTOR) {}
 
 Server::Server(int port) : Server(port, DEFAULT_REPLICATION_FACTOR) {}
@@ -18,8 +16,11 @@ Server::Server(int port, int replicationFactor)
     : Server(port, replicationFactor, DEFAULT_TIMEOUT) {}
 
 Server::Server(int port, int replicationFactor, int timeoutSeconds)
-    : port_(port),
-      replicationFactor_(replicationFactor),
+    : Server(port, replicationFactor, timeoutSeconds, 0) {}
+
+Server::Server(int port, int replicationFactor, int timeoutSeconds,
+               uint32_t epoch)
+    : port_(port), replicationFactor_(replicationFactor), epoch_(epoch),
       listener_(std::make_unique<TCPListenerChannel>(port, 3)),
       lockManager_(stateMutex_, dataNodeEndpointMap_, clientEndpointMap_,
                    fileManager_),
@@ -35,23 +36,26 @@ Server::~Server() {
   if (listener_)
     listener_->close();
 
-  // Join background threads before touching the session maps so we know no
-  // thread is still reading/writing them. Use unique_lock for stop() calls.
-  if (acceptThread_.joinable())    acceptThread_.join();
-  if (heartbeatThread_.joinable()) heartbeatThread_.join();
-  if (lockExpiryThread_.joinable()) lockExpiryThread_.join();
+  if (acceptThread_.joinable())
+    acceptThread_.join();
+  if (heartbeatThread_.joinable())
+    heartbeatThread_.join();
+  if (lockExpiryThread_.joinable())
+    lockExpiryThread_.join();
+  if (standbyHbThread_.joinable())
+    standbyHbThread_.join();
 
-  // Now it is safe to stop all sessions without holding any lock.
   for (auto &entry : dataNodeEndpointMap_)
-    if (entry.second) entry.second->stop();
+    if (entry.second)
+      entry.second->stop();
   for (auto &entry : clientEndpointMap_)
-    if (entry.second) entry.second->stop();
+    if (entry.second)
+      entry.second->stop();
 }
 
-// ── Run loop ──────────────────────────────────────────────────────────────────
-
 void Server::run() {
-  cout << "[SERVER]: Starting on port " << port_ << "...\n";
+  cout << "[SERVER]: Starting on port " << port_ << " (epoch=" << epoch_
+       << ")...\n";
   running_ = true;
 
   acceptThread_ = thread([this]() {
@@ -65,8 +69,6 @@ void Server::run() {
       if (!accepted)
         continue;
 
-      // Offload the entire accept/handshake/init to the thread pool so the
-      // accept loop is never blocked by slow handshakes or initial file syncs.
       AcceptedConnection conn = std::move(*accepted);
       requestPool_.submit([this, conn = std::move(conn)]() mutable {
         handleAccept(std::move(conn));
@@ -88,27 +90,34 @@ void Server::run() {
     }
   });
 
+  standbyHbThread_ = thread([this]() {
+    while (running_) {
+      if (standbyReplicaManager_)
+        standbyReplicaManager_->sendHeartbeats();
+      this_thread::sleep_for(chrono::milliseconds(500));
+    }
+  });
+
   if (acceptThread_.joinable())
     acceptThread_.join();
 
   running_ = false;
 
-  if (heartbeatThread_.joinable())    heartbeatThread_.join();
-  if (lockExpiryThread_.joinable()) lockExpiryThread_.join();
+  if (heartbeatThread_.joinable())
+    heartbeatThread_.join();
+  if (lockExpiryThread_.joinable())
+    lockExpiryThread_.join();
+  if (standbyHbThread_.joinable())
+    standbyHbThread_.join();
 }
-
-// ── Connection handling ───────────────────────────────────────────────────────
 
 void Server::handleAccept(AcceptedConnection accepted) {
   auto channel = accepted.channel;
   if (!channel)
     return;
 
-  // Perform the handshake on the calling thread (a requestPool_ worker).
-  // This keeps the accept loop free for new connections.
   SquidProtocol proto(fileManager_, channel, "[SERVER]", "SERVER");
 
-  // Step 1: send IDENTIFY so the peer knows to send us its identity.
   Message mex = proto.identify();
   if (!proto.isAlive()) {
     cerr << "[SERVER]: Handshake failed — peer disconnected during IDENTIFY\n";
@@ -116,14 +125,14 @@ void Server::handleAccept(AcceptedConnection accepted) {
   }
 
   string peerProcessName = mex.getString(FieldID::PROCESS_NAME);
-  string peerNodeType    = mex.getString(FieldID::NODE_TYPE);
+  string peerNodeType = mex.getString(FieldID::NODE_TYPE);
 
-  if (peerNodeType != "DATANODE" && peerNodeType != "CLIENT") {
+  if (peerNodeType != "DATANODE" && peerNodeType != "CLIENT" &&
+      peerNodeType != "STANDBY") {
     cout << "[SERVER]: Unknown node type '" << peerNodeType << "' — dropping\n";
     return;
   }
 
-  // Step 2: ACK the identity for both DATANODEs and CLIENTs uniformly.
   proto.response(true);
   if (!proto.isAlive()) {
     cerr << "[SERVER]: Handshake failed — could not send ACK to "
@@ -131,13 +140,15 @@ void Server::handleAccept(AcceptedConnection accepted) {
     return;
   }
 
-  cout << "[SERVER]: Handshake complete with " << peerNodeType
-       << " '" << peerProcessName << "'\n";
+  cout << "[SERVER]: Handshake complete with " << peerNodeType << " '"
+       << peerProcessName << "'\n";
 
-  // ── DATANODE path ────────────────────────────────────────────────────────
+  if (peerNodeType == "STANDBY") {
+    handleStandbyConnect(peerProcessName, channel);
+    return;
+  }
+
   if (peerNodeType == "DATANODE") {
-    // Datanodes are purely passive: the server sends requests, the datanode
-    // responds. No read loop needed on the server side (readLoop=false).
     auto datanodeSession = make_shared<ConnectionSession>(
         fileManager_, channel, "DATANODE", peerProcessName);
     datanodeSession->start(false);
@@ -147,7 +158,6 @@ void Server::handleAccept(AcceptedConnection accepted) {
       dataNodeEndpointMap_[peerProcessName] = datanodeSession;
     }
 
-    // Query the new datanode's file list and register it with the managers.
     Message files = datanodeSession->syncStatus();
     if (files.isResponse()) {
       auto fileVersionMap = files.getFileVersionMap();
@@ -158,14 +168,25 @@ void Server::handleAccept(AcceptedConnection accepted) {
     return;
   }
 
-  // ── CLIENT path ───────────────────────────────────────────────────────────
-  // Build the session first but do NOT start it yet. We push all existing
-  // files synchronously before starting the read loop so there is no window
-  // where the client can send a request while we are mid-push.
   auto clientSession = make_shared<ConnectionSession>(
       fileManager_, channel, "CLIENT", peerProcessName,
       [this](ConnectionSession &session, const Message &message) {
-        handleClientRequest(session, message);
+        // handleClientRequest must NOT run on the session worker thread.
+        // For CREATE_FILE and UPDATE_FILE the server sends an intermediate ACK
+        // and then calls receiveFileData(), which blocks waiting for the client
+        // to send the file bytes.  Those bytes arrive as raw TCP data that the
+        // session worker must remain free to read.  If we call
+        // handleClientRequest directly here (i.e. on the worker thread), the
+        // worker is stuck inside receiveFileData() and can never drain the
+        // incoming bytes — deadlock.  Dispatching to a separate pool thread
+        // keeps the session worker free to process incoming data while the
+        // handler is blocked on the receive.
+        auto sessionPtr = session.shared_from_this();
+        sessionPtr->suspendReads();
+        requestPool_.submit([this, sessionPtr, message]() {
+          handleClientRequest(*sessionPtr, message);
+          sessionPtr->resumeReads();
+        });
       });
 
   {
@@ -173,10 +194,6 @@ void Server::handleAccept(AcceptedConnection accepted) {
     clientEndpointMap_[peerProcessName] = clientSession;
   }
 
-  // Push all existing files before starting the read loop.
-  // pushCreateFile uses post() which enqueues into the session task queue.
-  // start(true) drains that queue before entering the select() loop, so all
-  // pushes are sent before the first client request can be processed.
   auto fileVersionMap = replicationManager_.getFileVersionMap();
   for (auto &[filePath, version] : fileVersionMap) {
     vector<uint8_t> fileData;
@@ -184,36 +201,45 @@ void Server::handleAccept(AcceptedConnection accepted) {
       clientSession->pushCreateFile(filePath, version, fileData);
   }
 
-  // Now start the read loop. The worker thread will first drain the push queue
-  // (all pushCreateFile posts above) and only then begin reading from the socket.
   clientSession->start(true);
+}
+
+void Server::handleStandbyConnect(const string &name,
+                                  shared_ptr<INetworkChannel> channel) {
+  if (!standbyReplicaManager_) {
+    standbyReplicaManager_ = make_unique<StandbyReplicaManager>(
+        fileManager_, replicationManager_, requestPool_, epoch_);
+    replicationManager_.setStandbyReplicaManager(standbyReplicaManager_.get());
+  }
+
+  auto session =
+      make_shared<ConnectionSession>(fileManager_, channel, "STANDBY", name);
+  session->start(false);
+
+  standbyReplicaManager_->registerStandby(name, session);
 }
 
 void Server::handleClientRequest(ConnectionSession &clientSession,
                                  const Message &mex) {
-  string filePath    = mex.getString(FieldID::FILE_PATH);
-  int    fileVersion = static_cast<int>(mex.getUint32(FieldID::FILE_VERSION, 0));
+  string filePath = mex.getString(FieldID::FILE_PATH);
+  int fileVersion = static_cast<int>(mex.getUint32(FieldID::FILE_VERSION, 0));
 
   switch (mex.opcode) {
   case Opcode::CREATE_FILE: {
-    clientSession.response(true);
     vector<uint8_t> fileData;
-    if (!clientSession.receiveFileData(fileData)) {
-      clientSession.response(false);
-      break;
-    }
-    // propagateCreateFile fans out via ConnectionSession::call() on each
-    // datanode's session thread — no additional pool thread needed.
-    bool ok = replicationManager_.propagateCreateFile(
-        filePath, fileVersion, clientSession.getProcessName(),
-        fileData, lockManager_);
+    bool recvOk = clientSession.call([&fileData](SquidProtocol &proto) -> bool {
+      proto.response(true);                   // ACK: "send the file"
+      return proto.receiveFileData(fileData); // immediately consume raw bytes
+    });
+    bool ok =
+        recvOk && replicationManager_.propagateCreateFile(
+                      filePath, fileVersion, clientSession.getProcessName(),
+                      fileData, lockManager_);
     clientSession.response(ok);
     break;
   }
 
   case Opcode::READ_FILE: {
-    // getFileFromDataNode dispatches to the datanode's session worker thread
-    // via ConnectionSession::call() — no pool thread needed.
     vector<uint8_t> fileData;
     bool ok = replicationManager_.getFileFromDataNode(filePath, fileData);
     if (ok) {
@@ -227,16 +253,15 @@ void Server::handleClientRequest(ConnectionSession &clientSession,
   }
 
   case Opcode::UPDATE_FILE: {
-    clientSession.response(true);
     vector<uint8_t> fileData;
-    if (!clientSession.receiveFileData(fileData)) {
-      clientSession.response(false);
-      break;
-    }
-    // propagateUpdateFile returns the new committed version, or -1 on failure.
-    // The new version is sent back so the client can update its local map.
-    int newVersion = replicationManager_.propagateUpdateFile(
-        filePath, fileVersion, clientSession.getProcessName(), fileData);
+    bool recvOk = clientSession.call([&fileData](SquidProtocol &proto) -> bool {
+      proto.response(true);
+      return proto.receiveFileData(fileData);
+    });
+    int newVersion = -1;
+    if (recvOk)
+      newVersion = replicationManager_.propagateUpdateFile(
+          filePath, fileVersion, clientSession.getProcessName(), fileData);
     if (newVersion >= 0)
       clientSession.response(true, newVersion);
     else
@@ -252,15 +277,10 @@ void Server::handleClientRequest(ConnectionSession &clientSession,
   }
 
   case Opcode::SYNC_STATUS:
-    // handleClientRequest is already executing on a requestPool_ worker thread.
-    // Calling getFileVersionMap() directly avoids a nested submit() that would
-    // block this thread waiting for another pool thread — which can deadlock
-    // when the pool is fully occupied.
     clientSession.response(replicationManager_.getFileVersionMap());
     break;
 
   case Opcode::ACQUIRE_LOCK:
-    // acquireLock is a pure in-memory operation — no pool thread needed.
     clientSession.response(
         lockManager_.acquireLock(filePath, clientSession.getProcessName()));
     break;
@@ -274,13 +294,6 @@ void Server::handleClientRequest(ConnectionSession &clientSession,
     break;
 
   case Opcode::CLOSE:
-    // ACK the close and mark the session dead. Do NOT call closeConn() here —
-    // that would send a second CLOSE frame and block waiting for a response
-    // from a peer that has already closed its side.
-    // The map erase is posted to the thread pool instead of done inline:
-    // this handler runs on the session's own worker thread, and erasing the
-    // shared_ptr here could drop the last reference, triggering
-    // ~ConnectionSession -> stop() -> worker_.join() on the running thread.
     clientSession.response(true);
     clientSession.setIsAlive(false);
     requestPool_.submit([this, name = clientSession.getProcessName()]() {
@@ -295,8 +308,6 @@ void Server::handleClientRequest(ConnectionSession &clientSession,
     break;
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 shared_ptr<ConnectionSession> Server::getDataNodeSession(const string &name) {
   shared_lock<shared_mutex> lock(stateMutex_);

@@ -1,5 +1,6 @@
 #include "replication_manager.hpp"
 #include "lock_manager.hpp"
+#include "standby_replica_manager.hpp"
 #include "peer.hpp"
 
 #include <algorithm>
@@ -210,6 +211,13 @@ bool ReplicationManager::propagateCreateFile(
   fileManager_.setFileVersion(filePath, version);
   persistState();
 
+  // Fanout delta to standbys (fire-and-forget, does not block the commit path).
+  if (standby_) {
+    vector<string> holders;
+    for (auto &[name, _] : ackedNodes) holders.push_back(name);
+    standby_->sendDelta(0, filePath, version, holders);
+  }
+
   // Push to all other clients.
   for (auto &client : clients) {
     if (!client.second || client.first == originProcessName)
@@ -291,6 +299,18 @@ int ReplicationManager::propagateUpdateFile(const string &filePath,
   fileManager_.setFileVersion(filePath, newVersion);
   persistState();
 
+  // Fanout delta to standbys.
+  if (standby_) {
+    vector<string> holders;
+    {
+      shared_lock<shared_mutex> lock(stateMutex_);
+      auto it = dataNodeReplicationMap_.find(filePath);
+      if (it != dataNodeReplicationMap_.end())
+        for (auto &[name, _] : it->second) holders.push_back(name);
+    }
+    standby_->sendDelta(0, filePath, newVersion, holders);
+  }
+
   // Push new version to all other clients.
   for (auto &client : clients) {
     if (!client.second || client.first == originProcessName)
@@ -349,6 +369,10 @@ void ReplicationManager::propagateDeleteFile(const string &filePath,
 
   fileManager_.deleteFileAndVersion(filePath);
   persistState();
+
+  // Fanout delete delta to standbys.
+  if (standby_)
+    standby_->sendDelta(1, filePath, 0, {});
 }
 
 // ── Replication map maintenance ───────────────────────────────────────────────
@@ -468,6 +492,11 @@ map<string, int> ReplicationManager::getFileVersionMap() {  // Query all live da
   }
 
   return fileVersionMap;
+}
+
+map<string, set<string>> ReplicationManager::getPersistableRepMap() {
+  shared_lock<shared_mutex> lock(stateMutex_);
+  return buildPersistableRepMap();
 }
 
 vector<string> ReplicationManager::pickDataNodes(size_t count) {

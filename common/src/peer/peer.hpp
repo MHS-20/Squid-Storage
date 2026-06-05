@@ -4,11 +4,12 @@
 #include <string>
 #include <thread>
 
+#include "ClusterConfig.hpp"
 #include "ConnectionSession.hpp"
-#include "filesystem/filemanager.hpp"
-#include "networking/TCPConnectorChannel.hpp"
 #include "filelock.hpp"
+#include "filesystem/filemanager.hpp"
 #include "filetransfer.hpp"
+#include "networking/TCPConnectorChannel.hpp"
 #include "squidprotocol.hpp"
 
 #define SERVER_IP "127.0.0.1"
@@ -23,15 +24,8 @@ public:
        std::string processName);
   virtual ~Peer();
 
-  // connectToServer performs the full handshake:
-  //   1. Connect TCP
-  //   2. Receive IDENTIFY from server
-  //   3. Send identity response
-  //   4. Receive ACK (server sends this to both CLIENTs and DATANODEs)
-  //   5. Build session and call onConnected()
-  // Subclasses should not override this unless they need a genuinely different
-  // transport; override onConnected() for post-connect setup instead.
   virtual void connectToServer();
+  virtual void connectWithFailover(const ClusterConfig &config);
   virtual void reconnect();
   virtual void disconnect();
   virtual bool isAlive() const;
@@ -50,6 +44,15 @@ protected:
   FileTransfer fileTransfer_;
 
   std::shared_ptr<ConnectionSession> session_;
+
+  uint32_t lastSeenEpoch_ = 0;
+  ClusterConfig clusterConfig_;
+
   virtual ConnectionSession::RequestHandler makeRequestHandler() = 0;
   virtual void onConnected() {}
+
+private:
+  std::shared_ptr<INetworkChannel> tryConnectChannel(const std::string &ip,
+                                                     int port);
+  bool performHandshake(std::shared_ptr<INetworkChannel> channel);
 };

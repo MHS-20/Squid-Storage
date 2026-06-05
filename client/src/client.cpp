@@ -101,6 +101,17 @@ void Client::handlePush(ConnectionSession &session, const Message &message) {
               << message.toString() << "\n";
     break;
 
+  case Opcode::NACK_STALE_EPOCH: {
+    uint32_t theirEpoch = message.getUint32(FieldID::EPOCH, 0);
+    std::cerr << "[Client]: NACK_STALE_EPOCH received — server epoch is stale"
+              << ", peer epoch=" << theirEpoch
+              << "; disconnecting from stale primary\n";
+    session.setIsAlive(false);
+    if (pushHandler_)
+      pushHandler_(message, {});
+    break;
+  }
+
   default:
     std::cerr << "[Client]: Unexpected opcode in push handler: "
               << message.toString() << "\n";

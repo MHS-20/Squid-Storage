@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <filesystem>
 #include <cstdint>
 #include <sys/socket.h>
@@ -71,6 +72,23 @@ public:
     void pushUpdateFile(const std::string &filePath, int version,
                         const std::vector<uint8_t> &fileData);
     void pushDeleteFile(const std::string &filePath);
+
+    // ── Standby-replication helpers (primary → standby) ───────────────────
+    // Send a full state snapshot to a newly connected standby.
+    void sendStateSnap(const std::map<std::string, int> &versionMap,
+                       const std::map<std::string, std::set<std::string>> &repMap,
+                       uint32_t epoch);
+
+    // Send an incremental delta after a committed write.
+    // op: 0=CREATE/UPDATE, 1=DELETE
+    void sendStateDelta(uint8_t op, const std::string &filePath, int version,
+                        const std::vector<std::string> &datanodes, uint32_t epoch);
+
+    // Send a leader heartbeat carrying the current epoch.
+    void sendLeaderHb(uint32_t epoch);
+
+    // Send epoch-fencing rejection (datanode/client → stale server).
+    void sendNackStaleEpoch(uint32_t myEpoch);
 
     virtual Message acquireLock(const std::string &filePath);
     virtual Message releaseLock(const std::string &filePath);

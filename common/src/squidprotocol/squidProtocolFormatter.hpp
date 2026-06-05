@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <filesystem>
 #include <cstdint>
 #include <stdexcept>
@@ -34,6 +35,23 @@ enum class Opcode : uint8_t
     PUSH_CREATE_FILE = 0x30,
     PUSH_UPDATE_FILE = 0x31,
     PUSH_DELETE_FILE = 0x32,
+
+    // ── Standby-replication opcodes (primary → standby) ───────────────────
+    // STATE_SNAP: full snapshot of version map + replication map sent on first
+    //   connect. Payload is a series of SNAP_ENTRY fields.
+    // STATE_DELTA: incremental update after every committed write.
+    //   Contains DELTA_OP + FILE_PATH + FILE_VERSION + zero-or-more DATANODE_NAME.
+    // LEADER_HB: periodic heartbeat from active server to standbys carrying
+    //   the current epoch. Standbys use it to detect primary failure.
+    STATE_SNAP   = 0x40,
+    STATE_DELTA  = 0x41,
+    LEADER_HB    = 0x42,
+
+    // NACK_STALE_EPOCH: sent by a datanode/client that has already seen a
+    // higher epoch than the server claiming to be leader. The server should
+    // step down when it receives this.
+    NACK_STALE_EPOCH = 0x43,
+
     RESPONSE      = 0xFF,
 };
 
@@ -51,6 +69,12 @@ enum class FieldID : uint8_t
     TIMESTAMP    = 0x08,
     FILE_ENTRY   = 0x10,
     VER_ENTRY    = 0x11,
+
+    // Standby-replication fields
+    EPOCH        = 0x20,   // uint32: current leadership epoch
+    DELTA_OP     = 0x21,   // uint8:  0=CREATE, 1=UPDATE, 2=DELETE
+    DATANODE_NAME= 0x22,   // string: one holder per field (repeated)
+    SNAP_ENTRY   = 0x23,   // string: "filePath version dn1,dn2" packed line
 };
 
 struct BinaryField
@@ -109,6 +133,29 @@ public:
     std::vector<uint8_t> pushUpdateFileFormat(const std::string &filePath, int version) const;
     std::vector<uint8_t> pushDeleteFileFormat(const std::string &filePath)               const;
 
+    // ── Standby-replication frames ────────────────────────────────────────
+    // Full snapshot sent to a standby on first connect.
+    // Each entry encodes "filePath version dn1,dn2" as a SNAP_ENTRY string.
+    std::vector<uint8_t> stateSnapFormat(
+        const std::map<std::string, int> &versionMap,
+        const std::map<std::string, std::set<std::string>> &repMap,
+        uint32_t epoch) const;
+
+    // Incremental delta after a committed write.
+    // op: 0=CREATE/UPDATE, 1=DELETE.  datanodes may be empty for DELETE.
+    std::vector<uint8_t> stateDeltaFormat(
+        uint8_t op,
+        const std::string &filePath,
+        int version,
+        const std::vector<std::string> &datanodes,
+        uint32_t epoch) const;
+
+    // Leader heartbeat carrying the current epoch.
+    std::vector<uint8_t> leaderHbFormat(uint32_t epoch) const;
+
+    // Epoch-fencing rejection.
+    std::vector<uint8_t> nackStaleEpochFormat(uint32_t myEpoch) const;
+
     std::vector<uint8_t> responseAck(bool isAck)                                        const;
     std::vector<uint8_t> responseAckWithVersion(bool isAck, int version)                const;
     std::vector<uint8_t> responsePort(int port)                                         const;
@@ -135,6 +182,13 @@ public:
     Message parseMessage(const std::vector<uint8_t> &frame) const;
     Message makeNack() const;
     Message makeAck()  const;
+
+    // Parses a single SNAP_ENTRY value from a STATE_SNAP frame.
+    // Returns false if the string is malformed.
+    static bool parseSnapEntry(const std::string &entry,
+                               std::string &filePath,
+                               int &version,
+                               std::set<std::string> &datanodes);
 
 private:
     std::string nodeType_;

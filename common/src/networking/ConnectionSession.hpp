@@ -21,6 +21,8 @@
 class ConnectionSession
     : public std::enable_shared_from_this<ConnectionSession> {
 public:
+  std::atomic<bool> readSuspended_{false};
+
   using RequestHandler =
       std::function<void(ConnectionSession &, const Message &)>;
 
@@ -245,6 +247,10 @@ public:
       return 0;
     });
   }
+
+  void suspendReads() { readSuspended_.store(true); }
+  void resumeReads() { readSuspended_.store(false); }
+
   void
   response(const std::map<std::string, fs::file_time_type> &filesLastWrite) {
     call([filesLastWrite](SquidProtocol &protocol) {

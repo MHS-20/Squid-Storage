@@ -1,19 +1,59 @@
 services:
-  server:
+  server_primary:
     image: archlinux:latest
     environment:
       HOME: /root
       SQUID_STORAGE_ROOT: /root/SquidStorage
     volumes:
-      - ./mockfiles/server:/root/SquidStorage
+      - ./mockfiles/server_primary:/root/SquidStorage
       - ./build:/app/bin:ro
+      - ./config:/app/config:ro
     working_dir: /root/SquidStorage
-    command: /app/bin/SquidStorageServer 12345 2 10
+    # args: port  replicationFactor  timeoutSeconds  configPath  myName
+    command: /app/bin/SquidStorageServer 12345 2 10 /app/config/cluster.conf server_primary
     ports:
       - "12345:12345"
     networks:
       squid_network:
         ipv4_address: 172.20.0.10
+
+  server_standby1:
+    image: archlinux:latest
+    environment:
+      HOME: /root
+      SQUID_STORAGE_ROOT: /root/SquidStorage
+    volumes:
+      - ./mockfiles/server_standby1:/root/SquidStorage
+      - ./build:/app/bin:ro
+      - ./config:/app/config:ro
+    working_dir: /root/SquidStorage
+    command: /app/bin/SquidStorageServer 12345 2 10 /app/config/cluster.conf server_standby1
+    ports:
+      - "12346:12345"
+    depends_on:
+      - server_primary
+    networks:
+      squid_network:
+        ipv4_address: 172.20.0.13
+
+  server_standby2:
+    image: archlinux:latest
+    environment:
+      HOME: /root
+      SQUID_STORAGE_ROOT: /root/SquidStorage
+    volumes:
+      - ./mockfiles/server_standby2:/root/SquidStorage
+      - ./build:/app/bin:ro
+      - ./config:/app/config:ro
+    working_dir: /root/SquidStorage
+    command: /app/bin/SquidStorageServer 12345 2 10 /app/config/cluster.conf server_standby2
+    ports:
+      - "12347:12345"
+    depends_on:
+      - server_primary
+    networks:
+      squid_network:
+        ipv4_address: 172.20.0.14
 
   datanode1:
     image: archlinux:latest
@@ -23,10 +63,12 @@ services:
     volumes:
       - ./mockfiles/datanode_alpha:/root/SquidStorage
       - ./build:/app/bin:ro
+      - ./config:/app/config:ro
     working_dir: /root/SquidStorage
-    command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_ALPHA
+    # args: server_ip  server_port  identity  configPath
+    command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_ALPHA /app/config/cluster.conf
     depends_on:
-      - server
+      - server_primary
     networks:
       squid_network:
         ipv4_address: 172.20.0.11
@@ -39,10 +81,11 @@ services:
     volumes:
       - ./mockfiles/datanode_beta:/root/SquidStorage
       - ./build:/app/bin:ro
+      - ./config:/app/config:ro
     working_dir: /root/SquidStorage
-    command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_BETA
+    command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_BETA /app/config/cluster.conf
     depends_on:
-      - server
+      - server_primary
     networks:
       squid_network:
         ipv4_address: 172.20.0.12
@@ -55,8 +98,10 @@ services:
     volumes:
       - ./mockfiles/client:/root/SquidStorage
       - ./build:/app/bin:ro
+      - ./config:/app/config:ro
     working_dir: /root/SquidStorage
-    command: /app/bin/SquidStorageClient 172.20.0.10 12345 MOCK_CLIENT_CONTAINER
+    # arg: configPath  processName  (new config-path form added in client/src/main.cpp)
+    command: /app/bin/SquidStorageClient /app/config/cluster.conf MOCK_CLIENT_CONTAINER
     depends_on:
       - datanode1
       - datanode2

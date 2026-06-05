@@ -3,18 +3,13 @@
 #include <iostream>
 #include <thread>
 
-// ── Name generation ───────────────────────────────────────────────────────────
-
 std::string DataNode::generateName(const std::string &ip, int port) {
-  // Replace dots with underscores so the name is a valid map key without
-  // any ambiguity when printed or logged.
   std::string safe_ip = ip;
   for (char &c : safe_ip)
-    if (c == '.') c = '_';
+    if (c == '.')
+      c = '_';
   return "DATANODE_" + safe_ip + "_" + std::to_string(port);
 }
-
-// ── Constructors ──────────────────────────────────────────────────────────────
 
 DataNode::DataNode()
     : Peer(SERVER_IP, SERVER_PORT, "DATANODE",
@@ -36,32 +31,37 @@ DataNode::DataNode(const char *server_ip, int port, std::string nodeType,
                    std::string processName)
     : Peer(server_ip, port, std::move(nodeType), std::move(processName)) {}
 
-// ── Request handler ───────────────────────────────────────────────────────────
-
 ConnectionSession::RequestHandler DataNode::makeRequestHandler() {
-  // DataNodes are purely passive storage. All incoming frames are requests
-  // from the server (CREATE, READ, UPDATE, DELETE, SYNC_STATUS, HEARTBEAT,
-  // CLOSE). responseDispatcher delegates to requestDispatcher for all of these.
-  // PUSH_* opcodes are logged and ignored — the server never pushes to datanodes.
-  return [](ConnectionSession &session, const Message &msg) {
+  return [this](ConnectionSession &session, const Message &msg) {
+    if (msg.opcode == Opcode::NACK_STALE_EPOCH) {
+      uint32_t theirEpoch = msg.getUint32(FieldID::EPOCH, 0);
+      if (theirEpoch > lastSeenEpoch_)
+        lastSeenEpoch_ = theirEpoch;
+      session.setIsAlive(false);
+      return;
+    }
     session.responseDispatcher(msg);
   };
 }
 
-// ── Run loop ──────────────────────────────────────────────────────────────────
-
 void DataNode::run() {
-  connectToServer();
+  // Only connect here if no session was established yet (e.g. via
+  // connectWithFailover() in main).  Calling connectToServer() unconditionally
+  // would clobber the config-resolved leader session with a hardcoded
+  // SERVER_IP:SERVER_PORT connection.
+  if (!isAlive())
+    connectToServer();
 
   while (true) {
     if (!isAlive()) {
-      std::cout << "[DATANODE " << processName_ << "]: Connection lost. Retrying...\n";
+      std::cout << "[DATANODE " << processName_
+                << "]: Connection lost. Retrying...\n";
       std::this_thread::sleep_for(std::chrono::seconds(3));
       try {
         reconnect();
       } catch (const std::exception &e) {
-        std::cerr << "[DATANODE " << processName_ << "]: Reconnect failed: "
-                  << e.what() << "\n";
+        std::cerr << "[DATANODE " << processName_
+                  << "]: Reconnect failed: " << e.what() << "\n";
         continue;
       }
     }
