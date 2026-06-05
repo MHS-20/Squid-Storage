@@ -16,7 +16,18 @@ void Client::setPushHandler(PushHandler handler) {
 }
 
 void Client::run() {
-  connectToServer();   // uses Peer::connectToServer() — handshake is uniform
+  connectToServer();
+  // syncStatus() reconciles any files created or updated locally while offline.
+  // We must NOT call it from onConnected() because Peer::connectToServer()
+  // returns before the server's initial PUSH_CREATE_FILE burst has been read
+  // from the wire: the session worker hasn't run yet, so the TCP buffer still
+  // holds unread push frames. Submitting a SYNC_STATUS task to the queue would
+  // run it BEFORE those frames are consumed, desynchronising the stream.
+  //
+  // Calling it here (from the main thread, after connectToServer() returns) is
+  // safe: session_->call() dispatches to the worker thread where it will be
+  // executed *after* the worker's read loop has processed all pending frames.
+  syncStatus();
   while (isAlive())
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
@@ -97,52 +108,82 @@ void Client::handlePush(ConnectionSession &session, const Message &message) {
   }
 }
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+// Extract the FILE_VERSION field from an ACK. Returns -1 when the field is
+// absent (e.g. the server is an older build that doesn't send it yet).
+static int versionFromAck(const Message &ack) {
+  if (!ack.isAck()) return -1;
+  uint32_t v = ack.getUint32(FieldID::FILE_VERSION, UINT32_MAX);
+  return (v == UINT32_MAX) ? -1 : static_cast<int>(v);
+}
+
 // ── Client-initiated file operations ─────────────────────────────────────────
 // All of these go through call(), which serialises them on the session worker
 // thread. The read loop is suspended while call() is executing, so there is no
 // risk of a PUSH frame being consumed by waitForAck() inside the operation.
+//
+// After each successful operation the server's authoritative version is read
+// from the ACK's FILE_VERSION field and persisted in the local map.  The
+// client never invents version numbers; it only echoes back the last version it
+// has seen so the server can compute the next one.
 
 Message Client::createFile(const std::string &filePath,
                            const std::vector<uint8_t> &data, int version) {
   if (!isAlive()) return {};
-  return session_->call([filePath, version, data](SquidProtocol &proto) {
+  Message ack = session_->call([&filePath, version, &data](SquidProtocol &proto) {
     return proto.createFile(filePath, version, data);
   });
+  int newVersion = versionFromAck(ack);
+  if (newVersion >= 0)
+    fileManager_.setFileVersion(filePath, newVersion);
+  return ack;
 }
 
 Message Client::readFile(const std::string &filePath,
                          std::vector<uint8_t> &dataOut) {
   if (!isAlive()) return {};
-  return session_->call([filePath, &dataOut](SquidProtocol &proto) {
+  Message ack = session_->call([&filePath, &dataOut](SquidProtocol &proto) {
     return proto.readFile(filePath, dataOut);
   });
+  int newVersion = versionFromAck(ack);
+  if (newVersion >= 0)
+    fileManager_.setFileVersion(filePath, newVersion);
+  return ack;
 }
 
 Message Client::updateFile(const std::string &filePath,
                            const std::vector<uint8_t> &data, int version) {
   if (!isAlive()) return {};
-  return session_->call([filePath, version, data](SquidProtocol &proto) {
+  Message ack = session_->call([&filePath, version, &data](SquidProtocol &proto) {
     return proto.updateFile(filePath, version, data);
   });
+  int newVersion = versionFromAck(ack);
+  if (newVersion >= 0)
+    fileManager_.setFileVersion(filePath, newVersion);
+  return ack;
 }
 
 Message Client::deleteFile(const std::string &filePath) {
   if (!isAlive()) return {};
-  return session_->call([filePath](SquidProtocol &proto) {
+  Message ack = session_->call([&filePath](SquidProtocol &proto) {
     return proto.deleteFile(filePath);
   });
+  if (ack.isAck())
+    fileManager_.deleteFileAndVersion(filePath);
+  return ack;
 }
 
 Message Client::acquireLock(const std::string &filePath) {
   if (!isAlive()) return {};
-  return session_->call([filePath](SquidProtocol &proto) {
+  return session_->call([&filePath](SquidProtocol &proto) {
     return proto.acquireLock(filePath);
   });
 }
 
 Message Client::releaseLock(const std::string &filePath) {
   if (!isAlive()) return {};
-  return session_->call([filePath](SquidProtocol &proto) {
+  return session_->call([&filePath](SquidProtocol &proto) {
     return proto.releaseLock(filePath);
   });
 }
@@ -150,6 +191,7 @@ Message Client::releaseLock(const std::string &filePath) {
 Message Client::syncStatus() {
   if (!isAlive()) return {};
 
+  // Ask the server for its current version map.
   Message response = session_->call([](SquidProtocol &proto) {
     return proto.syncStatus();
   });
@@ -164,22 +206,49 @@ Message Client::syncStatus() {
 
   for (const auto &op : ops) {
     switch (op.action) {
-    case SyncAction::UPLOAD:
-      session_->call([op](SquidProtocol &proto) {
-        return proto.updateFile(op.filePath, op.version);
+
+    case SyncAction::UPLOAD: {
+      // File exists on both sides; our version is newer.  Send it and record
+      // the authoritative version that comes back in the ACK.
+      std::string content = fileManager_.readFile(op.filePath);
+      std::vector<uint8_t> data(content.begin(), content.end());
+      Message ack = session_->call([&op, &data](SquidProtocol &proto) {
+        return proto.updateFile(op.filePath, op.version, data);
       });
+      int newVersion = versionFromAck(ack);
+      if (newVersion >= 0)
+        fileManager_.setFileVersion(op.filePath, newVersion);
       break;
-    case SyncAction::CREATE_REMOTE:
-      session_->call([op](SquidProtocol &proto) {
-        return proto.createFile(op.filePath, op.version);
+    }
+
+    case SyncAction::CREATE_REMOTE: {
+      // File exists locally but the server has never seen it.  Create it
+      // remotely using the local content and let the server assign the
+      // authoritative version.
+      std::string content = fileManager_.readFile(op.filePath);
+      std::vector<uint8_t> data(content.begin(), content.end());
+      Message ack = session_->call([&op, &data](SquidProtocol &proto) {
+        return proto.createFile(op.filePath, op.version, data);
       });
+      int newVersion = versionFromAck(ack);
+      if (newVersion >= 0)
+        fileManager_.setFileVersion(op.filePath, newVersion);
       break;
-    case SyncAction::DOWNLOAD:
-      session_->call([op](SquidProtocol &proto) {
-        return proto.readFile(op.filePath);
+    }
+
+    case SyncAction::DOWNLOAD: {
+      // Server has a newer (or new-to-us) file.  Download it and record the
+      // version from the ACK, not the snapshot version, so a concurrent server
+      // update doesn't leave us with a stale entry.
+      std::vector<uint8_t> data;
+      Message ack = session_->call([&op, &data](SquidProtocol &proto) {
+        return proto.readFile(op.filePath, data);
       });
-      fileManager_.setFileVersion(op.filePath, op.version);
+      int newVersion = versionFromAck(ack);
+      if (newVersion >= 0)
+        fileManager_.setFileVersion(op.filePath, newVersion);
       break;
+    }
     }
   }
 
