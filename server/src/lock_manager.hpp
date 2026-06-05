@@ -30,9 +30,10 @@ public:
   // Rebuild fileLockMap by querying all connected datanodes.
   void buildFileLockMap();
 
-  // Try to acquire the lock for a file path.
+  // Try to acquire the lock for a file path on behalf of clientName.
+  // Records the holder so checkFileLockExpiration() can notify them on expiry.
   // Returns false if the file has no lock entry or is already locked.
-  bool acquireLock(const std::string &path);
+  bool acquireLock(const std::string &path, const std::string &clientName);
 
   // Release the lock for a file path.
   bool releaseLock(const std::string &path);

@@ -15,7 +15,7 @@ static constexpr size_t   FRAME_HEADER_SIZE = 9;
 
 enum class Opcode : uint8_t
 {
-    CONNECT       = 0x01,
+    CONNECT_SERVER = 0x01,
     IDENTIFY      = 0x02,
     CLOSE         = 0x03,
     HEARTBEAT     = 0x04,
@@ -26,6 +26,12 @@ enum class Opcode : uint8_t
     DELETE_FILE   = 0x14,
     ACQUIRE_LOCK  = 0x20,
     RELEASE_LOCK  = 0x21,
+    // Server→client unsolicited push opcodes. Using dedicated values means the
+    // receiver can distinguish a push from a request/response frame by opcode
+    // alone, with no need for correlation IDs.
+    PUSH_CREATE_FILE = 0x30,
+    PUSH_UPDATE_FILE = 0x31,
+    PUSH_DELETE_FILE = 0x32,
     RESPONSE      = 0xFF,
 };
 
@@ -94,6 +100,12 @@ public:
     std::vector<uint8_t> acquireLockFormat(const std::string &filePath) const;
     std::vector<uint8_t> releaseLockFormat(const std::string &filePath) const;
 
+    // Dedicated push-opcode frames: no ACK handshake, receiver identifies them
+    // by the PUSH_* opcode so they cannot be confused with request/response.
+    std::vector<uint8_t> pushCreateFileFormat(const std::string &filePath, int version) const;
+    std::vector<uint8_t> pushUpdateFileFormat(const std::string &filePath, int version) const;
+    std::vector<uint8_t> pushDeleteFileFormat(const std::string &filePath)               const;
+
     std::vector<uint8_t> responseAck(bool isAck)                                        const;
     std::vector<uint8_t> responsePort(int port)                                         const;
     std::vector<uint8_t> responseIdentity(const std::string &nodeType,
@@ -113,6 +125,7 @@ public:
 
     Message parseMessage(const std::vector<uint8_t> &frame) const;
     Message makeNack() const;
+    Message makeAck()  const;
 
 private:
     std::string nodeType_;

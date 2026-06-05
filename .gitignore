@@ -1,8 +1,7 @@
 *.o
 main
 
-test_txt/
-mockfiles/*
+# mockfiles/*
 
 vcpkg_installed/
 .vcpkg/
@@ -10,6 +9,4 @@ vcpkg_installed/
 build/*
 CMakeFiles/*
 
-.agents/
-.squid/
-.codex/
+# .squid/

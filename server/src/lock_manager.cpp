@@ -28,7 +28,7 @@ void LockManager::buildFileLockMap() {
     if (!datanodeSession || !datanodeSession->isAlive())
       continue;
 
-    Message files = datanodeSession->listFiles();
+    Message files = datanodeSession->syncStatus();
     if (!files.isResponse())
       continue;
 
@@ -45,7 +45,7 @@ void LockManager::buildFileLockMap() {
   }
 }
 
-bool LockManager::acquireLock(const string &path) {
+bool LockManager::acquireLock(const string &path, const string &clientName) {
   unique_lock<shared_mutex> lock(stateMutex_);
   if (fileLockMap_.find(path) == fileLockMap_.end()) {
     lock.unlock();
@@ -57,6 +57,7 @@ bool LockManager::acquireLock(const string &path) {
 
   if (!fileLockMap_[path].isLocked()) {
     fileLockMap_[path].setIsLocked(true);
+    fileLockMap_[path].setClientHolder(clientName);
     fileLockMap_[path].setExpiration(chrono::system_clock::now() +
                                      chrono::minutes(DEFAULT_LOCK_INTERVAL));
     return true;

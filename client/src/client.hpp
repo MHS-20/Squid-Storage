@@ -20,7 +20,8 @@ public:
 
   void run() override;
   void setPushHandler(PushHandler handler);
-  void connectToServer() override;
+
+  // File operations — all serialised through the session worker thread.
   Message createFile(const std::string &filePath,
                      const std::vector<uint8_t> &data, int version = 0);
   Message readFile(const std::string &filePath, std::vector<uint8_t> &dataOut);
@@ -38,6 +39,8 @@ protected:
 private:
   PushHandler pushHandler_;
 
+  // handlePush is the requestHandler_ callback for the client session.
+  // It handles PUSH_* opcodes (server→client unsolicited frames) and
+  // heartbeat/close requests. It must never be called for RESPONSE frames.
   void handlePush(ConnectionSession &session, const Message &message);
-  void doHandshake(SquidProtocol &proto);
 };

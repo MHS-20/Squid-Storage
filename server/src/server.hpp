@@ -21,12 +21,10 @@
 #define DEFAULT_TIMEOUT 60
 #define DEFAULT_REPLICATION_FACTOR 2
 
-using namespace std;
-
 class Server {
 public:
   Server();
-  Server(int port);
+  explicit Server(int port);
   Server(int port, int replicationFactor);
   Server(int port, int replicationFactor, int timeoutSeconds);
   ~Server();
@@ -48,25 +46,26 @@ private:
   FileTransfer fileTransfer_;
   FileManager fileManager_;
 
-  // Shared state protected by stateMutex_
+  // Shared state — all access must hold stateMutex_.
   mutable std::shared_mutex stateMutex_;
-  map<string, shared_ptr<ConnectionSession>> dataNodeEndpointMap_;
-  map<string, shared_ptr<ConnectionSession>> clientEndpointMap_;
+  std::map<std::string, std::shared_ptr<ConnectionSession>> dataNodeEndpointMap_;
+  std::map<std::string, std::shared_ptr<ConnectionSession>> clientEndpointMap_;
 
-  // Sub-managers: constructed after the shared maps above.
+  // Sub-managers: constructed after the shared maps above (member order matters).
   LockManager lockManager_;
   ReplicationManager replicationManager_;
   HeartbeatManager heartbeatManager_;
 
+  // handleAccept is offloaded to requestPool_ so the accept thread is never
+  // blocked by handshake or initial sync work.
   void handleAccept(AcceptedConnection accepted);
-  void handleConnection(SquidProtocol &clientProtocol);
   void handleClientRequest(ConnectionSession &clientSession,
                            const Message &message);
 
-  shared_ptr<ConnectionSession> getClientSession(const string &name);
-  shared_ptr<ConnectionSession> getDataNodeSession(const string &name);
+  std::shared_ptr<ConnectionSession> getClientSession(const std::string &name);
+  std::shared_ptr<ConnectionSession> getDataNodeSession(const std::string &name);
 
-  void printMap(map<string, long long> &m, const string &name);
-  void printMap(map<string, shared_ptr<ConnectionSession>> &m,
-                const string &name);
+  void printMap(std::map<std::string, long long> &m, const std::string &name);
+  void printMap(std::map<std::string, std::shared_ptr<ConnectionSession>> &m,
+                const std::string &name);
 };

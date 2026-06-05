@@ -101,6 +101,7 @@ bool ReplicationManager::propagateCreateFile(
   if (ok)
     lockManager.insertLock(filePath);
 
+  // Push to all other clients using the dedicated PUSH_CREATE_FILE opcode.
   for (auto &client : clients) {
     if (!client.second || client.first == originProcessName)
       continue;
@@ -155,6 +156,7 @@ bool ReplicationManager::propagateUpdateFile(const string &filePath,
       ok = false;
   }
 
+  // Push to all other clients using the dedicated PUSH_UPDATE_FILE opcode.
   for (auto &client : clients) {
     if (!client.second || client.first == originProcessName)
       continue;
@@ -184,18 +186,29 @@ void ReplicationManager::propagateDeleteFile(const string &filePath,
       clients.push_back(entry);
   }
 
+  // Fan-out deletes to datanodes and wait for all results so we know the
+  // file is actually gone before erasing it from the replication map.
+  vector<future<Message>> futures;
+  futures.reserve(datanodes.size());
   for (auto &datanode : datanodes) {
-    if (datanode.second && datanode.second->isAlive())
-      requestPool_.submit([session = datanode.second, filePath]() {
-        return session->deleteFile(filePath);
-      });
+    if (!datanode.second || !datanode.second->isAlive())
+      continue;
+    futures.push_back(requestPool_.submit(
+        [session = datanode.second, filePath]() {
+          return session->deleteFile(filePath);
+        }));
+  }
+  for (auto &f : futures) {
+    Message result = f.get();
+    if (!result.isAck())
+      cerr << "[ReplicationManager]: datanode failed to delete " << filePath << "\n";
   }
 
+  // Notify all other clients using the dedicated PUSH_DELETE_FILE opcode.
   for (auto &client : clients) {
     if (!client.second || client.first == originProcessName)
       continue;
-    client.second->post(
-        [filePath](SquidProtocol &protocol) { protocol.deleteFile(filePath); });
+    client.second->pushDeleteFile(filePath);
   }
 
   lockManager.eraseLock(filePath);
@@ -226,7 +239,8 @@ void ReplicationManager::eraseFromReplicationMap(const string &datanodeName) {
         continue;
 
       it->second.erase(endpoint->first);
-      if (it->second.size() < static_cast<size_t>((replicationFactor_ / 2) + 1))
+      if (it->second.size() <
+          static_cast<size_t>((replicationFactor_ / 2) + 1))
         rebalanceTargets.push_back({it->first, it->second});
     }
   }
@@ -238,7 +252,6 @@ void ReplicationManager::eraseFromReplicationMap(const string &datanodeName) {
 void ReplicationManager::rebalanceFileReplication(
     const string &filePath,
     map<string, shared_ptr<ConnectionSession>> fileHoldersMap) {
-  vector<uint8_t> fileData;
   if (fileHoldersMap.empty())
     return;
 
@@ -246,6 +259,7 @@ void ReplicationManager::rebalanceFileReplication(
   if (!sourceSession)
     return;
 
+  vector<uint8_t> fileData;
   Message sourceMessage = sourceSession->readFile(filePath, fileData);
   if (!sourceMessage.isAck())
     return;
@@ -270,9 +284,13 @@ void ReplicationManager::rebalanceFileReplication(
     }
   }
 
+  // Merge the updated holders back into the replication map rather than
+  // overwriting, to avoid clobbering concurrent rebalances for the same file.
   {
     unique_lock<shared_mutex> lock(stateMutex_);
-    dataNodeReplicationMap_[filePath] = std::move(fileHoldersMap);
+    auto &stored = dataNodeReplicationMap_[filePath];
+    for (auto &entry : fileHoldersMap)
+      stored[entry.first] = entry.second;
   }
 }
 
@@ -289,7 +307,8 @@ map<string, int> ReplicationManager::getFileVersionMap() {
     if (!datanode || !datanode->isAlive())
       continue;
 
-    Message mex = datanode->listFiles();
+    // syncStatus() replaces the removed listFiles() call.
+    Message mex = datanode->syncStatus();
     map<string, int> datanodeMap = mex.getFileVersionMap();
     for (auto &file : datanodeMap) {
       auto it = fileVersionMap.find(file.first);

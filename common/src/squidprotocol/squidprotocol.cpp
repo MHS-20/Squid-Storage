@@ -224,19 +224,15 @@ Message SquidProtocol::connectServer()
     return r;
 }
 
+// closeConn sends the CLOSE frame and marks the connection dead locally.
+// It does NOT wait for a response: the server ACKs and closes immediately,
+// and waiting would race with the server tearing down its side first.
 Message SquidProtocol::closeConn()
 {
     sendFrame(formatter_.closeFormat());
-    return receiveAndParse();
-}
-
-Message SquidProtocol::listFiles()
-{
-    std::cout << nodeType_ + ": sending list files request" << std::endl;
-    sendFrame(formatter_.syncStatusFormat());
-    Message r = receiveAndParse();
-    std::cout << nodeType_ + ": received list files response" << std::endl;
-    return r;
+    alive_ = false;
+    if (channel_) channel_->close();
+    return formatter_.makeAck();
 }
 
 Message SquidProtocol::syncStatus()
@@ -250,13 +246,13 @@ Message SquidProtocol::syncStatus()
 
 Message SquidProtocol::createFile(const std::string &filePath)
 {
-    std::cout << "file name: " + filePath << std::endl;
+    std::cout << nodeType_ + ": sending create file request: " + filePath << std::endl;
     sendFrame(formatter_.createFileFormat(filePath));
     Message ack;
     if (!waitForAck(ack, "create file"))
         return ack;
 
-    std::cout << nodeType_ + ": received create file response" << std::endl;
+    std::cout << nodeType_ + ": received create file ack" << std::endl;
     if (!sendFileAfterAck(filePath, ack))
         return formatter_.makeNack();
 
@@ -265,14 +261,13 @@ Message SquidProtocol::createFile(const std::string &filePath)
 
 Message SquidProtocol::createFile(const std::string &filePath, int version)
 {
-    std::cout << "file name: " + filePath << std::endl;
+    std::cout << nodeType_ + ": sending create file request: " + filePath << std::endl;
     sendFrame(formatter_.createFileFormat(filePath, version));
-    std::cout << nodeType_ + ": sent create file request" << std::endl;
     Message ack;
     if (!waitForAck(ack, "create file"))
         return ack;
 
-    std::cout << nodeType_ + ": received create file response" << std::endl;
+    std::cout << nodeType_ + ": received create file ack" << std::endl;
     if (!sendFileAfterAck(filePath, ack))
         return formatter_.makeNack();
 
@@ -281,14 +276,13 @@ Message SquidProtocol::createFile(const std::string &filePath, int version)
 
 Message SquidProtocol::createFile(const std::string &filePath, int version, const std::vector<uint8_t> &fileData)
 {
-    std::cout << "file name: " + filePath << std::endl;
+    std::cout << nodeType_ + ": sending create file request: " + filePath << std::endl;
     sendFrame(formatter_.createFileFormat(filePath, version));
-    std::cout << nodeType_ + ": sent create file request" << std::endl;
     Message ack;
     if (!waitForAck(ack, "create file"))
         return ack;
 
-    std::cout << nodeType_ + ": received create file response" << std::endl;
+    std::cout << nodeType_ + ": received create file ack" << std::endl;
     if (!sendFileAfterAck(fileData, ack))
         return formatter_.makeNack();
 
@@ -378,20 +372,25 @@ bool SquidProtocol::sendFileData(const std::vector<uint8_t> &fileData)
     return fileTransfer_.sendFile(*channel_, processName_, fileData);
 }
 
+// Push helpers use dedicated PUSH_* opcodes so the receiver can distinguish
+// them from request/response frames without a correlation ID.
 void SquidProtocol::pushCreateFile(const std::string &filePath, int version,
                                    const std::vector<uint8_t> &fileData)
 {
-    // Send header only — no ACK wait. The receiving client calls
-    // receiveFileData() immediately after seeing the CREATE_FILE opcode.
-    sendFrame(formatter_.createFileFormat(filePath, version));
+    sendFrame(formatter_.pushCreateFileFormat(filePath, version));
     sendFileData(fileData);
 }
 
 void SquidProtocol::pushUpdateFile(const std::string &filePath, int version,
                                    const std::vector<uint8_t> &fileData)
 {
-    sendFrame(formatter_.updateFileFormat(filePath, version));
+    sendFrame(formatter_.pushUpdateFileFormat(filePath, version));
     sendFileData(fileData);
+}
+
+void SquidProtocol::pushDeleteFile(const std::string &filePath)
+{
+    sendFrame(formatter_.pushDeleteFileFormat(filePath));
 }
 
 Message SquidProtocol::deleteFile(const std::string &filePath)
@@ -456,6 +455,10 @@ void SquidProtocol::response(const std::map<std::string, fs::file_time_type> &fi
     sendFrame(formatter_.responseFormat(filesLastWrite));
 }
 
+// requestDispatcher handles all opcodes that arrive as requests (i.e. the peer
+// is initiating an operation and expects a response from us).
+// PUSH_* opcodes must never reach this dispatcher — they are handled separately
+// by the client's handlePush() and have no response protocol.
 void SquidProtocol::requestDispatcher(const Message &message)
 {
     std::string path = message.getString(FieldID::FILE_PATH);
@@ -504,6 +507,14 @@ void SquidProtocol::requestDispatcher(const Message &message)
         response(true);
         break;
 
+    case Opcode::ACQUIRE_LOCK:
+        // Datanodes do not manage locks; the server handles this.
+        // If a datanode ever receives ACQUIRE_LOCK it simply ACKs to avoid
+        // leaving the sender blocked.
+        std::cerr << nodeType_ + ": unexpected ACQUIRE_LOCK on requestDispatcher\n";
+        response(false);
+        break;
+
     case Opcode::RELEASE_LOCK:
         response(true);
         break;
@@ -521,17 +532,33 @@ void SquidProtocol::requestDispatcher(const Message &message)
         this->response(nodeType_, processName_);
         break;
 
+    case Opcode::CONNECT_SERVER:
+        // A datanode or peer sending CONNECT_SERVER is handled at the session
+        // layer (handshake). If it arrives here something is wrong; NACK.
+        std::cerr << nodeType_ + ": unexpected CONNECT_SERVER on requestDispatcher\n";
+        response(false);
+        break;
+
+    case Opcode::CLOSE:
+        response(true);
+        alive_ = false;
+        if (channel_) channel_->close();
+        std::cout << nodeType_ + ": Connection closed" << std::endl;
+        break;
+
     case Opcode::RESPONSE:
-        std::cerr << "Connection lost, aborting operation" << std::endl;
+        // A RESPONSE arriving where a request was expected means the stream is
+        // out of sync. Mark dead so the session tears down cleanly.
+        std::cerr << nodeType_ + ": unexpected RESPONSE frame — connection out of sync, closing" << std::endl;
         alive_ = false;
         break;
 
-        case Opcode::CLOSE:
-            response(true);
-            if (channel_) channel_->close();
-            alive_ = false;
-            std::cout << nodeType_ + ": Connection closed" << std::endl;
-            break;
+    // PUSH_* opcodes: must not be dispatched as requests.
+    case Opcode::PUSH_CREATE_FILE:
+    case Opcode::PUSH_UPDATE_FILE:
+    case Opcode::PUSH_DELETE_FILE:
+        std::cerr << nodeType_ + ": PUSH opcode reached requestDispatcher — misrouted, ignoring\n";
+        break;
 
     default:
         std::cerr << nodeType_ + ": Unknown request: " + message.toString() << std::endl;
@@ -539,28 +566,22 @@ void SquidProtocol::requestDispatcher(const Message &message)
     }
 }
 
+// responseDispatcher is used when the local node is purely reactive (e.g. a
+// datanode whose read loop only receives requests from the server).
+// It no longer falls back to requestDispatcher for non-RESPONSE opcodes —
+// if anything other than RESPONSE or a known request arrives, it is logged.
 void SquidProtocol::responseDispatcher(const Message &message)
 {
-    if (message.opcode != Opcode::RESPONSE)
+    // PUSH_* opcodes should never reach a datanode; log and ignore.
+    if (message.opcode == Opcode::PUSH_CREATE_FILE ||
+        message.opcode == Opcode::PUSH_UPDATE_FILE ||
+        message.opcode == Opcode::PUSH_DELETE_FILE)
     {
-        requestDispatcher(message);
+        std::cerr << nodeType_ + ": PUSH opcode reached responseDispatcher — unexpected\n";
         return;
     }
 
-    bool ack = message.isAck();
-
-    if (!ack)
-        std::cerr << nodeType_ + ": Error in response " + message.toString() << std::endl;
-    else
-        std::cout << nodeType_ + ": Operation performed" << std::endl;
-
-    if (!ack) return;
-
-    if (message.findField(FieldID::IS_LOCKED))
-    {
-        if (!message.getBool(FieldID::IS_LOCKED))
-            std::cerr << nodeType_ + ": Lock refused" << std::endl;
-        else
-            std::cout << nodeType_ + ": Acquired lock successfully" << std::endl;
-    }
+    // For all other opcodes (requests from the server), delegate to the
+    // full request handler which will send the appropriate response.
+    requestDispatcher(message);
 }

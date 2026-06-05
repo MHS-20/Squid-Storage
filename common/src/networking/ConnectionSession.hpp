@@ -19,7 +19,6 @@
 #include "squidprotocol.hpp"
 
 class ConnectionSession
-
     : public std::enable_shared_from_this<ConnectionSession> {
 public:
   using RequestHandler =
@@ -37,6 +36,11 @@ public:
   void start(bool readLoop) {
     readLoop_ = readLoop;
     alive_ = true;
+    // ownerThreadId_ is set inside run() before any task can execute, but we
+    // need it visible before any external call() could block on future.get().
+    // The worker sets it as the very first thing, protected by the fact that
+    // call() from outside will only submit a task and block — it cannot run
+    // before ownerThreadId_ is written because the worker hasn't started yet.
     worker_ = std::thread([this]() { run(); });
   }
 
@@ -45,8 +49,15 @@ public:
     if (channel_)
       channel_->close();
     queueCv_.notify_all();
-    if (worker_.joinable())
-      worker_.join();
+    // If stop() is called from the worker thread itself (e.g. the destructor
+    // fires because the last shared_ptr was released inside a requestHandler
+    // callback), joining would deadlock. Detach so the thread cleans itself up.
+    if (worker_.joinable()) {
+      if (std::this_thread::get_id() == ownerThreadId_.load())
+        worker_.detach();
+      else
+        worker_.join();
+    }
   }
 
   ~ConnectionSession() { stop(); }
@@ -62,10 +73,13 @@ public:
   std::string toString() const { return protocol_.toString(); }
   int socketFd() const { return protocol_.socketFd(); }
 
+  // call() dispatches fn to the session worker thread and blocks until done.
+  // If already on the worker thread (e.g. inside a requestHandler callback),
+  // fn is called directly to avoid deadlock.
   template <typename Fn>
   auto call(Fn &&fn) -> std::invoke_result_t<Fn, SquidProtocol &> {
     using Result = std::invoke_result_t<Fn, SquidProtocol &>;
-    if (std::this_thread::get_id() == ownerThreadId_)
+    if (std::this_thread::get_id() == ownerThreadId_.load())
       return std::forward<Fn>(fn)(protocol_);
 
     auto task = std::make_shared<std::packaged_task<Result()>>(
@@ -81,6 +95,9 @@ public:
     return future.get();
   }
 
+  // post() enqueues fn for asynchronous execution on the worker thread.
+  // Use for fire-and-forget operations (e.g. server-initiated pushes).
+  // Captures fn by value — never capture caller stack variables by reference.
   template <typename Fn> void post(Fn &&fn) {
     {
       std::lock_guard<std::mutex> lock(queueMutex_);
@@ -91,11 +108,11 @@ public:
   }
 
   void responseDispatcher(const Message &msg) {
-  call([&](SquidProtocol &protocol) {
-    protocol.responseDispatcher(msg);
-    return 0;
-  });
-}
+    call([msg](SquidProtocol &protocol) {
+      protocol.responseDispatcher(msg);
+      return 0;
+    });
+  }
 
   Message identify() {
     return call([](SquidProtocol &protocol) { return protocol.identify(); });
@@ -107,74 +124,77 @@ public:
   Message closeConn() {
     return call([](SquidProtocol &protocol) { return protocol.closeConn(); });
   }
-  Message listFiles() {
-    return call([](SquidProtocol &protocol) { return protocol.listFiles(); });
-  }
   Message syncStatus() {
     return call([](SquidProtocol &protocol) { return protocol.syncStatus(); });
   }
 
   Message createFile(const std::string &filePath) {
-    return call(
-        [&](SquidProtocol &protocol) { return protocol.createFile(filePath); });
+    return call([filePath](SquidProtocol &protocol) {
+      return protocol.createFile(filePath);
+    });
   }
 
   Message createFile(const std::string &filePath, int version) {
-    return call([&](SquidProtocol &protocol) {
+    return call([filePath, version](SquidProtocol &protocol) {
       return protocol.createFile(filePath, version);
     });
   }
 
   Message createFile(const std::string &filePath, int version,
                      const std::vector<uint8_t> &fileData) {
-    return call([&](SquidProtocol &protocol) {
+    return call([filePath, version, fileData](SquidProtocol &protocol) {
       return protocol.createFile(filePath, version, fileData);
     });
   }
 
   Message readFile(const std::string &filePath) {
-    return call(
-        [&](SquidProtocol &protocol) { return protocol.readFile(filePath); });
+    return call([filePath](SquidProtocol &protocol) {
+      return protocol.readFile(filePath);
+    });
   }
 
   Message readFile(const std::string &filePath,
                    std::vector<uint8_t> &fileData) {
-    return call([&](SquidProtocol &protocol) {
+    // fileData is an out-parameter: capture by reference is safe here because
+    // call() blocks until the task completes, so the caller's stack is live.
+    return call([filePath, &fileData](SquidProtocol &protocol) {
       return protocol.readFile(filePath, fileData);
     });
   }
 
   Message updateFile(const std::string &filePath) {
-    return call(
-        [&](SquidProtocol &protocol) { return protocol.updateFile(filePath); });
+    return call([filePath](SquidProtocol &protocol) {
+      return protocol.updateFile(filePath);
+    });
   }
 
   Message updateFile(const std::string &filePath, int version) {
-    return call([&](SquidProtocol &protocol) {
+    return call([filePath, version](SquidProtocol &protocol) {
       return protocol.updateFile(filePath, version);
     });
   }
 
   Message updateFile(const std::string &filePath, int version,
                      const std::vector<uint8_t> &fileData) {
-    return call([&](SquidProtocol &protocol) {
+    return call([filePath, version, fileData](SquidProtocol &protocol) {
       return protocol.updateFile(filePath, version, fileData);
     });
   }
 
   Message deleteFile(const std::string &filePath) {
-    return call(
-        [&](SquidProtocol &protocol) { return protocol.deleteFile(filePath); });
+    return call([filePath](SquidProtocol &protocol) {
+      return protocol.deleteFile(filePath);
+    });
   }
 
   Message acquireLock(const std::string &filePath) {
-    return call([&](SquidProtocol &protocol) {
+    return call([filePath](SquidProtocol &protocol) {
       return protocol.acquireLock(filePath);
     });
   }
 
   Message releaseLock(const std::string &filePath) {
-    return call([&](SquidProtocol &protocol) {
+    return call([filePath](SquidProtocol &protocol) {
       return protocol.releaseLock(filePath);
     });
   }
@@ -184,64 +204,64 @@ public:
   }
 
   void response(bool isAck) {
-    call([&](SquidProtocol &protocol) {
+    call([isAck](SquidProtocol &protocol) {
       protocol.response(isAck);
       return 0;
     });
   }
   void response(int port) {
-    call([&](SquidProtocol &protocol) {
+    call([port](SquidProtocol &protocol) {
       protocol.response(port);
       return 0;
     });
   }
   void response(const std::string &ack) {
-    call([&](SquidProtocol &protocol) {
+    call([ack](SquidProtocol &protocol) {
       protocol.response(ack);
       return 0;
     });
   }
   void response(const std::string &nodeType, const std::string &processName) {
-    call([&](SquidProtocol &protocol) {
+    call([nodeType, processName](SquidProtocol &protocol) {
       protocol.response(nodeType, processName);
       return 0;
     });
   }
   void response(const std::map<std::string, int> &fileVersionMap) {
-    call([&](SquidProtocol &protocol) {
+    call([fileVersionMap](SquidProtocol &protocol) {
       protocol.response(fileVersionMap);
       return 0;
     });
   }
   void response(const std::map<std::string, long long> &fileTimeMap) {
-    call([&](SquidProtocol &protocol) {
+    call([fileTimeMap](SquidProtocol &protocol) {
       protocol.response(fileTimeMap);
       return 0;
     });
   }
   void
   response(const std::map<std::string, fs::file_time_type> &filesLastWrite) {
-    call([&](SquidProtocol &protocol) {
+    call([filesLastWrite](SquidProtocol &protocol) {
       protocol.response(filesLastWrite);
       return 0;
     });
   }
 
   bool sendFileData(const std::vector<uint8_t> &fileData) {
-    return call([&](SquidProtocol &protocol) {
+    return call([fileData](SquidProtocol &protocol) {
       return protocol.sendFileData(fileData);
     });
   }
 
   bool receiveFileData(std::vector<uint8_t> &fileData) {
-    return call([&](SquidProtocol &protocol) {
+    // Out-parameter: capture by reference is safe because call() blocks.
+    return call([&fileData](SquidProtocol &protocol) {
       return protocol.receiveFileData(fileData);
     });
   }
 
-  // Push helpers for server → client propagation. These send the header frame
-  // and file bytes without any ACK handshake, matching what the client's
-  // handlePush path expects when it calls receiveFileData() after the opcode.
+  // Push helpers — use PUSH_* opcodes so the receiver can distinguish them
+  // from request/response frames unambiguously.
   void pushCreateFile(const std::string &filePath, int version,
                       const std::vector<uint8_t> &fileData) {
     post([filePath, version, fileData](SquidProtocol &protocol) {
@@ -256,8 +276,17 @@ public:
     });
   }
 
+  void pushDeleteFile(const std::string &filePath) {
+    post([filePath](SquidProtocol &protocol) {
+      protocol.pushDeleteFile(filePath);
+    });
+  }
+
   void run() {
-    ownerThreadId_ = std::this_thread::get_id();
+    // Set ownerThreadId_ as the very first thing so that any call() arriving
+    // while the loop is already running takes the direct path correctly.
+    ownerThreadId_.store(std::this_thread::get_id());
+
     while (alive_ && protocol_.isAlive()) {
       drainQueue();
 
@@ -318,7 +347,8 @@ private:
   std::thread worker_;
   std::atomic<bool> alive_{false};
   bool readLoop_ = false;
-  std::thread::id ownerThreadId_;
+  // Stored atomically so call() can read it from any thread without a lock.
+  std::atomic<std::thread::id> ownerThreadId_;
   std::mutex queueMutex_;
   std::condition_variable queueCv_;
   std::queue<std::function<void(SquidProtocol &)>> tasks_;

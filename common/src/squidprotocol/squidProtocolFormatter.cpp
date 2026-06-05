@@ -39,7 +39,7 @@ std::string opcodeToString(Opcode op)
 {
     switch (op)
     {
-    case Opcode::CONNECT:       return "CONNECT";
+    case Opcode::CONNECT_SERVER: return "CONNECT_SERVER";
     case Opcode::IDENTIFY:      return "IDENTIFY";
     case Opcode::CLOSE:         return "CLOSE";
     case Opcode::HEARTBEAT:     return "HEARTBEAT";
@@ -50,6 +50,9 @@ std::string opcodeToString(Opcode op)
     case Opcode::DELETE_FILE:   return "DELETE_FILE";
     case Opcode::ACQUIRE_LOCK:  return "ACQUIRE_LOCK";
     case Opcode::RELEASE_LOCK:  return "RELEASE_LOCK";
+    case Opcode::PUSH_CREATE_FILE: return "PUSH_CREATE_FILE";
+    case Opcode::PUSH_UPDATE_FILE: return "PUSH_UPDATE_FILE";
+    case Opcode::PUSH_DELETE_FILE: return "PUSH_DELETE_FILE";
     case Opcode::RESPONSE:      return "RESPONSE";
     default:                    return "UNKNOWN";
     }
@@ -133,7 +136,7 @@ std::vector<uint8_t> SquidProtocolFormatter::closeFormat() const
 
 std::vector<uint8_t> SquidProtocolFormatter::connectServerFormat() const
 {
-    return buildFrame(Opcode::CONNECT, 0, {});
+    return buildFrame(Opcode::CONNECT_SERVER, 0, {});
 }
 
 std::vector<uint8_t> SquidProtocolFormatter::heartbeatFormat() const
@@ -188,6 +191,26 @@ std::vector<uint8_t> SquidProtocolFormatter::acquireLockFormat(const std::string
 std::vector<uint8_t> SquidProtocolFormatter::releaseLockFormat(const std::string &filePath) const
 {
     return buildFrame(Opcode::RELEASE_LOCK, 0, { fieldString(FieldID::FILE_PATH, filePath) });
+}
+
+std::vector<uint8_t> SquidProtocolFormatter::pushCreateFileFormat(const std::string &filePath, int version) const
+{
+    return buildFrame(Opcode::PUSH_CREATE_FILE, 0,
+        { fieldString(FieldID::FILE_PATH,    filePath),
+          fieldUint32(FieldID::FILE_VERSION, static_cast<uint32_t>(version)) });
+}
+
+std::vector<uint8_t> SquidProtocolFormatter::pushUpdateFileFormat(const std::string &filePath, int version) const
+{
+    return buildFrame(Opcode::PUSH_UPDATE_FILE, 0,
+        { fieldString(FieldID::FILE_PATH,    filePath),
+          fieldUint32(FieldID::FILE_VERSION, static_cast<uint32_t>(version)) });
+}
+
+std::vector<uint8_t> SquidProtocolFormatter::pushDeleteFileFormat(const std::string &filePath) const
+{
+    return buildFrame(Opcode::PUSH_DELETE_FILE, 0,
+        { fieldString(FieldID::FILE_PATH, filePath) });
 }
 
 std::vector<uint8_t> SquidProtocolFormatter::responseAck(bool isAck) const
@@ -285,6 +308,15 @@ Message SquidProtocolFormatter::makeNack() const
     m.opcode = Opcode::RESPONSE;
     m.flags  = FLAG_RESPONSE;
     m.fields.push_back(fieldBool(FieldID::ACK, false));
+    return m;
+}
+
+Message SquidProtocolFormatter::makeAck() const
+{
+    Message m;
+    m.opcode = Opcode::RESPONSE;
+    m.flags  = FLAG_RESPONSE;
+    m.fields.push_back(fieldBool(FieldID::ACK, true));
     return m;
 }
 

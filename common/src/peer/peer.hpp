@@ -23,6 +23,14 @@ public:
        std::string processName);
   virtual ~Peer();
 
+  // connectToServer performs the full handshake:
+  //   1. Connect TCP
+  //   2. Receive IDENTIFY from server
+  //   3. Send identity response
+  //   4. Receive ACK (server sends this to both CLIENTs and DATANODEs)
+  //   5. Build session and call onConnected()
+  // Subclasses should not override this unless they need a genuinely different
+  // transport; override onConnected() for post-connect setup instead.
   virtual void connectToServer();
   virtual void reconnect();
   virtual void disconnect();

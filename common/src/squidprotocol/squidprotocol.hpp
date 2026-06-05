@@ -41,7 +41,9 @@ public:
     virtual Message identify();
     virtual Message connectServer();
     virtual Message closeConn();
-    virtual Message listFiles();
+
+    // syncStatus() is the single operation for querying the file version map,
+    // used both server→datanode and client→server. listFiles() has been removed.
     virtual Message syncStatus();
 
     virtual Message createFile(const std::string &filePath);
@@ -57,13 +59,14 @@ public:
     bool receiveFileData(std::vector<uint8_t> &fileData);
     bool sendFileData(const std::vector<uint8_t> &fileData);
 
-    // Push helpers: send a header frame + file bytes with no ACK handshake.
-    // Use these when the server pushes a file to a passive receiver (client),
-    // as opposed to the request/response overloads above which expect ACKs.
+    // Push helpers: send a dedicated PUSH_* opcode frame + file bytes with no
+    // ACK handshake. The receiver distinguishes pushes from request/responses
+    // by opcode, so there is no ambiguity even if a client request is in-flight.
     void pushCreateFile(const std::string &filePath, int version,
                         const std::vector<uint8_t> &fileData);
     void pushUpdateFile(const std::string &filePath, int version,
                         const std::vector<uint8_t> &fileData);
+    void pushDeleteFile(const std::string &filePath);
 
     virtual Message acquireLock(const std::string &filePath);
     virtual Message releaseLock(const std::string &filePath);
