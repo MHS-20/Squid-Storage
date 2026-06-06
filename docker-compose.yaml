@@ -90,32 +90,32 @@ services:
       squid_network:
         ipv4_address: 172.20.0.12
 
-  mock_client:
-    image: archlinux:latest
-    environment:
-      HOME: /root
-      SQUID_STORAGE_ROOT: /root/SquidStorage
-    volumes:
-      - ./mockfiles/client:/root/SquidStorage
-      - ./build:/app/bin:ro
-      - ./config:/app/config:ro
-    working_dir: /root/SquidStorage
-    # arg: configPath  processName  (new config-path form added in client/src/main.cpp)
-    command: /app/bin/SquidStorageClient /app/config/cluster.conf MOCK_CLIENT_CONTAINER
-    depends_on:
-      - datanode1
-      - datanode2
-    networks:
-      squid_network:
-        ipv4_address: 172.20.0.20
-
+  # mock_client:
+  #   image: archlinux:latest
+  #   environment:
+  #     HOME: /root
+  #     SQUID_STORAGE_ROOT: /root/SquidStorage
+  #   volumes:
+  #     - ./mockfiles/client:/root/SquidStorage
+  #     - ./build:/app/bin:ro
+  #     - ./config:/app/config:ro
+  #   working_dir: /root/SquidStorage
+  #   # arg: configPath  processName  (new config-path form added in client/src/main.cpp)
+  #   command: /app/bin/SquidStorageClient /app/config/cluster.conf MOCK_CLIENT_CONTAINER
+  #   depends_on:
+  #     - datanode1
+  #     - datanode2
+  #   networks:
+  #     squid_network:
+  #       ipv4_address: 172.20.0.20
+  #
   fuse_client:
     image: archlinux:latest
     environment:
       HOME: /root
       SQUID_STORAGE_ROOT: /root/SquidStorage
     volumes:
-      - ./mockfiles/fuse_client:/root/SquidStorage
+      - ./mockfiles/client:/root/SquidStorage
       - ./build:/app/bin:ro
       - ./config:/app/config:ro
       - ./scripts:/app/scripts:ro
@@ -125,8 +125,8 @@ services:
       - SYS_ADMIN
     security_opt:
       - apparmor:unconfined
-    command: ["bash", "/app/scripts/fuse_test.sh",
-              "/app/config/cluster.conf", "FUSE_CLIENT", "/mnt/squid"]
+    # command: ["bash", "/app/scripts/fuse_test.sh", "/app/config/cluster.conf", "FUSE_CLIENT", "/mnt/squid"]
+    entrypoint: ["sh", "-c", "pacman -Sy --noconfirm fuse3 && mkdir -p /mnt/squid && exec /app/bin/SquidFSMount /mnt/squid /app/config/cluster.conf FUSE_CLIENT"]
     depends_on:
       - datanode1
       - datanode2

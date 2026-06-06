@@ -98,7 +98,7 @@ std::string SquidFS::rel(const char *path) {
 }
 
 std::map<std::string, int> SquidFS::localVersionMap() const {
-  return FileManager().getFileVersionMap(FileManager::storageRoot().string());
+  return client_.getVersionMap(); // pure in-memory, no disk read
 }
 
 std::set<std::string> SquidFS::listChildren(const std::string &dirRel) const {
@@ -186,7 +186,7 @@ int SquidFS::op_getattr(const char *path, struct stat *st,
   }
 
   // Check the on-disk version map for a known file.
-  int localVersion = client_.fileManager_.getFileVersion(r);
+  int localVersion = client_.getFileVersion(r);
   if (localVersion < 0)
     return -ENOENT;
 

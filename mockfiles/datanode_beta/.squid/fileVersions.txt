@@ -1,2 +1,2 @@
-hello.txt 1
+hello.txt 3
 testfile.txt 1
