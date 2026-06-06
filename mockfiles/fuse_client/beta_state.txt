@@ -1,0 +1,2 @@
+DataNode Beta workspace starts here.
+Replicated files should be written into this folder by the server.

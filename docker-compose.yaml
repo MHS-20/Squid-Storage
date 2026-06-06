@@ -109,6 +109,31 @@ services:
       squid_network:
         ipv4_address: 172.20.0.20
 
+  fuse_client:
+    image: archlinux:latest
+    environment:
+      HOME: /root
+      SQUID_STORAGE_ROOT: /root/SquidStorage
+    volumes:
+      - ./mockfiles/fuse_client:/root/SquidStorage
+      - ./build:/app/bin:ro
+      - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
+    devices:
+      - /dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    command: ["bash", "/app/scripts/fuse_test.sh",
+              "/app/config/cluster.conf", "FUSE_CLIENT", "/mnt/squid"]
+    depends_on:
+      - datanode1
+      - datanode2
+    networks:
+      squid_network:
+        ipv4_address: 172.20.0.21
+
 networks:
   squid_network:
     driver: bridge

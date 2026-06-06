@@ -63,3 +63,27 @@ add_executable(DataNode
     datanode/src/main.cpp
     ${COMMON_SOURCES}
 )
+
+# === EXECUTABLE: SquidFS FUSE mount ===
+pkg_check_modules(FUSE3 REQUIRED fuse3)
+
+add_executable(SquidFSMount
+    client/src/squidfs_main.cpp
+    client/src/squidfs.cpp
+    client/src/client.cpp
+    ${COMMON_SOURCES}
+)
+
+target_include_directories(SquidFSMount PRIVATE
+    ${FUSE3_INCLUDE_DIRS}
+)
+
+target_compile_options(SquidFSMount PRIVATE
+    ${FUSE3_CFLAGS_OTHER}
+    -D_FILE_OFFSET_BITS=64
+)
+
+target_link_libraries(SquidFSMount PRIVATE
+    ${FUSE3_LIBRARIES}
+    pthread
+)

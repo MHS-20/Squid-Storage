@@ -58,31 +58,21 @@ int main(int argc, char **argv) {
                   << data.size() << " bytes)\n";
       });
 
-  // connectToServer() performs the handshake and starts the session worker.
-  // The 500ms sleep below gives the worker time to drain the server's initial
-  // PUSH_CREATE_FILE burst before we send any requests. syncStatus() (called
-  // inside Client::run() or explicitly here) reconciles offline-only files.
   client.connectToServer();
 
-  // Let the session worker drain the initial push burst from the server.
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-  // Reconcile local version map against the server now that pushes are done.
   checkResponse("syncStatus (startup)", client.syncStatus());
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
   std::vector<uint8_t> fileData = {'h', 'e', 'l', 'l', 'o'};
 
-  // Pass version=0 — the server assigns the authoritative version and echoes
-  // it back in the ACK.  Client::createFile() records it in the local map.
   checkResponse("createFile", client.createFile(TEST_FILE, fileData));
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
   checkResponse("acquireLock", client.acquireLock(TEST_FILE));
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-  // Pass version=0 again — Client::updateFile() will use the locally stored
-  // version when sending, and will update the map from the ACK on success.
   std::vector<uint8_t> updateData = {'w', 'o', 'r', 'l', 'd'};
   checkResponse("updateFile", client.updateFile(TEST_FILE, updateData));
   std::this_thread::sleep_for(std::chrono::milliseconds(500));

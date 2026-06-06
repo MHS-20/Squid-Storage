@@ -16,6 +16,8 @@
 #define SERVER_PORT 12345
 
 class Peer {
+  friend class SquidFS;
+
 public:
   Peer();
   Peer(std::string nodeType, std::string processName);
