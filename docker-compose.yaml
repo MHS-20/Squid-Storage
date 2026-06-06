@@ -134,6 +134,15 @@ services:
       squid_network:
         ipv4_address: 172.20.0.21
 
+  chaos:
+    image: ghcr.io/alexei-led/pumba:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      --random --interval 15s
+      kill --signal SIGKILL
+      "re2:(server|datanode)_primary"
+
 networks:
   squid_network:
     driver: bridge

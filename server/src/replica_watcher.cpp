@@ -163,7 +163,6 @@ void ReplicaWatcher::watchLoop() {
 }
 
 // ── Receive loop (standby mode)
-// ───────────────────────────────────────────────
 
 bool ReplicaWatcher::receiveLoop(INetworkChannel &channel, FileManager &fm,
                                  const string &primaryName) {
@@ -259,7 +258,6 @@ bool ReplicaWatcher::receiveLoop(INetworkChannel &channel, FileManager &fm,
 }
 
 // ── Apply snapshot / delta
-// ────────────────────────────────────────────────────
 
 void ReplicaWatcher::applySnap(const Message &msg) {
   uint32_t epoch = msg.getUint32(FieldID::EPOCH, 0);
@@ -328,25 +326,34 @@ void ReplicaWatcher::applyDelta(const Message &msg) {
 }
 
 // ── Promotion logic
-// ───────────────────────────────────────────────────────────
 
 bool ReplicaWatcher::allHigherPriorityDown() const {
   auto higher = config_.higherPriorityThan(myName_);
   if (higher.empty())
-    return true; // we are highest priority
+    return true;
 
   for (const auto &s : higher) {
+    cerr << "[ReplicaWatcher:" << myName_ << "]: probing " << s.name << " at "
+         << s.ip << ":" << s.port << "\n";
+    bool reachable = false;
     for (int attempt = 0; attempt < config_.promotion_probe_attempts;
          ++attempt) {
       auto ch = tryConnect(s, 1, 0);
+      cerr << "[ReplicaWatcher:" << myName_ << "]: probe attempt "
+           << attempt + 1 << " -> ch=" << (ch ? "CONNECTED" : "null") << "\n";
       if (ch) {
         ch->close();
-        // At least one higher-priority server is reachable.
-        return false;
+        reachable = true;
+        break;
       }
       this_thread::sleep_for(milliseconds(config_.promotion_probe_delay_ms));
     }
+    cerr << "[ReplicaWatcher:" << myName_ << "]: " << s.name
+         << " reachable=" << reachable << "\n";
+    if (reachable)
+      return false;
   }
+  cerr << "[ReplicaWatcher:" << myName_ << "]: all higher-priority DOWN\n";
   return true;
 }
 
@@ -371,14 +378,12 @@ void ReplicaWatcher::promote() {
 }
 
 // ── TCP helpers
-// ───────────────────────────────────────────────────────────────
 
 shared_ptr<INetworkChannel> ReplicaWatcher::tryConnect(const ServerEntry &entry,
                                                        int attempts,
                                                        int delayMs) const {
   for (int i = 0; i < attempts; ++i) {
     try {
-      // Timeout of 1 second per attempt — we don't want to block long.
       auto ch =
           make_shared<TCPConnectorChannel>(entry.ip.c_str(), entry.port, 1, 1);
       if (ch->isOpen())
