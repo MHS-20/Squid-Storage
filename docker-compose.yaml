@@ -139,7 +139,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: >
-      --random --interval 15s
+      --random --interval 30s
       kill --signal SIGKILL
       "re2:(server|datanode)_primary"
 
