@@ -92,7 +92,7 @@ private:
 
     // Run the standby receive loop against a connected primary channel.
     // Returns true if the primary gracefully disconnected, false if it timed out.
-    bool receiveLoop(INetworkChannel &channel,
+    bool receiveLoop(std::shared_ptr<INetworkChannel> channel,
                      FileManager &fm,
                      const std::string &primaryName);
 

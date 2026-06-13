@@ -61,22 +61,18 @@ bool SquidProtocol::handleRecvError(ssize_t bytes) {
   return true;
 }
 
-void SquidProtocol::sendFrame(const std::vector<uint8_t> &frame) {
-  // Stamp the current outbound sequence number before writing to the wire,
-  // then advance the counter. The formatter leaves bytes [5..8] as zero
-  // placeholders so we can patch them here without copying the frame.
-  std::vector<uint8_t> stamped = frame;
-  SquidProtocolFormatter::stampSeq(stamped, nextSendSeq_++);
+void SquidProtocol::sendFrame(std::vector<uint8_t> frame) {
+  SquidProtocolFormatter::stampSeq(frame, nextSendSeq_++);
 
   size_t total = 0;
-  while (total < stamped.size()) {
+  while (total < frame.size()) {
     if (!channel_) {
       alive_ = false;
       return;
     }
 
     ssize_t sent =
-        channel_->writeBytes(stamped.data() + total, stamped.size() - total);
+        channel_->writeBytes(frame.data() + total, frame.size() - total);
     if (sent <= 0) {
       alive_ = false;
       return;
@@ -276,9 +272,39 @@ Message SquidProtocol::closeConn() {
 Message SquidProtocol::syncStatus() {
   std::cout << nodeType_ + ": sending sync status request" << std::endl;
   sendFrame(formatter_.syncStatusFormat());
-  Message response = receiveAndParse();
-  std::cout << nodeType_ + ": received sync status response" << std::endl;
-  return response;
+  // The server may send PUSH frames (PUSH_CREATE_FILE, PUSH_UPDATE_FILE,
+  // PUSH_DELETE_FILE) or HEARTBEAT before responding to the sync status
+  // request. Loop until we see an actual RESPONSE/ACK frame, consuming
+  // intervening frames and their trailing file data.
+  while (true) {
+    Message msg = receiveAndParse();
+    if (msg.isResponse() || msg.isAck()) {
+      std::cout << nodeType_ + ": received sync status response" << std::endl;
+      return msg;
+    }
+    switch (msg.opcode) {
+    case Opcode::PUSH_CREATE_FILE:
+    case Opcode::PUSH_UPDATE_FILE: {
+      std::vector<uint8_t> data;
+      receiveFileData(data);
+      break;
+    }
+    case Opcode::PUSH_DELETE_FILE:
+      break;
+    case Opcode::HEARTBEAT:
+      // Acknowledge the heartbeat so the server doesn't time us out.
+      response(true);
+      break;
+    case Opcode::CLOSE:
+      alive_ = false;
+      return msg;
+    default:
+      std::cerr << nodeType_ + ": unexpected frame during syncStatus: "
+                << msg.toString() << std::endl;
+      alive_ = false;
+      return msg;
+    }
+  }
 }
 
 Message SquidProtocol::createFile(const std::string &filePath) {

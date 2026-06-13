@@ -178,3 +178,34 @@ TEST_F(ClusterConfigTest, InlineComment) {
     ASSERT_EQ(cfg.servers.size(), 1u);
     EXPECT_EQ(cfg.servers[0].port, 5);
 }
+
+TEST_F(ClusterConfigTest, InlineHashComment) {
+    writeConfig(
+        "[servers]\n"
+        "s = 1.2.3.4:5 # primary server\n"
+    );
+    auto cfg = ClusterConfig::fromFile(configPath_);
+    ASSERT_EQ(cfg.servers.size(), 1u);
+    EXPECT_EQ(cfg.servers[0].port, 5);
+}
+
+TEST_F(ClusterConfigTest, SemicolonInValuePreserved) {
+    writeConfig(
+        "[replication]\n"
+        "reconnect_attempts = 3 ; this is fine\n"
+    );
+    auto cfg = ClusterConfig::fromFile(configPath_);
+    EXPECT_EQ(cfg.reconnect_attempts, 3);
+}
+
+TEST_F(ClusterConfigTest, ReplicationFactorInServerSection) {
+    // replication_factor in [servers] section should be ignored (it's only
+    // parsed in [replication]), so the default applies.
+    writeConfig(
+        "[servers]\n"
+        "s = 1.2.3.4:5\n"
+        "replication_factor = 9\n"
+    );
+    auto cfg = ClusterConfig::fromFile(configPath_);
+    EXPECT_EQ(cfg.replication_factor, 2);
+}

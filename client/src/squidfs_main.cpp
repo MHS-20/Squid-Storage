@@ -29,25 +29,30 @@ int main(int argc, char **argv) {
     // Config-file form: mountpoint  cluster.conf  [processName]
     try {
       ClusterConfig cfg = ClusterConfig::fromFile(arg2);
-      if (!cfg.servers.empty()) {
-        serverIp = cfg.servers[0].ip;
-        serverPort = cfg.servers[0].port;
-      }
+      if (argc > 3)
+        processName = argv[3];
+      std::cout << "[squidfs_main]: connecting via cluster config as "
+                << processName << "\n";
+      Client client(processName);
+      client.connectWithFailover(cfg);
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      client.syncStatus();
+      SquidFS fs(mountpoint, client);
+      int rc = fs.run();
+      std::cout << "[squidfs_main]: unmounted, rc=" << rc << "\n";
+      client.disconnect();
+      return rc;
     } catch (const std::exception &ex) {
-      std::cerr << "[squidfs_main]: failed to load config '" << arg2
-                << "': " << ex.what() << "\n";
+      std::cerr << "[squidfs_main]: " << ex.what() << "\n";
       return 1;
     }
-    if (argc > 3)
-      processName = argv[3];
-  } else {
-    // Raw form: mountpoint  server_ip  [port [processName]]
-    serverIp = arg2;
-    if (argc > 3)
-      serverPort = std::atoi(argv[3]);
-    if (argc > 4)
-      processName = argv[4];
   }
+  // Raw form: mountpoint  server_ip  [port [processName]]
+  serverIp = arg2;
+  if (argc > 3)
+    serverPort = std::atoi(argv[3]);
+  if (argc > 4)
+    processName = argv[4];
 
   std::cout << "[squidfs_main]: connecting to " << serverIp << ":" << serverPort
             << " as " << processName << "\n";

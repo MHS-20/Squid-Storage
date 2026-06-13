@@ -135,8 +135,15 @@ struct ClusterConfig {
             ltrim(value); rtrim(value);
 
             // Strip inline comments.
-            auto semi = value.find(';');
-            if (semi != std::string::npos) { value = value.substr(0, semi); rtrim(value); }
+            // Only treat ';' or '#' as comment delimiters when preceded by
+            // whitespace, so legitimate values containing these chars work.
+            for (const char *marker : { " ;", " #" }) {
+                auto pos = value.rfind(marker);
+                if (pos != std::string::npos) {
+                    value = value.substr(0, pos);
+                    rtrim(value);
+                }
+            }
 
             if (currentSection == "servers") {
                 // value is "ip:port"

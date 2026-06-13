@@ -39,7 +39,7 @@ public:
     // Useful for diagnostics and for matching responses to requests.
     uint32_t getLastSeq() const { return lastDeliveredSeq_; }
 
-    void sendFrame(const std::vector<uint8_t> &frame);
+    void sendFrame(std::vector<uint8_t> frame);
     std::vector<uint8_t> receiveFrame();
     virtual Message receiveAndParse();
 

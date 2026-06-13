@@ -18,6 +18,9 @@ public:
 
   Client(const std::string &serverIp, int serverPort,
          const std::string &processName);
+
+  // For use with connectWithFailover — no single-server target needed.
+  explicit Client(const std::string &processName);
   ~Client() override;
 
   void run() override;
@@ -41,6 +44,10 @@ public:
 
 protected:
   ConnectionSession::RequestHandler makeRequestHandler() override;
+
+  // Attempts reconnect + syncStatus when connection is dead.
+  // Returns true if alive after the attempt.
+  bool ensureConnected();
 
 private:
   PushHandler pushHandler_;

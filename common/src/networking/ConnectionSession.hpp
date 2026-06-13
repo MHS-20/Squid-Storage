@@ -144,7 +144,9 @@ public:
 
   Message createFile(const std::string &filePath, int version,
                      const std::vector<uint8_t> &fileData) {
-    return call([filePath, version, fileData](SquidProtocol &protocol) {
+    // fileData is an in-parameter: capture by reference is safe because
+    // call() blocks until the task completes, so the caller's stack is live.
+    return call([filePath, version, &fileData](SquidProtocol &protocol) {
       return protocol.createFile(filePath, version, fileData);
     });
   }
@@ -172,7 +174,9 @@ public:
 
   Message updateFile(const std::string &filePath, int version,
                      const std::vector<uint8_t> &fileData) {
-    return call([filePath, version, fileData](SquidProtocol &protocol) {
+    // fileData is an in-parameter: capture by reference is safe because
+    // call() blocks until the task completes, so the caller's stack is live.
+    return call([filePath, version, &fileData](SquidProtocol &protocol) {
       return protocol.updateFile(filePath, version, fileData);
     });
   }

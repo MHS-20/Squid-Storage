@@ -5,6 +5,9 @@
 #include <iostream>
 #include <string>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "filemanager.hpp"
 
 namespace fs = std::filesystem;
@@ -43,7 +46,11 @@ public:
                     return;
                 }
                 out << epoch << "\n";
+                out.flush();
             }
+            // fsync before rename to ensure data is on stable storage.
+            int fd = ::open(tmp.c_str(), O_RDONLY);
+            if (fd >= 0) { ::fsync(fd); ::close(fd); }
             fs::rename(tmp, p);
         } catch (const std::exception &e) {
             std::cerr << "[EpochStore]: save failed: " << e.what() << "\n";

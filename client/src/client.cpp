@@ -6,6 +6,9 @@ Client::Client(const std::string &serverIp, int serverPort,
                const std::string &processName)
     : Peer(serverIp, serverPort, "CLIENT", processName) {}
 
+Client::Client(const std::string &processName)
+    : Peer("CLIENT", processName) {}
+
 Client::~Client() { disconnect(); }
 
 void Client::setPushHandler(PushHandler handler) {
@@ -17,6 +20,24 @@ void Client::run() {
   syncStatus();
   while (isAlive())
     std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
+// ── Reconnect helper
+
+bool Client::ensureConnected() {
+  if (isAlive())
+    return true;
+  try {
+    reconnect();
+  } catch (const std::exception &e) {
+    std::cerr << processName_ << ": reconnect failed: " << e.what() << "\n";
+    return false;
+  }
+  if (!isAlive())
+    return false;
+  // Refresh version map from the new server.
+  syncStatus();
+  return true;
 }
 
 // ── Version map
@@ -120,7 +141,7 @@ void Client::handlePush(ConnectionSession &session, const Message &message) {
 
 Message Client::createFile(const std::string &filePath,
                            const std::vector<uint8_t> &data, int version) {
-  if (!isAlive())
+  if (!ensureConnected())
     return {};
   Message ack = session_->call([&](SquidProtocol &proto) {
     return proto.createFile(filePath, version, data);
@@ -131,7 +152,7 @@ Message Client::createFile(const std::string &filePath,
 
 Message Client::readFile(const std::string &filePath,
                          std::vector<uint8_t> &dataOut) {
-  if (!isAlive())
+  if (!ensureConnected())
     return {};
   Message ack = session_->call(
       [&](SquidProtocol &proto) { return proto.readFile(filePath, dataOut); });
@@ -141,7 +162,7 @@ Message Client::readFile(const std::string &filePath,
 
 Message Client::updateFile(const std::string &filePath,
                            const std::vector<uint8_t> &data, int version) {
-  if (!isAlive())
+  if (!ensureConnected())
     return {};
   Message ack = session_->call([&](SquidProtocol &proto) {
     return proto.updateFile(filePath, version, data);
@@ -151,7 +172,7 @@ Message Client::updateFile(const std::string &filePath,
 }
 
 Message Client::deleteFile(const std::string &filePath) {
-  if (!isAlive())
+  if (!ensureConnected())
     return {};
   Message ack = session_->call(
       [&](SquidProtocol &proto) { return proto.deleteFile(filePath); });
@@ -161,14 +182,14 @@ Message Client::deleteFile(const std::string &filePath) {
 }
 
 Message Client::acquireLock(const std::string &filePath) {
-  if (!isAlive())
+  if (!ensureConnected())
     return {};
   return session_->call(
       [&](SquidProtocol &proto) { return proto.acquireLock(filePath); });
 }
 
 Message Client::releaseLock(const std::string &filePath) {
-  if (!isAlive())
+  if (!ensureConnected())
     return {};
   return session_->call(
       [&](SquidProtocol &proto) { return proto.releaseLock(filePath); });

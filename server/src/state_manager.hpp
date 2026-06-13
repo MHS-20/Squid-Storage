@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "filemanager.hpp"
 
 namespace fs = std::filesystem;
@@ -132,7 +135,11 @@ private:
           return;
         }
         fn(out);
+        out.flush();
       }
+      // fsync before rename to ensure data is on stable storage.
+      int fd = ::open(tmp.c_str(), O_RDONLY);
+      if (fd >= 0) { ::fsync(fd); ::close(fd); }
       fs::rename(tmp, dst);
     } catch (const std::exception &e) {
       std::cerr << "[StateManager]: atomicWrite failed: " << e.what() << '\n';

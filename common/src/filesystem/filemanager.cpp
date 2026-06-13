@@ -1,5 +1,7 @@
 #include "filemanager.hpp"
 #include <algorithm>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace {
 bool isRuntimeFile(const fs::path &path)
@@ -143,6 +145,8 @@ bool FileManager::deleteFileAndVersion(std::string path) {
       newVersionFile << line << std::endl;
     }
     newVersionFile.close();
+    int fd = ::open(versionFilePath().c_str(), O_RDONLY);
+    if (fd >= 0) { ::fsync(fd); ::close(fd); }
     return true;
   }
   return false;
@@ -238,6 +242,8 @@ bool FileManager::setFileVersion(std::string path, int version) {
     newVersionFile << line << std::endl;
   }
   newVersionFile.close();
+  int fd = ::open(versionFilePath().c_str(), O_RDONLY);
+  if (fd >= 0) { ::fsync(fd); ::close(fd); }
 
   return true;
 }

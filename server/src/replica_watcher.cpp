@@ -1,6 +1,7 @@
 #include "replica_watcher.hpp"
 
 #include <chrono>
+#include <future>
 #include <iostream>
 #include <thread>
 
@@ -145,7 +146,7 @@ void ReplicaWatcher::watchLoop() {
     // we re-wrap the channel for the long-lived receive loop. This avoids
     // seq-number state leaking across the two uses.
 
-    bool timedOut = receiveLoop(*ch, fileManager_, followTarget);
+    bool timedOut = receiveLoop(ch, fileManager_, followTarget);
     ch->close();
 
     if (timedOut) {
@@ -164,13 +165,11 @@ void ReplicaWatcher::watchLoop() {
 
 // ── Receive loop (standby mode)
 
-bool ReplicaWatcher::receiveLoop(INetworkChannel &channel, FileManager &fm,
-                                 const string &primaryName) {
+bool ReplicaWatcher::receiveLoop(std::shared_ptr<INetworkChannel> channel,
+                                 FileManager &fm, const string &primaryName) {
   // We read frames directly from the channel using a fresh SquidProtocol so
   // the seq-number state is clean for this connection.
-  SquidProtocol proto(fm,
-                      std::shared_ptr<INetworkChannel>(&channel, [](auto *) {}),
-                      "STANDBY", myName_);
+  SquidProtocol proto(fm, channel, "STANDBY", myName_);
 
   // Heartbeat deadline: updated every time we receive a LEADER_HB.
   auto deadline =
@@ -179,7 +178,7 @@ bool ReplicaWatcher::receiveLoop(INetworkChannel &channel, FileManager &fm,
   while (running_ && role_.load() == Role::STANDBY) {
     // Poll with a short timeout so we can check the heartbeat deadline.
     // We use select() on the raw socket.
-    int fd = channel.getSocket();
+    int fd = channel->getSocket();
     if (fd < 0)
       return true;
 
@@ -332,28 +331,25 @@ bool ReplicaWatcher::allHigherPriorityDown() const {
   if (higher.empty())
     return true;
 
+  // Probe higher-priority servers in parallel to minimize failover latency.
+  vector<future<bool>> futures;
   for (const auto &s : higher) {
-    cerr << "[ReplicaWatcher:" << myName_ << "]: probing " << s.name << " at "
-         << s.ip << ":" << s.port << "\n";
-    bool reachable = false;
-    for (int attempt = 0; attempt < config_.promotion_probe_attempts;
-         ++attempt) {
-      auto ch = tryConnect(s, 1, 0);
-      cerr << "[ReplicaWatcher:" << myName_ << "]: probe attempt "
-           << attempt + 1 << " -> ch=" << (ch ? "CONNECTED" : "null") << "\n";
-      if (ch) {
-        ch->close();
-        reachable = true;
-        break;
+    futures.push_back(async(launch::async, [&s, this]() {
+      for (int attempt = 0; attempt < config_.promotion_probe_attempts;
+           ++attempt) {
+        auto ch = tryConnect(s, 1, 0);
+        if (ch) {
+          ch->close();
+          return true; // reachable
+        }
+        this_thread::sleep_for(milliseconds(config_.promotion_probe_delay_ms));
       }
-      this_thread::sleep_for(milliseconds(config_.promotion_probe_delay_ms));
-    }
-    cerr << "[ReplicaWatcher:" << myName_ << "]: " << s.name
-         << " reachable=" << reachable << "\n";
-    if (reachable)
-      return false;
+      return false; // unreachable
+    }));
   }
-  cerr << "[ReplicaWatcher:" << myName_ << "]: all higher-priority DOWN\n";
+  for (auto &f : futures)
+    if (f.get())
+      return false; // at least one higher-priority server is reachable
   return true;
 }
 

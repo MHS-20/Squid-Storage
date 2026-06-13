@@ -31,7 +31,7 @@ run-datanode: build
 	./$(BUILD_DIR)/$(DN_TARGET)
 
 test: build
-	./$(BUILD_DIR)/SquidStorageTests
+	./$(BUILD_DIR)/tests/SquidStorageTests
 
 reset-cluster:
 	scripts/reset_cluster.sh

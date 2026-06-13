@@ -2,6 +2,8 @@
 #include "filemanager.hpp"
 #include <algorithm>
 #include <filesystem>
+#include <fcntl.h>
+#include <unistd.h>
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -184,8 +186,12 @@ bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename,
 
     cout << rolename + " File " + outputpath + " received \n";
     outfile.close();
+    // fsync the received file to stable storage.
+    int fd = ::open(fullPath.c_str(), O_RDONLY);
+    if (fd >= 0) { ::fsync(fd); ::close(fd); }
     return true;
-}
+  }
+
 
 bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename, vector<uint8_t> &data)
 {
