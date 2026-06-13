@@ -2,8 +2,8 @@
 main
 AGENTS.md
 
-# mockfiles/*
-# .squid/
+mockfiles/*
+.squid/
 
 vcpkg_installed/
 .vcpkg/

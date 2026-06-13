@@ -28,10 +28,14 @@ FileManager::FileManager() {
 }
 
 void FileManager::setFileMap(std::map<std::string, FileLock> fileMap) {
+  std::lock_guard<std::mutex> lk(mutex_);
   this->fileMap = fileMap;
 }
 
-std::map<std::string, FileLock> FileManager::getFileMap() { return fileMap; }
+std::map<std::string, FileLock> FileManager::getFileMap() {
+  std::lock_guard<std::mutex> lk(mutex_);
+  return fileMap;
+}
 
 std::vector<std::string> FileManager::getFiles(std::string path) {
   std::vector<std::string> files;
@@ -248,12 +252,18 @@ bool FileManager::setFileVersion(std::string path, int version) {
   return true;
 }
 
-// used by client
-void FileManager::setFileLock(FileLock fileLock) { this->fileLock = fileLock; }
+void FileManager::setFileLock(FileLock fileLock) {
+  std::lock_guard<std::mutex> lk(mutex_);
+  this->fileLock = fileLock;
+}
 
-FileLock &FileManager::getFileLock() { return this->fileLock; }
+FileLock &FileManager::getFileLock() {
+  std::lock_guard<std::mutex> lk(mutex_);
+  return this->fileLock;
+}
 
 void FileManager::updateFileMap() {
+  std::lock_guard<std::mutex> lk(mutex_);
   std::vector<std::string> entries = getFiles(storageRoot().string());
   for (auto entry : entries) {
     if (fileMap.find(entry) == fileMap.end())

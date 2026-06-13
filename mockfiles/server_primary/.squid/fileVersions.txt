@@ -1,2 +1,0 @@
-data/f.txt 1
-fresh.txt 1

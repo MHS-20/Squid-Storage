@@ -124,5 +124,5 @@ private:
 
   std::vector<std::string> pickDataNodes(size_t count);
 
-  size_t roundRobinCursor_ = 0;
+  std::atomic<size_t> roundRobinCursor_{0};
 };

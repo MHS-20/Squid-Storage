@@ -1,12 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <map>
 #include <set>
 #include <filesystem>
-#include <cstdint>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <signal.h>
@@ -18,6 +18,10 @@
 #include "squidProtocolFormatter.hpp"
 
 namespace fs = std::filesystem;
+
+// Maximum allowed payload length for a single frame (16 MiB).
+// Prevents remote-triggered OOM from a crafted oversized payloadLen.
+static constexpr uint32_t MAX_PAYLOAD_SIZE = 16 * 1024 * 1024;
 
 class SquidProtocol
 {

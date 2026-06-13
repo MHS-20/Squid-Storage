@@ -4,6 +4,7 @@
 #include <string>
 #include <fstream>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <filesystem>
 #include <cstdlib>
@@ -85,6 +86,7 @@ private:
     void updateFileMap();
     void createFileVersionFile();
 
+    mutable std::mutex mutex_;
     std::map<std::string, FileLock> fileMap;
     FileLock fileLock;
 };

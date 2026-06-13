@@ -483,10 +483,12 @@ vector<string> ReplicationManager::pickDataNodes(size_t count) {
   if (nodes.empty())
     return selected;
 
-  roundRobinCursor_ %= nodes.size();
+  size_t cursor = roundRobinCursor_.load(std::memory_order_relaxed);
+  cursor %= nodes.size();
   for (size_t i = 0; i < count && i < nodes.size(); ++i)
-    selected.push_back(nodes[(roundRobinCursor_ + i) % nodes.size()]);
+    selected.push_back(nodes[(cursor + i) % nodes.size()]);
 
-  roundRobinCursor_ = (roundRobinCursor_ + count) % nodes.size();
+  roundRobinCursor_.store((cursor + count) % nodes.size(),
+                           std::memory_order_relaxed);
   return selected;
 }

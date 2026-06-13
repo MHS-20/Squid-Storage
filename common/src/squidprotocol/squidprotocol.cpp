@@ -119,6 +119,12 @@ std::vector<uint8_t> SquidProtocol::receiveFrame() {
     }
   }
 
+  if (payloadLen > MAX_PAYLOAD_SIZE) {
+    alive_.store(false, std::memory_order_release);
+    std::cerr << nodeType_ + ": oversized frame rejected (payloadLen="
+              << payloadLen << ")\n";
+    return {};
+  }
   if (payloadLen > 0) {
     size_t before = frame.size();
     frame.resize(before + payloadLen);

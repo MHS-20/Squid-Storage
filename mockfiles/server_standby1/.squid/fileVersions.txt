@@ -1,3 +1,0 @@
-fresh.txt 1
-beta_state.txt 0
-alpha_state.txt 0

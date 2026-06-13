@@ -1,3 +1,0 @@
-alpha_state.txt DATANODE_ALPHA
-beta_state.txt DATANODE_BETA
-fresh.txt DATANODE_ALPHA,DATANODE_BETA
