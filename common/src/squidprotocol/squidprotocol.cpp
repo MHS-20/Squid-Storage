@@ -327,20 +327,6 @@ Message SquidProtocol::createFile(const std::string &filePath, int version,
   return waitForTransferResult("create file");
 }
 
-Message SquidProtocol::readFile(const std::string &filePath) {
-  std::cout << nodeType_ + ": sending read file request" << std::endl;
-  sendFrame(formatter_.readFileFormat(filePath));
-  Message ack;
-  if (!waitForAck(ack, "read file"))
-    return ack;
-
-  if (!channel_ ||
-      !fileTransfer_.receiveFile(*channel_, processName_, filePath))
-    return formatter_.makeNack();
-
-  return waitForTransferResult("read file");
-}
-
 Message SquidProtocol::readFile(const std::string &filePath,
                                 std::vector<uint8_t> &fileData) {
   std::cout << nodeType_ + ": sending read file request" << std::endl;

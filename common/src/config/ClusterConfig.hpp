@@ -43,6 +43,8 @@ struct ClusterConfig {
     // Ordered list of servers, highest priority first.
     std::vector<ServerEntry> servers;
 
+    int replication_factor = 2;
+
     // Timing parameters with defaults matching the design document.
     int heartbeat_interval_ms    = 500;
     int heartbeat_timeout_ms     = 1500;
@@ -162,7 +164,8 @@ struct ClusterConfig {
                                   << key << "' on line " << lineNum << "\n";
                     }
                 };
-                if      (key == "heartbeat_interval_ms")    parseInt(cfg.heartbeat_interval_ms);
+                if      (key == "replication_factor")      parseInt(cfg.replication_factor);
+                else if (key == "heartbeat_interval_ms")    parseInt(cfg.heartbeat_interval_ms);
                 else if (key == "heartbeat_timeout_ms")     parseInt(cfg.heartbeat_timeout_ms);
                 else if (key == "reconnect_attempts")       parseInt(cfg.reconnect_attempts);
                 else if (key == "reconnect_delay_ms")       parseInt(cfg.reconnect_delay_ms);

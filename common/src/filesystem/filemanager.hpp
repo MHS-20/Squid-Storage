@@ -61,7 +61,6 @@ public:
     std::map<std::string, fs::file_time_type> getFilesLastWrite(std::string path);
     std::map<std::string, int> getFileVersionMap(std::string path);
 
-    char *stringToChar(std::string str);
     bool createFile(std::string path);
     bool createFile(std::string path, int version);
     bool deleteFile(std::string path);
@@ -69,7 +68,6 @@ public:
     bool updateFile(std::string path, std::string content);
     bool updateFile(std::string path, std::string content, int version);
     bool updateFileAndVersion(std::string path, std::string content);
-    std::string readFile(std::string path);
     std::string formatFileList(std::vector<std::string> files);
     int getFileVersion(std::string path);
     bool setFileVersion(std::string path, int version);

@@ -13,12 +13,9 @@ Server::Server() : Server(DEFAULT_PORT, DEFAULT_REPLICATION_FACTOR) {}
 Server::Server(int port) : Server(port, DEFAULT_REPLICATION_FACTOR) {}
 
 Server::Server(int port, int replicationFactor)
-    : Server(port, replicationFactor, DEFAULT_TIMEOUT) {}
+    : Server(port, replicationFactor, 0) {}
 
-Server::Server(int port, int replicationFactor, int timeoutSeconds)
-    : Server(port, replicationFactor, timeoutSeconds, 0) {}
-
-Server::Server(int port, int replicationFactor, int timeoutSeconds,
+Server::Server(int port, int replicationFactor,
                uint32_t epoch)
     : port_(port), replicationFactor_(replicationFactor), epoch_(epoch),
       listener_(std::make_unique<TCPListenerChannel>(port, 3)),
@@ -27,9 +24,8 @@ Server::Server(int port, int replicationFactor, int timeoutSeconds,
       replicationManager_(replicationFactor_, stateMutex_, dataNodeEndpointMap_,
                           clientEndpointMap_, fileManager_, requestPool_),
       heartbeatManager_(stateMutex_, dataNodeEndpointMap_, requestPool_,
-                        replicationManager_) {
-  (void)timeoutSeconds;
-}
+                        replicationManager_) {}
+
 
 Server::~Server() {
   running_ = false;

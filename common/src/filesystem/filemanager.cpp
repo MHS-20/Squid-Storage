@@ -102,16 +102,6 @@ std::map<std::string, int> FileManager::getFileVersionMap(std::string path) {
   return filesVersion;
 }
 
-char *FileManager::stringToChar(std::string str) {
-  char *res = new char[str.length() + 1];
-  for (int i = 0; i <= str.length(); i++) {
-    res[i] = str[i];
-  }
-  res[str.length()] = '\0';
-
-  return res;
-}
-
 bool FileManager::createFile(std::string path) {
   fs::path fullPath = resolvePath(path);
   fs::create_directories(fullPath.parent_path());
@@ -192,17 +182,6 @@ bool FileManager::updateFileAndVersion(std::string path, std::string content) {
     }
   }
   return false;
-}
-
-std::string FileManager::readFile(std::string path) {
-  std::ifstream file(resolvePath(path));
-  std::string fileContent;
-  std::string line;
-  while (std::getline(file, line)) {
-    fileContent += line + "\n";
-  }
-  file.close();
-  return fileContent;
 }
 
 std::string FileManager::formatFileList(std::vector<std::string> files) {

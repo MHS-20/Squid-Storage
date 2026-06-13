@@ -149,12 +149,6 @@ public:
     });
   }
 
-  Message readFile(const std::string &filePath) {
-    return call([filePath](SquidProtocol &protocol) {
-      return protocol.readFile(filePath);
-    });
-  }
-
   Message readFile(const std::string &filePath,
                    std::vector<uint8_t> &fileData) {
     // fileData is an out-parameter: capture by reference is safe here because

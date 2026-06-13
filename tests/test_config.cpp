@@ -56,10 +56,22 @@ TEST_F(ClusterConfigTest, DefaultsApplied) {
     auto cfg = ClusterConfig::fromFile(configPath_);
     // Only heartbeat_interval_ms and heartbeat_timeout_ms are set in the
     // example — the rest should be the class defaults
+    EXPECT_EQ(cfg.replication_factor, 2);
     EXPECT_EQ(cfg.reconnect_attempts, 3);
     EXPECT_EQ(cfg.reconnect_delay_ms, 500);
     EXPECT_EQ(cfg.promotion_probe_attempts, 3);
     EXPECT_EQ(cfg.promotion_probe_delay_ms, 200);
+}
+
+TEST_F(ClusterConfigTest, ReplicationFactorParsed) {
+    writeConfig(
+        "[servers]\n"
+        "s = 1.2.3.4:5\n"
+        "[replication]\n"
+        "replication_factor = 5\n"
+    );
+    auto cfg = ClusterConfig::fromFile(configPath_);
+    EXPECT_EQ(cfg.replication_factor, 5);
 }
 
 TEST_F(ClusterConfigTest, CommentLines) {

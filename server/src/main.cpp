@@ -11,7 +11,6 @@
 int main(int argc, char **argv) {
   int port = DEFAULT_PORT;
   int replicationFactor = DEFAULT_REPLICATION_FACTOR;
-  int timeoutSeconds = DEFAULT_TIMEOUT;
   std::string configPath;
   std::string myName;
 
@@ -20,17 +19,14 @@ int main(int argc, char **argv) {
   if (argc > 2)
     replicationFactor = atoi(argv[2]);
   if (argc > 3)
-    timeoutSeconds = atoi(argv[3]);
+    configPath = argv[3];
   if (argc > 4)
-    configPath = argv[4];
-  if (argc > 5)
-    myName = argv[5];
+    myName = argv[4];
 
   if (configPath.empty() || myName.empty()) {
     std::cout << "Starting standalone server on port: " << port
-              << ", replication factor: " << replicationFactor
-              << ", timeout: " << timeoutSeconds << "s" << std::endl;
-    Server server(port, replicationFactor, timeoutSeconds);
+              << ", replication factor: " << replicationFactor << std::endl;
+    Server server(port, replicationFactor);
     server.run();
     return 0;
   }
@@ -43,6 +39,9 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // In HA mode, replicationFactor comes from cluster config.
+  replicationFactor = config.replication_factor;
+
   FileManager fileManager;
   EpochStore epochStore(fileManager);
 
@@ -52,7 +51,7 @@ int main(int argc, char **argv) {
     uint32_t epoch = epochStore.load();
     std::cout << "Starting as PRIMARY '" << myName << "' on port " << port
               << " (epoch=" << epoch << ")\n";
-    Server server(port, replicationFactor, timeoutSeconds, epoch);
+    Server server(port, replicationFactor, epoch);
     server.run();
   } else {
     std::cout << "Starting as STANDBY '" << myName << "'\n";
@@ -61,7 +60,7 @@ int main(int argc, char **argv) {
         config, myName, fileManager, epochStore, [&](uint32_t newEpoch) {
           std::cout << "[main]: promoting to leader (epoch=" << newEpoch
                     << "), starting Server on port " << port << "\n";
-          Server server(port, replicationFactor, timeoutSeconds, newEpoch);
+          Server server(port, replicationFactor, newEpoch);
           server.run();
         });
 

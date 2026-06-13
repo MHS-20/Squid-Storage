@@ -19,7 +19,6 @@
 #include "thread_pool.hpp"
 
 #define DEFAULT_PORT 12345
-#define DEFAULT_TIMEOUT 60
 #define DEFAULT_REPLICATION_FACTOR 2
 
 class Server {
@@ -27,12 +26,11 @@ public:
   Server();
   explicit Server(int port);
   Server(int port, int replicationFactor);
-  Server(int port, int replicationFactor, int timeoutSeconds);
 
   // HA constructor: epoch is the current leadership epoch (0 for first primary,
   // >0 after a failover).  The epoch is stamped into every replication frame
   // so standbys and clients can detect stale leaders.
-  Server(int port, int replicationFactor, int timeoutSeconds, uint32_t epoch);
+  Server(int port, int replicationFactor, uint32_t epoch);
 
   ~Server();
 

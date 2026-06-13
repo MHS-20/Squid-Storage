@@ -58,26 +58,8 @@ void Peer::connectToServer() {
                                                        timeoutSeconds, 3);
   std::cout << nodeType_ << ": Connected to server\n";
 
-  SquidProtocol proto(fileManager_, channel, nodeType_, processName_);
-
-  Message identify = proto.receiveAndParse();
-  if (!proto.isAlive() || identify.opcode != Opcode::IDENTIFY)
-    throw std::runtime_error(nodeType_ +
-                             ": handshake failed — expected IDENTIFY");
-
-  proto.response(nodeType_, processName_);
-  if (!proto.isAlive())
-    throw std::runtime_error(nodeType_ +
-                             ": handshake failed — could not send identity");
-
-  Message ack = proto.receiveAndParse();
-  if (!proto.isAlive() || !ack.isAck())
-    throw std::runtime_error(nodeType_ +
-                             ": handshake failed — ACK not received");
-
-  uint32_t serverEpoch = ack.getUint32(FieldID::EPOCH, 0);
-  if (serverEpoch > lastSeenEpoch_)
-    lastSeenEpoch_ = serverEpoch;
+  if (!performHandshake(channel))
+    throw std::runtime_error(nodeType_ + ": handshake failed");
 
   std::cout << nodeType_ << ": Handshake complete\n";
 

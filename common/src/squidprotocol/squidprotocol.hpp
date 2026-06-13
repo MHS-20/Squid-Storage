@@ -54,7 +54,6 @@ public:
     virtual Message createFile(const std::string &filePath);
     virtual Message createFile(const std::string &filePath, int version);
     virtual Message createFile(const std::string &filePath, int version, const std::vector<uint8_t> &fileData);
-    virtual Message readFile  (const std::string &filePath);
     virtual Message readFile  (const std::string &filePath, std::vector<uint8_t> &fileData);
     virtual Message updateFile(const std::string &filePath);
     virtual Message updateFile(const std::string &filePath, int version);

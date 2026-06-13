@@ -8,7 +8,6 @@ find_package(PkgConfig REQUIRED)
 
 # === INCLUDE PATH ===
 include_directories(
-    ${SDL2_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/common/src
     ${CMAKE_SOURCE_DIR}/common/src/config
     ${CMAKE_SOURCE_DIR}/common/src/utils

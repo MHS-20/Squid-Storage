@@ -17,8 +17,11 @@ add_executable(SquidStorageTests
     test_protocol.cpp
     test_config.cpp
     test_syncplanner.cpp
+    test_integration.cpp
     ${TEST_SOURCES}
 )
+
+target_include_directories(SquidStorageTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(SquidStorageTests
     GTest::gtest
