@@ -1,4 +1,0 @@
-alpha_state.txt 0
-hello.txt 0
-testfile.txt 0
-beta_state.txt 0

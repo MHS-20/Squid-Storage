@@ -322,3 +322,65 @@ TEST_F(IntegrationTest, ReorderingThroughChannel) {
     Message m1 = client.receiveAndParse();
     EXPECT_EQ(m1.seq, 1u);
 }
+
+// syncStatus robustly consumes push frames that arrive before the response.
+// Server enqueues a PUSH_CREATE_FILE + file data before the SYNC_STATUS
+// RESPONSE.  syncStatus must return the RESPONSE, not the push, and must
+// consume the trailing file data so it does not corrupt the next read.
+TEST_F(IntegrationTest, SyncStatusConsumesPushes) {
+    auto [serverCh, clientCh] = makeChannelPair();
+    SquidProtocol server(fm_, serverCh, "SERVER", "server_node");
+    SquidProtocol client(fm_, clientCh, "CLIENT", "client_node");
+    SquidProtocolFormatter fmt;
+
+    // Build a PUSH_CREATE_FILE frame (seq=0).
+    std::string filePath = "consumed.txt";
+    int fileVersion = 42;
+    auto pushFrame = fmt.pushCreateFileFormat(filePath, fileVersion);
+    SquidProtocolFormatter::stampSeq(pushFrame, 0);
+
+    // Build the trailing file data in FileTransfer format:
+    // 8-byte big-endian size + raw bytes.
+    std::vector<uint8_t> fileData = {'p', 'u', 's', 'h'};
+    uint64_t sz = fileData.size();
+    std::vector<uint8_t> transferData;
+    for (int i = 7; i >= 0; --i)
+        transferData.push_back(static_cast<uint8_t>((sz >> (i * 8)) & 0xFF));
+    transferData.insert(transferData.end(), fileData.begin(), fileData.end());
+
+    // Build the SYNC_STATUS RESPONSE (seq=1).
+    auto ackFrame = makeAckFrame(5, false);
+    SquidProtocolFormatter::stampSeq(ackFrame, 1);
+
+    // Feed push frame + file data + response into the server's write buffer
+    // (which the client reads).
+    serverCh->writeBytes(pushFrame.data(), pushFrame.size());
+    serverCh->writeBytes(transferData.data(), transferData.size());
+    serverCh->writeBytes(ackFrame.data(), ackFrame.size());
+
+    // Call syncStatus — it should consume the push and return the RESPONSE.
+    Message result = client.syncStatus();
+    ASSERT_TRUE(client.isAlive());
+    EXPECT_TRUE(result.isAck());
+
+    // Verify the SYNC_STATUS request was actually sent (visible on server's
+    // receive side).
+    Message req = server.receiveAndParse();
+    ASSERT_TRUE(server.isAlive());
+    EXPECT_EQ(req.opcode, Opcode::SYNC_STATUS);
+
+    // Verify the first syncStatus result is an ACK as expected.
+    ASSERT_TRUE(result.isAck());
+
+    // Verify the protocol is clean — client's expectedRecvSeq_ is 2 after
+    // consuming push (seq=0) and ACK (seq=1).  Write a heartbeat with seq=2
+    // and verify the client reads it.
+    ASSERT_GE(client.getLastSeq(), 1u);
+
+    auto hbFrame = fmt.heartbeatFormat();
+    SquidProtocolFormatter::stampSeq(hbFrame, 2);
+    serverCh->writeBytes(hbFrame.data(), hbFrame.size());
+    Message hb = client.receiveAndParse();
+    ASSERT_TRUE(client.isAlive()) << "Client died reading heartbeat seq=2";
+    EXPECT_EQ(hb.opcode, Opcode::HEARTBEAT);
+}
