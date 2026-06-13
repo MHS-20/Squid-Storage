@@ -43,7 +43,9 @@ public:
     // The worker sets it as the very first thing, protected by the fact that
     // call() from outside will only submit a task and block — it cannot run
     // before ownerThreadId_ is written because the worker hasn't started yet.
-    worker_ = std::thread([this]() { run(); });
+    // Capture shared_from_this() so the worker thread keeps the session alive
+    // until run() returns, preventing destruction while the worker is running.
+    worker_ = std::thread([self = shared_from_this()]() { self->run(); });
   }
 
   void stop() {
@@ -51,15 +53,8 @@ public:
     if (channel_)
       channel_->close();
     queueCv_.notify_all();
-    // If stop() is called from the worker thread itself (e.g. the destructor
-    // fires because the last shared_ptr was released inside a requestHandler
-    // callback), joining would deadlock. Detach so the thread cleans itself up.
-    if (worker_.joinable()) {
-      if (std::this_thread::get_id() == ownerThreadId_.load())
-        worker_.detach();
-      else
-        worker_.join();
-    }
+    if (worker_.joinable())
+      worker_.join();
   }
 
   ~ConnectionSession() { stop(); }
@@ -94,6 +89,14 @@ public:
       tasks_.emplace([task](SquidProtocol &) { (*task)(); });
     }
     queueCv_.notify_one();
+    if (rpcTimeout_.count() > 0 &&
+        future.wait_for(rpcTimeout_) == std::future_status::timeout) {
+      alive_ = false;
+      if (channel_)
+        channel_->close();
+      queueCv_.notify_all();
+      throw std::runtime_error("RPC timed out");
+    }
     return future.get();
   }
 
@@ -203,6 +206,8 @@ public:
     return call([](SquidProtocol &protocol) { return protocol.heartbeat(); });
   }
 
+  void setRpcTimeout(std::chrono::milliseconds t) { rpcTimeout_ = t; }
+
   void response(bool isAck) {
     call([isAck](SquidProtocol &protocol) {
       protocol.response(isAck);
@@ -258,12 +263,18 @@ public:
   }
 
   bool sendFileData(const std::vector<uint8_t> &fileData) {
+    // Fast path: already on the worker thread (e.g. inside a push handler).
+    if (std::this_thread::get_id() == ownerThreadId_.load())
+      return protocol_.sendFileData(fileData);
     return call([fileData](SquidProtocol &protocol) {
       return protocol.sendFileData(fileData);
     });
   }
 
   bool receiveFileData(std::vector<uint8_t> &fileData) {
+    // Fast path: already on the worker thread.
+    if (std::this_thread::get_id() == ownerThreadId_.load())
+      return protocol_.receiveFileData(fileData);
     // Out-parameter: capture by reference is safe because call() blocks.
     return call([&fileData](SquidProtocol &protocol) {
       return protocol.receiveFileData(fileData);
@@ -362,4 +373,5 @@ private:
   std::mutex queueMutex_;
   std::condition_variable queueCv_;
   std::queue<std::function<void(SquidProtocol &)>> tasks_;
+  std::chrono::milliseconds rpcTimeout_{0}; // 0 = no timeout
 };

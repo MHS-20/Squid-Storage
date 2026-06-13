@@ -1,4 +1,3 @@
-alpha_state.txt 0
-hello.txt 0
-testfile.txt 0
-beta_state.txt 0
+a/b/c/d.txt 1
+p3.txt 2
+sub/f.txt 1

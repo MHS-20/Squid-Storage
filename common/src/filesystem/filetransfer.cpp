@@ -81,11 +81,11 @@ bool FileTransfer::sendFile(INetworkChannel &channel, const string &rolename, co
         return false;
     }
 
-    char buffer[BUFFER_SIZE];
-    while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0)
+    std::vector<char> buffer(BUFFER_SIZE);
+    while (file.read(buffer.data(), buffer.size()) || file.gcount() > 0)
     {
         streamsize toSend = file.gcount();
-        ssize_t s = sendAll(channel, buffer, static_cast<size_t>(toSend));
+        ssize_t s = sendAll(channel, buffer.data(), static_cast<size_t>(toSend));
         if(!handleErrors(s))
         {
             file.close();
@@ -165,12 +165,12 @@ bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename,
         return false;
     }
 
-    char buffer[BUFFER_SIZE];
+    std::vector<char> buffer(BUFFER_SIZE);
     uint64_t remaining = filesize;
     while (remaining > 0)
     {
         size_t chunk = (remaining > BUFFER_SIZE) ? BUFFER_SIZE : static_cast<size_t>(remaining);
-        ssize_t r = recvAll(channel, buffer, chunk);
+        ssize_t r = recvAll(channel, buffer.data(), chunk);
         if (!handleErrors(r))
         {
             // delete file
@@ -180,7 +180,7 @@ bool FileTransfer::receiveFile(INetworkChannel &channel, const string &rolename,
             return false;
         }
 
-        outfile.write(buffer, static_cast<std::streamsize>(r));
+        outfile.write(buffer.data(), static_cast<std::streamsize>(r));
         remaining -= static_cast<uint64_t>(r);
     }
 

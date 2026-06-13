@@ -48,6 +48,9 @@ SquidFS::SquidFS(const std::string &mountpoint, Client &client)
 }
 
 SquidFS::~SquidFS() {
+  healthStop_.store(true);
+  if (monitorThread_.joinable())
+    monitorThread_.join();
   if (fuse_) {
     fuse_unmount(fuse_);
     fuse_destroy(fuse_);
@@ -76,9 +79,37 @@ int SquidFS::run() {
     return -1;
   }
   std::cout << "[SquidFS]: mounted at " << mountpoint_ << "\n";
+
+  healthStop_.store(false);
+  monitorThread_ = std::thread([this]() { healthLoop(); });
+
   int rc = fuse_loop(fuse_);
+
+  healthStop_.store(true);
+  if (monitorThread_.joinable())
+    monitorThread_.join();
+
   fuse_unmount(fuse_);
   return rc;
+}
+
+void SquidFS::healthLoop() {
+  while (!healthStop_.load()) {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    if (healthStop_.load())
+      break;
+
+    // Keep the connection alive. If the RPC timeout fires or the session is
+    // dead, reconnect proactively so the next FUSE operation doesn't block.
+    if (!client_.isAlive()) {
+      try {
+        client_.reconnect();
+      } catch (const std::exception &e) {
+        std::cerr << "[SquidFS]: health monitor reconnect failed: " << e.what()
+                  << "\n";
+      }
+    }
+  }
 }
 
 void SquidFS::invalidatePath(const std::string &path) {
@@ -105,6 +136,21 @@ std::set<std::string> SquidFS::listChildren(const std::string &dirRel) const {
   std::set<std::string> children;
   const std::string prefix = dirRel.empty() ? "" : dirRel + "/";
 
+  // Include explicitly created directories.
+  {
+    std::lock_guard<std::mutex> lk(dirMutex_);
+    for (const auto &d : createdDirs_) {
+      if (d == dirRel)
+        continue;
+      if (!prefix.empty() && d.substr(0, prefix.size()) != prefix)
+        continue;
+      std::string rest = d.substr(prefix.size());
+      auto slash = rest.find('/');
+      if (slash == std::string::npos)
+        children.insert(rest + "/");
+    }
+  }
+
   for (const auto &[filePath, _] : localVersionMap()) {
     if (!prefix.empty() && filePath.substr(0, prefix.size()) != prefix)
       continue; // not under this directory
@@ -124,6 +170,12 @@ std::set<std::string> SquidFS::listChildren(const std::string &dirRel) const {
 }
 
 bool SquidFS::isKnownDir(const std::string &dirRel) const {
+  // Explicitly created via mkdir.
+  {
+    std::lock_guard<std::mutex> lk(dirMutex_);
+    if (createdDirs_.count(dirRel))
+      return true;
+  }
   // A virtual directory exists if any known file path starts with "dirRel/".
   const std::string prefix = dirRel + "/";
   for (const auto &[filePath, _] : localVersionMap())
@@ -219,7 +271,24 @@ int SquidFS::op_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 }
 
 // mkdir is virtual: directories in SquidFS are implied by file paths.
-int SquidFS::op_mkdir(const char * /*path*/, mode_t /*mode*/) { return 0; }
+int SquidFS::op_mkdir(const char *path, mode_t /*mode*/) {
+  const std::string r = rel(path);
+  if (r.empty())
+    return 0; // root always exists
+  // Reject if a file with this path already exists.
+  if (client_.getFileVersion(r) >= 0)
+    return -EEXIST;
+  // Check that the parent exists (skip root).
+  auto slash = r.rfind('/');
+  if (slash != std::string::npos) {
+    std::string parent = r.substr(0, slash);
+    if (!isKnownDir(parent))
+      return -ENOENT;
+  }
+  std::lock_guard<std::mutex> lk(dirMutex_);
+  createdDirs_.insert(r);
+  return 0;
+}
 
 // rmdir succeeds only when the directory has no children in the version map.
 int SquidFS::op_rmdir(const char *path) {
@@ -272,6 +341,13 @@ int SquidFS::op_open(const char *path, struct fuse_file_info *fi) {
     }
   }
 
+  // Handle O_TRUNC for overwrites: discard cached data so the in-memory buffer
+  // reflects an empty file.  Subsequent op_write fills it from offset 0.
+  if ((fi->flags & O_TRUNC) && writable) {
+    entry.data.clear();
+    entry.dirty = true;
+  }
+
   if (writable)
     entry.lockCount++;
   entry.openCount++;
@@ -287,12 +363,15 @@ int SquidFS::op_create(const char *path, mode_t /*mode*/,
   if (r.empty())
     return -EINVAL;
 
-  // If the file already exists in our cache, delegate to open.
+  // If the file already exists (in cache or in the local version map),
+  // delegate to open instead of trying to create it again.
   {
     std::lock_guard<std::mutex> lk(cacheMutex_);
     if (cache_.count(r))
       return op_open(path, fi);
   }
+  if (client_.getFileVersion(r) >= 0)
+    return op_open(path, fi);
 
   // Create on the server (always writable).
   Message cAck = client_.createFile(r, {}, 0);

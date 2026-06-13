@@ -49,6 +49,10 @@ protected:
   // Returns true if alive after the attempt.
   bool ensureConnected();
 
+  // Thread-safe session access: calls ensureConnected() then returns a locked
+  // copy of session_ (or nullptr if connection failed).
+  std::shared_ptr<ConnectionSession> sessionLocked();
+
 private:
   PushHandler pushHandler_;
 

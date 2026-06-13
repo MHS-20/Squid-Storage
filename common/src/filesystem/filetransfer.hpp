@@ -10,7 +10,7 @@
 #include "INetworkChannel.hpp"
 
 using namespace std;
-#define BUFFER_SIZE 1024
+static constexpr size_t BUFFER_SIZE = 1024 * 1024; // 1 MiB
 // Maximum allowed file size to receive (1 GiB)
 #define FILETRANSFER_MAX_SIZE ((uint64_t)1 << 30)
 

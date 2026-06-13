@@ -3,10 +3,12 @@
 #define FUSE_USE_VERSION 31
 #include <fuse3/fuse.h>
 
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "client.hpp"
@@ -70,7 +72,8 @@ private:
   std::set<std::string> listChildren(const std::string &dir) const;
 
   // Returns true if `dir` (relative, no trailing slash) is a prefix of at
-  // least one known file path. Used by getattr to synthesise directory stats.
+  // least one known file path, or was explicitly created via mkdir.
+  // Used by getattr to synthesise directory stats.
   bool isKnownDir(const std::string &dir) const;
 
   // Strip the single leading '/' that FUSE puts on every path argument.
@@ -83,10 +86,19 @@ private:
   mutable std::mutex cacheMutex_;
   std::map<std::string, CacheEntry> cache_; // keyed by relative path
 
+  // Virtual directories explicitly created via mkdir.
+  mutable std::mutex dirMutex_;
+  std::set<std::string> createdDirs_;
+
   struct fuse *fuse_ = nullptr;
   struct fuse_args fargs_{};
 
   static SquidFS *instance_;
+
+  // ── Health monitor ───────────────────────────────────────────────────────
+  void healthLoop();
+  std::thread monitorThread_;
+  std::atomic<bool> healthStop_{false};
 
   // ── FUSE C-callback trampolines ──────────────────────────────────────────
   static int c_getattr(const char *, struct stat *, struct fuse_file_info *);

@@ -1,0 +1,3 @@
+p3.txt 2
+sub/f.txt 1
+a/b/c/d.txt 1

@@ -63,9 +63,13 @@ void Peer::connectToServer() {
 
   std::cout << nodeType_ << ": Handshake complete\n";
 
-  session_ = std::make_shared<ConnectionSession>(
+  auto newSession = std::make_shared<ConnectionSession>(
       fileManager_, channel, nodeType_, processName_, makeRequestHandler());
-  session_->start(true);
+  newSession->start(true);
+  {
+    std::lock_guard<std::mutex> lk(sessionMutex_);
+    session_ = std::move(newSession);
+  }
   onConnected();
 }
 
@@ -92,9 +96,13 @@ void Peer::connectWithFailover(const ClusterConfig &config) {
       server_ip = entry.ip;
       port = entry.port;
 
-      session_ = std::make_shared<ConnectionSession>(
+      auto newSession = std::make_shared<ConnectionSession>(
           fileManager_, channel, nodeType_, processName_, makeRequestHandler());
-      session_->start(true);
+      newSession->start(true);
+      {
+        std::lock_guard<std::mutex> lk(sessionMutex_);
+        session_ = std::move(newSession);
+      }
       onConnected();
       return;
     }
@@ -113,15 +121,24 @@ void Peer::reconnect() {
     connectWithFailover(clusterConfig_);
   else
     connectToServer();
+  // connectToServer / connectWithFailover assign to session_ under their own
+  // locks, or we hold no lock here because disconnect() already released it.
 }
 
 void Peer::disconnect() {
-  if (!session_)
+  std::shared_ptr<ConnectionSession> old;
+  {
+    std::lock_guard<std::mutex> lk(sessionMutex_);
+    old = std::move(session_);
+  }
+  if (!old)
     return;
-  if (session_->isAlive())
-    session_->closeConn();
-  session_->stop();
-  session_.reset();
+  if (old->isAlive())
+    old->closeConn();
+  old->stop();
 }
 
-bool Peer::isAlive() const { return session_ && session_->isAlive(); }
+bool Peer::isAlive() const {
+  std::lock_guard<std::mutex> lk(sessionMutex_);
+  return session_ && session_->isAlive();
+}

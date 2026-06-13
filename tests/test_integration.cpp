@@ -1,9 +1,13 @@
 #include <gtest/gtest.h>
 
-#include <filesystem>
+#include <chrono>
 #include <cstring>
+#include <filesystem>
 #include <memory>
+#include <thread>
 #include <vector>
+
+#include "ConnectionSession.hpp"
 
 #include "squidprotocol.hpp"
 #include "squidProtocolFormatter.hpp"
@@ -383,4 +387,29 @@ TEST_F(IntegrationTest, SyncStatusConsumesPushes) {
     Message hb = client.receiveAndParse();
     ASSERT_TRUE(client.isAlive()) << "Client died reading heartbeat seq=2";
     EXPECT_EQ(hb.opcode, Opcode::HEARTBEAT);
+}
+
+// RPC timeout: a call() that does not complete within the configured
+// timeout should throw std::runtime_error and mark the session dead.
+TEST_F(IntegrationTest, RpcTimeout) {
+    auto [chA, chB] = makeChannelPair();
+    auto session = std::make_shared<ConnectionSession>(
+        fm_, chA, "CLIENT", "test_client");
+    session->setRpcTimeout(std::chrono::milliseconds(10));
+    session->start(false); // no readLoop — tasks only
+
+    // Submit a task that sleeps far beyond the timeout.
+    // call() should throw after ~10ms.
+    EXPECT_THROW(
+        session->call([](SquidProtocol &) -> Message {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            return Message{};
+        }),
+        std::runtime_error);
+
+    // The session should be marked dead after the timeout.
+    EXPECT_FALSE(session->isAlive());
+
+    // stop() blocks until the worker finishes its sleep, which takes ~1s.
+    session->stop();
 }
