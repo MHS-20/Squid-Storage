@@ -159,25 +159,15 @@ bool ReplicationManager::propagateCreateFile(
       clients.push_back(entry);
   }
 
-  // Fan out to all live datanodes in parallel.
-  vector<future<Message>> futures;
-  futures.reserve(datanodes.size());
-  for (auto &datanode : datanodes) {
-    if (!datanode.second || !datanode.second->isAlive())
-      continue;
-    futures.push_back(requestPool_.submit(
-        [session = datanode.second, filePath, version, fileData]() {
-          return session->createFile(filePath, version, fileData);
-        }));
-  }
-
-  // Collect ACKs — track which datanodes succeeded.
+  // Fan out to all live datanodes — submit and collect immediately to
+  // avoid future-index misalignment if isAlive() changes between passes.
   vector<pair<string, shared_ptr<ConnectionSession>>> ackedNodes;
-  size_t futureIndex = 0;
   for (auto &datanode : datanodes) {
     if (!datanode.second || !datanode.second->isAlive())
       continue;
-    Message response = futures[futureIndex++].get();
+    Message response = datanode.second->call([&](SquidProtocol &proto) {
+      return proto.createFile(filePath, version, fileData);
+    });
     if (response.isAck())
       ackedNodes.push_back(datanode);
     else
@@ -212,10 +202,10 @@ bool ReplicationManager::propagateCreateFile(
   persistState();
 
   // Fanout delta to standbys (fire-and-forget, does not block the commit path).
-  if (standby_) {
+  if (auto *s = standby_.load(std::memory_order_acquire)) {
     vector<string> holders;
     for (auto &[name, _] : ackedNodes) holders.push_back(name);
-    standby_->sendDelta(0, filePath, version, holders);
+    s->sendDelta(0, filePath, version, holders);
   }
 
   // Push to all other clients.
@@ -256,25 +246,15 @@ int ReplicationManager::propagateUpdateFile(const string &filePath,
       clients.push_back(entry);
   }
 
-  // Fan out in parallel.
-  vector<future<Message>> futures;
-  futures.reserve(datanodes.size());
-  for (auto &datanode : datanodes) {
-    if (!datanode.second || !datanode.second->isAlive())
-      continue;
-    futures.push_back(requestPool_.submit(
-        [session = datanode.second, filePath, newVersion, fileData]() {
-          return session->updateFile(filePath, newVersion, fileData);
-        }));
-  }
-
-  // Collect ACKs.
+  // Fan out in parallel — submit and collect immediately to avoid
+  // future-index misalignment if isAlive() changes between passes.
   vector<pair<string, shared_ptr<ConnectionSession>>> ackedNodes;
-  size_t futureIndex = 0;
   for (auto &datanode : datanodes) {
     if (!datanode.second || !datanode.second->isAlive())
       continue;
-    Message response = futures[futureIndex++].get();
+    Message response = datanode.second->call([&](SquidProtocol &proto) {
+      return proto.updateFile(filePath, newVersion, fileData);
+    });
     if (response.isAck())
       ackedNodes.push_back(datanode);
     else
@@ -300,7 +280,7 @@ int ReplicationManager::propagateUpdateFile(const string &filePath,
   persistState();
 
   // Fanout delta to standbys.
-  if (standby_) {
+  if (auto *s = standby_.load(std::memory_order_acquire)) {
     vector<string> holders;
     {
       shared_lock<shared_mutex> lock(stateMutex_);
@@ -308,7 +288,7 @@ int ReplicationManager::propagateUpdateFile(const string &filePath,
       if (it != dataNodeReplicationMap_.end())
         for (auto &[name, _] : it->second) holders.push_back(name);
     }
-    standby_->sendDelta(0, filePath, newVersion, holders);
+    s->sendDelta(0, filePath, newVersion, holders);
   }
 
   // Push new version to all other clients.
@@ -337,18 +317,11 @@ void ReplicationManager::propagateDeleteFile(const string &filePath,
       clients.push_back(entry);
   }
 
-  vector<future<Message>> futures;
-  futures.reserve(datanodes.size());
   for (auto &datanode : datanodes) {
     if (!datanode.second || !datanode.second->isAlive())
       continue;
-    futures.push_back(requestPool_.submit(
-        [session = datanode.second, filePath]() {
-          return session->deleteFile(filePath);
-        }));
-  }
-  for (auto &f : futures) {
-    Message result = f.get();
+    Message result = datanode.second->call(
+        [&](SquidProtocol &proto) { return proto.deleteFile(filePath); });
     if (!result.isAck())
       cerr << "[ReplicationManager]: datanode failed to delete " << filePath << "\n";
   }
@@ -371,8 +344,8 @@ void ReplicationManager::propagateDeleteFile(const string &filePath,
   persistState();
 
   // Fanout delete delta to standbys.
-  if (standby_)
-    standby_->sendDelta(1, filePath, 0, {});
+  if (auto *s = standby_.load(std::memory_order_acquire))
+    s->sendDelta(1, filePath, 0, {});
 }
 
 // ── Replication map maintenance ───────────────────────────────────────────────

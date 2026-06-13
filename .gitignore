@@ -9,4 +9,5 @@ vcpkg_installed/
 .vcpkg/
 
 build/*
+build-*/
 CMakeFiles/*

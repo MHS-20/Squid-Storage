@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
 #include <map>
@@ -26,8 +27,8 @@ public:
     SquidProtocol(FileManager &fileManager, std::shared_ptr<INetworkChannel> channel, std::string nodeType, std::string processName);
     virtual ~SquidProtocol();
 
-    virtual bool        isAlive()        const { return alive_; }
-    virtual void        setIsAlive(bool v)     { alive_ = v; }
+    virtual bool        isAlive()        const { return alive_.load(std::memory_order_acquire); }
+    virtual void        setIsAlive(bool v)     { alive_.store(v, std::memory_order_release); }
     virtual void        setSocket(int fd);
     virtual void        setChannel(std::shared_ptr<INetworkChannel> channel);
     virtual std::string getProcessName() const { return processName_; }
@@ -106,7 +107,7 @@ public:
     virtual void responseDispatcher(const Message &response);
 
 protected:
-    bool        alive_       = false;
+    std::atomic<bool>   alive_{false};
     std::string processName_;
     std::string nodeType_;
     std::shared_ptr<INetworkChannel> channel_;

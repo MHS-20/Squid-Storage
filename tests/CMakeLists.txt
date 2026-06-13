@@ -28,6 +28,7 @@ add_executable(SquidStorageTests
     test_config.cpp
     test_syncplanner.cpp
     test_integration.cpp
+    test_stress.cpp
     ${TEST_SOURCES}
 )
 

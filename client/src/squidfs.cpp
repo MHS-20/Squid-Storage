@@ -48,9 +48,8 @@ SquidFS::SquidFS(const std::string &mountpoint, Client &client)
 }
 
 SquidFS::~SquidFS() {
+  client_.setPushHandler({});
   healthStop_.store(true);
-  if (monitorThread_.joinable())
-    monitorThread_.join();
   if (fuse_) {
     fuse_unmount(fuse_);
     fuse_destroy(fuse_);
@@ -81,15 +80,13 @@ int SquidFS::run() {
   std::cout << "[SquidFS]: mounted at " << mountpoint_ << "\n";
 
   healthStop_.store(false);
-  monitorThread_ = std::thread([this]() { healthLoop(); });
+  monitorThread_ = ScopedThread(std::thread([this]() { healthLoop(); }));
 
   int rc = fuse_loop(fuse_);
 
   healthStop_.store(true);
-  if (monitorThread_.joinable())
-    monitorThread_.join();
-
   fuse_unmount(fuse_);
+  fuse_ = nullptr;
   return rc;
 }
 

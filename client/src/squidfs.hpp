@@ -8,10 +8,10 @@
 #include <mutex>
 #include <set>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "client.hpp"
+#include "scoped_thread.hpp"
 
 // Per-file in-memory state, shared across all fds that have the same path open.
 struct CacheEntry {
@@ -97,7 +97,7 @@ private:
 
   // ── Health monitor ───────────────────────────────────────────────────────
   void healthLoop();
-  std::thread monitorThread_;
+  ScopedThread monitorThread_;
   std::atomic<bool> healthStop_{false};
 
   // ── FUSE C-callback trampolines ──────────────────────────────────────────

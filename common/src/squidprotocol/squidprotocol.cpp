@@ -49,13 +49,13 @@ bool SquidProtocol::recvExact(uint8_t *buf, size_t n) {
 bool SquidProtocol::handleRecvError(ssize_t bytes) {
   if (bytes == 0) {
     std::cout << nodeType_ + ": Connection closed by peer" << std::endl;
-    alive_ = false;
+    alive_.store(false, std::memory_order_release);
     return false;
   }
   if (bytes < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK)
       std::cout << nodeType_ + ": Socket timeout" << std::endl;
-    alive_ = false;
+    alive_.store(false, std::memory_order_release);
     return false;
   }
   return true;
@@ -67,14 +67,14 @@ void SquidProtocol::sendFrame(std::vector<uint8_t> frame) {
   size_t total = 0;
   while (total < frame.size()) {
     if (!channel_) {
-      alive_ = false;
+      alive_.store(false, std::memory_order_release);
       return;
     }
 
     ssize_t sent =
         channel_->writeBytes(frame.data() + total, frame.size() - total);
     if (sent <= 0) {
-      alive_ = false;
+      alive_.store(false, std::memory_order_release);
       return;
     }
     total += static_cast<size_t>(sent);
@@ -91,7 +91,7 @@ std::vector<uint8_t> SquidProtocol::receiveFrame() {
   uint16_t magic = (uint16_t(header[0]) << 8) | header[1];
   if (magic != SQUID_MAGIC) {
     std::cerr << nodeType_ + ": Bad frame magic" << std::endl;
-    alive_ = false;
+    alive_.store(false, std::memory_order_release);
     return {};
   }
 
@@ -263,7 +263,7 @@ Message SquidProtocol::connectServer() {
 // and waiting would race with the server tearing down its side first.
 Message SquidProtocol::closeConn() {
   sendFrame(formatter_.closeFormat());
-  alive_ = false;
+  alive_.store(false, std::memory_order_release);
   if (channel_)
     channel_->close();
   return formatter_.makeAck();
@@ -296,12 +296,12 @@ Message SquidProtocol::syncStatus() {
       response(true);
       break;
     case Opcode::CLOSE:
-      alive_ = false;
+      alive_.store(false, std::memory_order_release);
       return msg;
     default:
       std::cerr << nodeType_ + ": unexpected frame during syncStatus: "
                 << msg.toString() << std::endl;
-      alive_ = false;
+      alive_.store(false, std::memory_order_release);
       return msg;
     }
   }
@@ -606,7 +606,7 @@ void SquidProtocol::requestDispatcher(const Message &message) {
 
   case Opcode::CLOSE:
     response(true);
-    alive_ = false;
+    alive_.store(false, std::memory_order_release);
     if (channel_)
       channel_->close();
     std::cout << nodeType_ + ": Connection closed" << std::endl;
@@ -619,7 +619,7 @@ void SquidProtocol::requestDispatcher(const Message &message) {
         << nodeType_ +
                ": unexpected RESPONSE frame — connection out of sync, closing"
         << std::endl;
-    alive_ = false;
+    alive_.store(false, std::memory_order_release);
     break;
 
   // PUSH_* opcodes: must not be dispatched as requests.

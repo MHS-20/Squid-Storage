@@ -14,8 +14,10 @@
 #include <utility>
 #include <vector>
 
+#include <cassert>
 #include <sys/select.h>
 
+#include "scoped_thread.hpp"
 #include "squidprotocol.hpp"
 
 class ConnectionSession
@@ -365,7 +367,7 @@ private:
   std::shared_ptr<INetworkChannel> channel_;
   SquidProtocol protocol_;
   RequestHandler requestHandler_;
-  std::thread worker_;
+  ScopedThread worker_;
   std::atomic<bool> alive_{false};
   bool readLoop_ = false;
   // Stored atomically so call() can read it from any thread without a lock.

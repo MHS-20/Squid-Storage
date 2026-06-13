@@ -1,6 +1,7 @@
 #pragma once
 
 #include <future>
+#include <atomic>
 #include <map>
 #include <memory>
 #include <set>
@@ -83,7 +84,9 @@ public:
 
   // Wire in the standby fanout after construction (avoids circular dependency
   // between ReplicationManager and StandbyReplicaManager).
-  void setStandbyReplicaManager(StandbyReplicaManager *srm) { standby_ = srm; }
+  void setStandbyReplicaManager(StandbyReplicaManager *srm) {
+    standby_.store(srm, std::memory_order_release);
+  }
 
 private:
   int replicationFactor_;
@@ -105,7 +108,9 @@ private:
   std::map<std::string, int> persistedVersionMap_;
 
   // Optional standby fanout — null when running without HA config.
-  StandbyReplicaManager *standby_ = nullptr;
+  // Atomic for lock-free reads from propagation threads; written once by
+  // setStandbyReplicaManager() during a standby connect.
+  std::atomic<StandbyReplicaManager*> standby_{nullptr};
 
   // Persist both state files atomically.
   void persistState();

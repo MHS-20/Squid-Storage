@@ -27,22 +27,10 @@ void HeartbeatManager::sendHeartbeats() {
   }
 
   vector<string> deadNodes;
-  vector<future<Message>> futures;
-  futures.reserve(datanodes.size());
-
   for (auto &entry : datanodes) {
     if (!entry.second)
       continue;
-    futures.push_back(requestPool_.submit(
-        [session = entry.second]() { return session->heartbeat(); }));
-  }
-
-  for (size_t i = 0; i < datanodes.size(); ++i) {
-    auto &entry = datanodes[i];
-    if (!entry.second)
-      continue;
-
-    Message heartbeat = futures[i].get();
+    Message heartbeat = entry.second->heartbeat();
     if (!heartbeat.isAck()) {
       entry.second->setIsAlive(false);
       deadNodes.push_back(entry.first);
