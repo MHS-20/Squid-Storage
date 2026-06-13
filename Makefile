@@ -4,7 +4,7 @@ CLIENT_TARGET = SquidStorageClient
 SRV_TARGET = SquidStorageServer
 DN_TARGET  = DataNode
 
-.PHONY: all init build clean run-client run-server run-datanode install uninstall
+.PHONY: all init build clean run-client run-server run-datanode install uninstall test reset-cluster
 
 all: build
 
@@ -29,6 +29,12 @@ run-server: build
 
 run-datanode: build
 	./$(BUILD_DIR)/$(DN_TARGET)
+
+test: build
+	./$(BUILD_DIR)/SquidStorageTests
+
+reset-cluster:
+	scripts/reset_cluster.sh
 
 install: build
 	sudo cmake --install $(BUILD_DIR)

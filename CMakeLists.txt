@@ -87,3 +87,7 @@ target_link_libraries(SquidFSMount PRIVATE
     ${FUSE3_LIBRARIES}
     pthread
 )
+
+# === TESTS ===
+enable_testing()
+add_subdirectory(tests)

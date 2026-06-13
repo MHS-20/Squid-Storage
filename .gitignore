@@ -1,12 +1,12 @@
 *.o
 main
+AGENTS.md
 
 # mockfiles/*
+# .squid/
 
 vcpkg_installed/
 .vcpkg/
 
 build/*
 CMakeFiles/*
-
-# .squid/

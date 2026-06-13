@@ -1,14 +1,16 @@
 services:
-  server_primary:
+  server_primary: &server-base
     image: archlinux:latest
-    environment:
+    environment: &server-env
       HOME: /root
       SQUID_STORAGE_ROOT: /root/SquidStorage
-    volumes:
+    volumes: &server-vols
       - ./mockfiles/server_primary:/root/SquidStorage
       - ./build:/app/bin:ro
       - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
     working_dir: /root/SquidStorage
+    entrypoint: ["/app/scripts/docker_entrypoint.sh"]
     # args: port  replicationFactor  timeoutSeconds  configPath  myName
     command: /app/bin/SquidStorageServer 12345 2 10 /app/config/cluster.conf server_primary
     ports:
@@ -18,15 +20,12 @@ services:
         ipv4_address: 172.20.0.10
 
   server_standby1:
-    image: archlinux:latest
-    environment:
-      HOME: /root
-      SQUID_STORAGE_ROOT: /root/SquidStorage
+    <<: *server-base
     volumes:
       - ./mockfiles/server_standby1:/root/SquidStorage
       - ./build:/app/bin:ro
       - ./config:/app/config:ro
-    working_dir: /root/SquidStorage
+      - ./scripts:/app/scripts:ro
     command: /app/bin/SquidStorageServer 12345 2 10 /app/config/cluster.conf server_standby1
     ports:
       - "12346:12345"
@@ -37,15 +36,12 @@ services:
         ipv4_address: 172.20.0.13
 
   server_standby2:
-    image: archlinux:latest
-    environment:
-      HOME: /root
-      SQUID_STORAGE_ROOT: /root/SquidStorage
+    <<: *server-base
     volumes:
       - ./mockfiles/server_standby2:/root/SquidStorage
       - ./build:/app/bin:ro
       - ./config:/app/config:ro
-    working_dir: /root/SquidStorage
+      - ./scripts:/app/scripts:ro
     command: /app/bin/SquidStorageServer 12345 2 10 /app/config/cluster.conf server_standby2
     ports:
       - "12347:12345"
@@ -55,7 +51,7 @@ services:
       squid_network:
         ipv4_address: 172.20.0.14
 
-  datanode1:
+  datanode1: &datanode-base
     image: archlinux:latest
     environment:
       HOME: /root
@@ -64,7 +60,9 @@ services:
       - ./mockfiles/datanode_alpha:/root/SquidStorage
       - ./build:/app/bin:ro
       - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
     working_dir: /root/SquidStorage
+    entrypoint: ["/app/scripts/docker_entrypoint.sh"]
     # args: server_ip  server_port  identity  configPath
     command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_ALPHA /app/config/cluster.conf
     depends_on:
@@ -74,15 +72,12 @@ services:
         ipv4_address: 172.20.0.11
 
   datanode2:
-    image: archlinux:latest
-    environment:
-      HOME: /root
-      SQUID_STORAGE_ROOT: /root/SquidStorage
+    <<: *datanode-base
     volumes:
       - ./mockfiles/datanode_beta:/root/SquidStorage
       - ./build:/app/bin:ro
       - ./config:/app/config:ro
-    working_dir: /root/SquidStorage
+      - ./scripts:/app/scripts:ro
     command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_BETA /app/config/cluster.conf
     depends_on:
       - server_primary
@@ -125,8 +120,8 @@ services:
       - SYS_ADMIN
     security_opt:
       - apparmor:unconfined
-    # command: ["bash", "/app/scripts/fuse_test.sh", "/app/config/cluster.conf", "FUSE_CLIENT", "/mnt/squid"]
-    entrypoint: ["sh", "-c", "pacman -Sy --noconfirm fuse3 && mkdir -p /mnt/squid && exec /app/bin/SquidFSMount /mnt/squid /app/config/cluster.conf FUSE_CLIENT"]
+    entrypoint: ["/app/scripts/docker_entrypoint.sh"]
+    command: ["sh", "-c", "pacman -Sy --noconfirm fuse3 && mkdir -p /mnt/squid && exec /app/bin/SquidFSMount /mnt/squid /app/config/cluster.conf FUSE_CLIENT"]
     depends_on:
       - datanode1
       - datanode2
