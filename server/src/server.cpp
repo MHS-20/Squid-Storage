@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <iostream>
 #include <utility>
 
@@ -32,6 +33,9 @@ Server::~Server() {
   if (listener_)
     listener_->close();
 
+  // Clean up readiness flag.
+  std::remove("/tmp/squid_ready");
+
   if (acceptThread_.joinable())
     acceptThread_.join();
   if (heartbeatThread_.joinable())
@@ -53,6 +57,12 @@ void Server::run() {
   cout << "[SERVER]: Starting on port " << port_ << " (epoch=" << epoch_
        << ")...\n";
   running_ = true;
+
+  // Signal readiness for healthcheck / orchestration.
+  {
+    std::ofstream ready("/tmp/squid_ready");
+    ready << port_ << std::endl;
+  }
 
   acceptThread_ = thread([this]() {
     while (running_) {
@@ -88,8 +98,11 @@ void Server::run() {
 
   standbyHbThread_ = thread([this]() {
     while (running_) {
-      if (standbyReplicaManager_)
-        standbyReplicaManager_->sendHeartbeats();
+      {
+        shared_lock<shared_mutex> lock(stateMutex_);
+        if (standbyReplicaManager_)
+          standbyReplicaManager_->sendHeartbeats();
+      }
       this_thread::sleep_for(chrono::milliseconds(500));
     }
   });
@@ -108,6 +121,7 @@ void Server::run() {
 }
 
 void Server::handleAccept(AcceptedConnection accepted) {
+  try {
   auto channel = accepted.channel;
   if (!channel)
     return;
@@ -198,14 +212,21 @@ void Server::handleAccept(AcceptedConnection accepted) {
   }
 
   clientSession->start(true);
+  } catch (const std::exception &e) {
+    cerr << "[SERVER]: handleAccept failed: " << e.what() << "\n";
+  }
 }
 
 void Server::handleStandbyConnect(const string &name,
-                                  shared_ptr<INetworkChannel> channel) {
-  if (!standbyReplicaManager_) {
-    standbyReplicaManager_ = make_unique<StandbyReplicaManager>(
-        fileManager_, replicationManager_, requestPool_, epoch_);
-    replicationManager_.setStandbyReplicaManager(standbyReplicaManager_.get());
+                                   shared_ptr<INetworkChannel> channel) {
+  {
+    unique_lock<shared_mutex> lock(stateMutex_);
+    if (!standbyReplicaManager_) {
+      standbyReplicaManager_ = make_unique<StandbyReplicaManager>(
+          fileManager_, replicationManager_, requestPool_, epoch_);
+      replicationManager_.setStandbyReplicaManager(
+          standbyReplicaManager_.get());
+    }
   }
 
   auto session =

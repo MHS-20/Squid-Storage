@@ -9,4 +9,7 @@ if [ -n "${SQUID_STORAGE_ROOT:-}" ]; then
     rm -rf "${SQUID_STORAGE_ROOT}/.squid"
 fi
 
+# Remove stale readiness flag so healthcheck doesn't pass prematurely.
+rm -f /tmp/squid_ready
+
 exec "$@"

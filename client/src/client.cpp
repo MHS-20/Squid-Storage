@@ -104,10 +104,13 @@ void Client::handlePush(ConnectionSession &session, const Message &message) {
 
   case Opcode::PUSH_DELETE_FILE: {
     const std::string path = message.getString(FieldID::FILE_PATH);
-    if (!path.empty())
-      deleteFileVersion(path);
+    // Erase cache *before* version map so FUSE sees cache gone first,
+    // avoiding a window where the version is gone but a stale cache entry
+    // remains (P1.5).
     if (pushHandler_)
       pushHandler_(message, {});
+    if (!path.empty())
+      deleteFileVersion(path);
     break;
   }
 

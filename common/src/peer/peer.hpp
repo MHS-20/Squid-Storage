@@ -55,7 +55,7 @@ protected:
   mutable std::mutex sessionMutex_;
   std::shared_ptr<ConnectionSession> session_;
 
-  uint32_t lastSeenEpoch_ = 0;
+  std::atomic<uint32_t> lastSeenEpoch_{0};
   ClusterConfig clusterConfig_;
 
   virtual ConnectionSession::RequestHandler makeRequestHandler() = 0;

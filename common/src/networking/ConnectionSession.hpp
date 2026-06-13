@@ -337,6 +337,8 @@ public:
         continue;
 
       if (ready > 0 && FD_ISSET(socketFd(), &readfds)) {
+        if (readSuspended_.load(std::memory_order_acquire))
+          continue;
         Message mex = protocol_.receiveAndParse();
         if (!protocol_.isAlive())
           break;

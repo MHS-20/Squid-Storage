@@ -72,11 +72,11 @@ static std::vector<uint8_t> hbFrame(uint32_t seq) {
 }
 
 // ========================================================================
-// P0.1 — readSuspended_ is dead code (never checked in run())
+// P0.1 — readSuspended_ — now checked in run() loop (FIXED)
 // ========================================================================
-// With a real-socket channel, the worker's select() actually monitors the
-// fd.  This test proves that suspendReads() has no effect: even after
-// calling it, the worker still processes incoming frames.
+// After suspendReads(), the worker's select() still monitors the fd but
+// skips frame parsing.  This test verifies the handler is NOT called while
+// reads are suspended.
 TEST(StressTest, ReadSuspendedIsDeadCode) {
     auto [srv, cli] = makeSocketPair();
     std::atomic<int> count{0};
@@ -98,16 +98,16 @@ TEST(StressTest, ReadSuspendedIsDeadCode) {
     ASSERT_GT(beforeSuspend, 0)
         << "Pre-condition: worker must process a frame before suspend";
 
-    // Now suspend reads and send another frame.  If readSuspended_ worked,
-    // the handler would NOT be called.  The current (buggy) code WILL call it.
+    // Suspend reads and send another frame.  With the fix, the handler
+    // is NOT called while reads are suspended.
     session->suspendReads();
     srv->writeBytes(hbFrame(1).data(), hbFrame(1).size());
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     int afterSuspend = count.load();
 
-    EXPECT_GT(afterSuspend, beforeSuspend)
-        << "BUG CONFIRMED: readSuspended_ is dead code — handler was still "
-           "called after suspendReads()";
+    EXPECT_EQ(afterSuspend, beforeSuspend)
+        << "FIXED: readSuspended_ now works — handler was NOT called after "
+           "suspendReads()";
 
     session->stop();
 }

@@ -82,6 +82,7 @@ FileManager::getFilesLastWrite(std::string path) {
 }
 
 std::map<std::string, int> FileManager::getFileVersionMap(std::string path) {
+  std::lock_guard<std::mutex> lk(mutex_);
   std::map<std::string, int> savedFilesVersion;
   std::ifstream versionFile(versionFilePath());
   std::string line;
@@ -128,6 +129,7 @@ bool FileManager::createFile(std::string path, int version) {
 bool FileManager::deleteFile(std::string path) { return fs::remove(resolvePath(path)); }
 
 bool FileManager::deleteFileAndVersion(std::string path) {
+  std::lock_guard<std::mutex> lk(mutex_);
   if (deleteFile(path)) {
     fs::create_directories(versionFilePath().parent_path());
     std::ifstream versionFile(versionFilePath());
@@ -202,6 +204,7 @@ std::string FileManager::formatFileList(std::vector<std::string> files) {
 }
 
 int FileManager::getFileVersion(std::string path) {
+  std::lock_guard<std::mutex> lk(mutex_);
   std::ifstream versionFile(versionFilePath());
   std::string line;
   while (std::getline(versionFile, line)) {
@@ -219,6 +222,7 @@ int FileManager::getFileVersion(std::string path) {
 }
 
 bool FileManager::setFileVersion(std::string path, int version) {
+  std::lock_guard<std::mutex> lk(mutex_);
   fs::create_directories(versionFilePath().parent_path());
   std::ifstream versionFile(versionFilePath());
   std::string line;

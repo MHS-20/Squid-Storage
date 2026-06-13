@@ -101,6 +101,7 @@ void SquidFS::healthLoop() {
     if (!client_.isAlive()) {
       try {
         client_.reconnect();
+        client_.syncStatus();
       } catch (const std::exception &e) {
         std::cerr << "[SquidFS]: health monitor reconnect failed: " << e.what()
                   << "\n";
@@ -184,8 +185,9 @@ bool SquidFS::isKnownDir(const std::string &dirRel) const {
 
 // fetchIntoCache — must be called with cacheMutex_ held via `lock`.
 // Drops the lock around the blocking RPC and re-acquires it before returning.
+// Writes to a freshly-looked-up entry to avoid dangling references (P0.4).
 int SquidFS::fetchIntoCache(std::unique_lock<std::mutex> &lock,
-                            const std::string &relPath, CacheEntry &entry) {
+                            const std::string &relPath, CacheEntry & /*entry*/) {
   lock.unlock();
   std::vector<uint8_t> data;
   Message ack = client_.readFile(relPath, data);
@@ -196,9 +198,12 @@ int SquidFS::fetchIntoCache(std::unique_lock<std::mutex> &lock,
               << ") NACK: " << ack.toString() << "\n";
     return -EIO;
   }
-  entry.data = std::move(data);
-  entry.version = static_cast<int>(ack.getUint32(FieldID::FILE_VERSION, 0));
-  entry.dirty = false;
+  // Re-find after re-lock: push handler may have erased the entry while
+  // the lock was released.  operator[] re-creates if necessary.
+  auto &fresh = cache_[relPath];
+  fresh.data = std::move(data);
+  fresh.version = static_cast<int>(ack.getUint32(FieldID::FILE_VERSION, 0));
+  fresh.dirty = false;
   return 0;
 }
 
@@ -241,9 +246,10 @@ int SquidFS::op_getattr(const char *path, struct stat *st,
 
   st->st_mode = S_IFREG | 0644;
   st->st_nlink = 1;
-  std::error_code ec;
-  auto diskSize = fs::file_size(FileManager::resolvePath(r), ec);
-  st->st_size = ec ? 0 : static_cast<off_t>(diskSize);
+  // The FUSE client does not store files locally (they live on datanodes).
+  // Return 0 for size here; callers that need the real size should open the
+  // file first, which fetches it into cache and populates st_size correctly.
+  st->st_size = 0;
   return 0;
 }
 
@@ -312,42 +318,49 @@ int SquidFS::op_open(const char *path, struct fuse_file_info *fi) {
     lock.unlock();
     Message ack = client_.acquireLock(r);
     lock.lock();
+    // Re-find: push handler may have erased entry while lock was released.
+    auto it = cache_.find(r);
     if (!ack.isAck()) {
-      // Clean up the (possibly just-inserted) empty cache entry only if
-      // nobody else is using it.
-      if (entry.openCount == 0)
+      if (it != cache_.end() && it->second.openCount == 0)
         cache_.erase(r);
       std::cerr << "[SquidFS]: acquireLock(" << r
                 << ") NACK: " << ack.toString() << "\n";
       return -EACCES;
     }
+    if (it == cache_.end())
+      return -EIO;
   }
 
   // Fetch bytes from the server if the cache entry is empty.
   // This covers: first open of any kind, and re-open after eviction.
-  if (entry.openCount == 0) {
+  if (cache_[r].openCount == 0) {
     if (int rc = fetchIntoCache(lock, r, entry); rc != 0) {
       if (writable) {
         lock.unlock();
         client_.releaseLock(r);
         lock.lock();
       }
-      if (entry.openCount == 0)
+      auto it = cache_.find(r);
+      if (it != cache_.end() && it->second.openCount == 0)
         cache_.erase(r);
       return rc;
     }
   }
 
+  // Re-reference after all unlock/re-lock windows: fetchIntoCache and
+  // acquireLock above both drop the lock.  Use operator[] for a fresh ref.
+  auto &e = cache_[r];
+
   // Handle O_TRUNC for overwrites: discard cached data so the in-memory buffer
   // reflects an empty file.  Subsequent op_write fills it from offset 0.
   if ((fi->flags & O_TRUNC) && writable) {
-    entry.data.clear();
-    entry.dirty = true;
+    e.data.clear();
+    e.dirty = true;
   }
 
   if (writable)
-    entry.lockCount++;
-  entry.openCount++;
+    e.lockCount++;
+  e.openCount++;
 
   // Store per-fd state so release() knows whether to call releaseLock().
   fi->fh = reinterpret_cast<uint64_t>(new FileHandle{r, writable});
@@ -382,6 +395,8 @@ int SquidFS::op_create(const char *path, mode_t /*mode*/,
   if (!lAck.isAck()) {
     std::cerr << "[SquidFS]: acquireLock after create(" << r
               << ") NACK: " << lAck.toString() << "\n";
+    // Clean up the orphaned server-side file (P1.7).
+    client_.deleteFile(r);
     return -EACCES;
   }
 
@@ -412,6 +427,8 @@ int SquidFS::op_read(const char *path, char *buf, size_t size, off_t offset,
     if (int rc = fetchIntoCache(lock, r, entry); rc != 0)
       return rc;
     it = cache_.find(r);
+    if (it == cache_.end())
+      return -EIO;
   }
 
   const auto &data = it->second.data;
@@ -456,8 +473,16 @@ int SquidFS::op_release(const char *path, struct fuse_file_info *fi) {
 
   std::unique_lock<std::mutex> lock(cacheMutex_);
   auto it = cache_.find(r);
-  if (it == cache_.end())
+  if (it == cache_.end()) {
+    // Entry was evicted (e.g. by a push delete).  If the handle was
+    // writable, release the server-side lock to prevent a leak (P1.8).
+    if (writable) {
+      lock.unlock();
+      client_.releaseLock(r);
+      lock.lock();
+    }
     return 0;
+  }
 
   auto &entry = it->second;
   if (writable)
@@ -477,11 +502,20 @@ int SquidFS::op_release(const char *path, struct fuse_file_info *fi) {
                   << ") NACK: " << ack.toString() << "\n";
 
       lock.lock();
-      if (ack.isAck()) {
-        uint32_t v = ack.getUint32(FieldID::FILE_VERSION, 0);
-        if (v)
-          cache_[r].version = static_cast<int>(v);
-        cache_[r].dirty = false;
+      // Re-find: push handler may have erased entry while lock was released.
+      auto it2 = cache_.find(r);
+      if (it2 != cache_.end()) {
+        if (ack.isAck()) {
+          uint32_t v = ack.getUint32(FieldID::FILE_VERSION, 0);
+          if (v)
+            it2->second.version = static_cast<int>(v);
+          it2->second.dirty = false;
+        } else {
+          // NACK: server rejected our version.  Clear dirty so we don't
+          // retry with the same stale version on the next release (P1.9).
+          // The next open will fetch the current authoritative version.
+          it2->second.dirty = false;
+        }
       }
       lock.unlock();
     } else {
@@ -491,9 +525,13 @@ int SquidFS::op_release(const char *path, struct fuse_file_info *fi) {
     lock.lock();
   }
 
-  // Evict the cache entry only when all handles (read and write) are gone.
-  if (entry.openCount == 0)
-    cache_.erase(r);
+  // Re-find: push handler may have erased entry while lock was released.
+  // Only evict when all handles (read and write) are gone.
+  {
+    auto it2 = cache_.find(r);
+    if (it2 != cache_.end() && it2->second.openCount == 0)
+      cache_.erase(r);
+  }
 
   return 0;
 }

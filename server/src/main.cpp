@@ -60,8 +60,12 @@ int main(int argc, char **argv) {
         config, myName, fileManager, epochStore, [&](uint32_t newEpoch) {
           std::cout << "[main]: promoting to leader (epoch=" << newEpoch
                     << "), starting Server on port " << port << "\n";
-          Server server(port, replicationFactor, newEpoch);
-          server.run();
+          // Run Server on a dedicated thread so the watcher loop continues
+          // and can detect/demote if a higher-epoch leader appears (P0.8).
+          std::thread([=]() {
+            Server server(port, replicationFactor, newEpoch);
+            server.run();
+          }).detach();
         });
 
     watcher.start();

@@ -317,13 +317,25 @@ void ReplicationManager::propagateDeleteFile(const string &filePath,
       clients.push_back(entry);
   }
 
+  size_t acks = 0;
+  size_t total = 0;
   for (auto &datanode : datanodes) {
     if (!datanode.second || !datanode.second->isAlive())
       continue;
+    ++total;
     Message result = datanode.second->call(
         [&](SquidProtocol &proto) { return proto.deleteFile(filePath); });
-    if (!result.isAck())
+    if (result.isAck())
+      ++acks;
+    else
       cerr << "[ReplicationManager]: datanode failed to delete " << filePath << "\n";
+  }
+
+  // Quorum check: if we have holders, at least quorum_ must ACK.
+  if (total > 0 && acks < min(quorum_, total)) {
+    cerr << "[ReplicationManager]: delete quorum not met for " << filePath
+         << " (" << acks << "/" << min(quorum_, total) << " ACKs)\n";
+    return;
   }
 
   for (auto &client : clients) {

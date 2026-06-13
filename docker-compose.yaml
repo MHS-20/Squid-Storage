@@ -18,6 +18,12 @@ services:
     networks:
       squid_network:
         ipv4_address: 172.20.0.10
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/squid_ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 2s
 
   server_standby1:
     <<: *server-base
@@ -30,7 +36,8 @@ services:
     ports:
       - "12346:12345"
     depends_on:
-      - server_primary
+      server_primary:
+        condition: service_healthy
     networks:
       squid_network:
         ipv4_address: 172.20.0.13
@@ -46,7 +53,8 @@ services:
     ports:
       - "12347:12345"
     depends_on:
-      - server_primary
+      server_primary:
+        condition: service_healthy
     networks:
       squid_network:
         ipv4_address: 172.20.0.14
@@ -66,7 +74,8 @@ services:
     # args: server_ip  server_port  identity  configPath
     command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_ALPHA /app/config/cluster.conf
     depends_on:
-      - server_primary
+      server_primary:
+        condition: service_healthy
     networks:
       squid_network:
         ipv4_address: 172.20.0.11
@@ -80,7 +89,8 @@ services:
       - ./scripts:/app/scripts:ro
     command: /app/bin/DataNode 172.20.0.10 12345 DATANODE_BETA /app/config/cluster.conf
     depends_on:
-      - server_primary
+      server_primary:
+        condition: service_healthy
     networks:
       squid_network:
         ipv4_address: 172.20.0.12
@@ -131,6 +141,8 @@ services:
 
   chaos:
     image: ghcr.io/alexei-led/pumba:latest
+    profiles:
+      - chaos
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: >
