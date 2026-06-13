@@ -36,6 +36,9 @@ test: build
 reset-cluster:
 	scripts/reset_cluster.sh
 
+reset-all:
+	scripts/reset_all.sh
+
 install: build
 	sudo cmake --install $(BUILD_DIR)
 

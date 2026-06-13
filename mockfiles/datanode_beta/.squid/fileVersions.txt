@@ -1,3 +1,2 @@
-fix_test.txt 3
-subdir/f.txt 1
-a/b/c/d.txt 1
+fresh.txt 1
+data/f.txt 1
