@@ -3,10 +3,12 @@
 #define FUSE_USE_VERSION 31
 #include <fuse3/fuse.h>
 
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "client.hpp"
@@ -87,6 +89,11 @@ private:
   struct fuse_args fargs_{};
 
   static SquidFS *instance_;
+
+  // ── Health monitor ───────────────────────────────────────────────────────
+  void healthLoop();
+  std::thread monitorThread_;
+  std::atomic<bool> healthStop_{false};
 
   // ── FUSE C-callback trampolines ──────────────────────────────────────────
   static int c_getattr(const char *, struct stat *, struct fuse_file_info *);

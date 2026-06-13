@@ -40,6 +40,14 @@ bool Client::ensureConnected() {
   return true;
 }
 
+// ── Session accessor
+
+std::shared_ptr<ConnectionSession> Client::sessionLocked() {
+  if (ensureConnected())
+    return lockedSession();
+  return {};
+}
+
 // ── Version map
 
 int Client::getFileVersion(const std::string &path) const {
@@ -141,9 +149,10 @@ void Client::handlePush(ConnectionSession &session, const Message &message) {
 
 Message Client::createFile(const std::string &filePath,
                            const std::vector<uint8_t> &data, int version) {
-  if (!ensureConnected())
+  auto sess = sessionLocked();
+  if (!sess)
     return {};
-  Message ack = session_->call([&](SquidProtocol &proto) {
+  Message ack = sess->call([&](SquidProtocol &proto) {
     return proto.createFile(filePath, version, data);
   });
   setVersionFromAck(filePath, ack);
@@ -152,9 +161,10 @@ Message Client::createFile(const std::string &filePath,
 
 Message Client::readFile(const std::string &filePath,
                          std::vector<uint8_t> &dataOut) {
-  if (!ensureConnected())
+  auto sess = sessionLocked();
+  if (!sess)
     return {};
-  Message ack = session_->call(
+  Message ack = sess->call(
       [&](SquidProtocol &proto) { return proto.readFile(filePath, dataOut); });
   setVersionFromAck(filePath, ack);
   return ack;
@@ -162,9 +172,10 @@ Message Client::readFile(const std::string &filePath,
 
 Message Client::updateFile(const std::string &filePath,
                            const std::vector<uint8_t> &data, int version) {
-  if (!ensureConnected())
+  auto sess = sessionLocked();
+  if (!sess)
     return {};
-  Message ack = session_->call([&](SquidProtocol &proto) {
+  Message ack = sess->call([&](SquidProtocol &proto) {
     return proto.updateFile(filePath, version, data);
   });
   setVersionFromAck(filePath, ack);
@@ -172,9 +183,10 @@ Message Client::updateFile(const std::string &filePath,
 }
 
 Message Client::deleteFile(const std::string &filePath) {
-  if (!ensureConnected())
+  auto sess = sessionLocked();
+  if (!sess)
     return {};
-  Message ack = session_->call(
+  Message ack = sess->call(
       [&](SquidProtocol &proto) { return proto.deleteFile(filePath); });
   if (ack.isAck())
     deleteFileVersion(filePath);
@@ -182,25 +194,28 @@ Message Client::deleteFile(const std::string &filePath) {
 }
 
 Message Client::acquireLock(const std::string &filePath) {
-  if (!ensureConnected())
+  auto sess = sessionLocked();
+  if (!sess)
     return {};
-  return session_->call(
+  return sess->call(
       [&](SquidProtocol &proto) { return proto.acquireLock(filePath); });
 }
 
 Message Client::releaseLock(const std::string &filePath) {
-  if (!ensureConnected())
+  auto sess = sessionLocked();
+  if (!sess)
     return {};
-  return session_->call(
+  return sess->call(
       [&](SquidProtocol &proto) { return proto.releaseLock(filePath); });
 }
 
 Message Client::syncStatus() {
-  if (!isAlive())
+  auto sess = lockedSession();
+  if (!sess)
     return {};
 
   Message response =
-      session_->call([](SquidProtocol &proto) { return proto.syncStatus(); });
+      sess->call([](SquidProtocol &proto) { return proto.syncStatus(); });
   if (!response.isResponse())
     return response;
 
@@ -215,7 +230,8 @@ Message Client::syncStatus() {
 }
 
 Message Client::heartbeat() {
-  if (!isAlive())
+  auto sess = lockedSession();
+  if (!sess)
     return {};
-  return session_->call([](SquidProtocol &proto) { return proto.heartbeat(); });
+  return sess->call([](SquidProtocol &proto) { return proto.heartbeat(); });
 }

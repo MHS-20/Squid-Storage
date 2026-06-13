@@ -1,0 +1,7 @@
+alpha_state.txt 
+beta_state.txt DATANODE_BETA
+hello.txt DATANODE_BETA
+t1.txt DATANODE_BETA
+test.txt DATANODE_BETA
+test2.txt DATANODE_BETA
+testfile.txt DATANODE_BETA

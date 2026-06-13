@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -34,6 +35,12 @@ public:
 
   virtual void run() = 0;
 
+  // Thread-safe copy of session_ (returns nullptr if no session).
+  std::shared_ptr<ConnectionSession> lockedSession() const {
+    std::lock_guard<std::mutex> lk(sessionMutex_);
+    return session_;
+  }
+
 protected:
   int port = SERVER_PORT;
   std::string server_ip = SERVER_IP;
@@ -45,6 +52,7 @@ protected:
   FileManager fileManager_;
   FileTransfer fileTransfer_;
 
+  mutable std::mutex sessionMutex_;
   std::shared_ptr<ConnectionSession> session_;
 
   uint32_t lastSeenEpoch_ = 0;

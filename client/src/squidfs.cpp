@@ -48,6 +48,9 @@ SquidFS::SquidFS(const std::string &mountpoint, Client &client)
 }
 
 SquidFS::~SquidFS() {
+  healthStop_.store(true);
+  if (monitorThread_.joinable())
+    monitorThread_.join();
   if (fuse_) {
     fuse_unmount(fuse_);
     fuse_destroy(fuse_);
@@ -76,9 +79,37 @@ int SquidFS::run() {
     return -1;
   }
   std::cout << "[SquidFS]: mounted at " << mountpoint_ << "\n";
+
+  healthStop_.store(false);
+  monitorThread_ = std::thread([this]() { healthLoop(); });
+
   int rc = fuse_loop(fuse_);
+
+  healthStop_.store(true);
+  if (monitorThread_.joinable())
+    monitorThread_.join();
+
   fuse_unmount(fuse_);
   return rc;
+}
+
+void SquidFS::healthLoop() {
+  while (!healthStop_.load()) {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    if (healthStop_.load())
+      break;
+
+    // Keep the connection alive. If the RPC timeout fires or the session is
+    // dead, reconnect proactively so the next FUSE operation doesn't block.
+    if (!client_.isAlive()) {
+      try {
+        client_.reconnect();
+      } catch (const std::exception &e) {
+        std::cerr << "[SquidFS]: health monitor reconnect failed: " << e.what()
+                  << "\n";
+      }
+    }
+  }
 }
 
 void SquidFS::invalidatePath(const std::string &path) {
